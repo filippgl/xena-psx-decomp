@@ -65,3 +65,34 @@ Notes:
   to get `$gp`-relative code; they stay common symbols thanks to `--use-comm-section`.
 - `INCLUDE_ASM`/`INCLUDE_RODATA` use the maspsx reorder hack, because cc1 2.7.2 moves
   top-level asm ahead of functions.
+
+## Native PC port (`port/`)
+
+A playable Windows build made by **static recompilation**: `port/recomp/recomp.py`
+translates every MIPS function of `xena.exe` into C, and `port/runtime/` replaces the
+PS1 hardware (no CPU emulation):
+
+| Part | File |
+|---|---|
+| GPU (software rasterizer, 1 MB VRAM) | `gpu.c` |
+| GTE (geometry coprocessor) | `gte.c` |
+| CD-ROM controller on the `.bin` image | `cdrom.c` |
+| SPU voices + CD-XA music | `spu.c` |
+| MDEC (FMV) | `mdec.c` |
+| Controller port (DualShock protocol) | `pad.c` |
+| DMA, IRQ, timers, virtual clock | `hw.c` |
+| BIOS kernel calls (HLE), memory card on host files | `bios.c` |
+| SDL2 window/input/audio | `platform.c` |
+
+Virtual time advances by a fixed cost per loop iteration, so library timeouts behave
+as on hardware; output is paced to real time once per frame.
+
+Build (WSL, after the decomp build so `build/xena.exe.elf` exists):
+
+```sh
+bash tools/wsl.sh bash -c "source .venv-linux/bin/activate && bash port/build.sh"
+bash port/package.sh ../XenaPC     # xena.exe + SDL2.dll + README
+```
+
+Testing helpers: `--headless --frames N --shots K DIR --script "frame:BUTTON:len,..."`,
+`--wav out.wav`, `--trace`, `--watch addr,...`, `--verbose`.
