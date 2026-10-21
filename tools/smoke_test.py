@@ -55,6 +55,7 @@ SCENARIOS = [
     ("software_hd", 9700, START_LEVEL1 + f",{MENU + 1100}:UP:300", ["--opt", "renderer=software", "--render-scale", "2", "--aspect", "16:9"], False),
     ("native_4x3", 9700, START_LEVEL1 + f",{MENU + 1100}:UP:300", ["--opt", "renderer=software", "--render-scale", "1", "--aspect", "4:3",
                                                                     "--opt", "perspective=0", "--opt", "texture_filter=0"], False),
+    ("memcard_selftest", 7400, "", ["--selftest", "memcard", "7350"], False),
     ("gl_8x_219_ssaa", 9700, START_LEVEL1 + f",{MENU + 1100}:UP:300", ["--render-scale", "8", "--aspect", "21:9", "--opt", "ssaa=2"], False),
 ]
 
@@ -92,6 +93,8 @@ def run(s, args):
     problems = []
     if "FATAL" in log:
         problems.append(log[log.index("FATAL"):].splitlines()[0])
+    if "--selftest" in extra and "selftest memcard: PASS" not in log:
+        problems.append("self test failed")
     if f"reached frame {frames}" not in log:
         problems.append("did not reach the last frame")
     shot = os.path.join(out, f"frame_{frames:06d}.bmp")

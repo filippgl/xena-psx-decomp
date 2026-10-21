@@ -146,7 +146,9 @@ static u32 file_open(u32 name_addr, u32 flags) {
                 fseek(f, 0, SEEK_SET);
             }
         } else {
-            f = fopen(path, (flags & 2) ? "rb+" : "rb");
+            /* libmcrd opens with FREAD|FASYNC and then writes too: always allow both */
+            f = fopen(path, "rb+");
+            if (!f) f = fopen(path, "rb");
         }
         if (!f) {
             LOG("open(%s) failed", name);
@@ -163,6 +165,7 @@ static u32 file_open(u32 name_addr, u32 flags) {
 }
 
 static u32 file_rw(u32 fd, u32 buf, u32 n, int write) {
+    if (fd != 1) LOG("%s(fd=%u, buf=%08X, n=%u)", write ? "write" : "read", fd, buf, n);
     if (fd == 1 && write) { /* stdout */
         for (u32 i = 0; i < n; i++) fputc((int)mem_r8(buf + i), stdout);
         fflush(stdout);
@@ -180,7 +183,11 @@ static u32 file_rw(u32 fd, u32 buf, u32 n, int write) {
         for (u32 i = 0; i < r; i++) mem_w8(buf + i, tmp[i]);
     }
     free(tmp);
-    if (cfiles[fd].async) card_event(0x0004);
+    if (cfiles[fd].async) {
+        /* asynchronous I/O: 0 = request accepted, completion is signalled by an event */
+        card_event(r == n ? 0x0004 : 0x8000);
+        return 0;
+    }
     return r;
 }
 
@@ -424,6 +431,7 @@ static void bios_b0(u32 fn) {
     case 0x19: hook_jmpbuf = a0; LOG("HookEntryInt(%08X)", a0); break;
     case 0x32: cpu.r[2] = file_open(a0, a1); break;
     case 0x33: /* lseek */
+        LOG("lseek(%u, %u, %u)", a0, a1, a2);
         if (a0 < 16 && cfiles[a0].f) {
             fseek(cfiles[a0].f, (long)a1, a2 == 0 ? SEEK_SET : a2 == 1 ? SEEK_CUR : SEEK_END);
             cpu.r[2] = (u32)ftell(cfiles[a0].f);

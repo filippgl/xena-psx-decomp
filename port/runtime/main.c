@@ -13,6 +13,8 @@ static int opt_render_scale, opt_aspect = -1, opt_vsync;
 static const char* opts[16];
 static long menu_shot_frame = -1;
 static const char* opt_textures;
+static const char* opt_selftest;
+static long opt_selftest_frame = -1;
 static const char* menu_shot_file;
 static int nopts;
 static long opt_frames = -1;      /* exit after N frames (testing) */
@@ -213,6 +215,7 @@ void host_frame(void) {
         if (platform_settings_requested()) platform_settings_menu();
     }
     pace_frame();
+    if (frame_no == opt_selftest_frame) { extern void selftest_run(const char*); selftest_run(opt_selftest); }
     if (frame_no % 120 == 0) { extern void texdump_write(void); texdump_write(); }
 
     g_script_buttons = 0;
@@ -362,6 +365,7 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--vsync")) opt_vsync = 1;
         else if (!strcmp(argv[i], "--menu-shot") && i + 2 < argc) { menu_shot_frame = atol(argv[++i]); menu_shot_file = argv[++i]; }
         else if (!strcmp(argv[i], "--dump-textures") && i + 1 < argc) { extern void texdump_enable(const char*); texdump_enable(argv[++i]); }
+        else if (!strcmp(argv[i], "--selftest") && i + 2 < argc) { opt_selftest = argv[++i]; opt_selftest_frame = atol(argv[++i]); }
         else if (!strcmp(argv[i], "--textures") && i + 1 < argc) opt_textures = argv[++i];
         else if (!strcmp(argv[i], "--opt") && i + 1 < argc && nopts < 16) opts[nopts++] = argv[++i];
         else if (!strcmp(argv[i], "--render-scale") && i + 1 < argc) opt_render_scale = atoi(argv[++i]);
