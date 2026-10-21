@@ -8,3 +8,11 @@ _remove_ChgclrPAD   hle_nop
 
 # setjmp (libetc): the BIOS later resumes execution right after these calls
 @return_entries     8009192C
+
+# Xena's control update (called through her character table at 800C4BE8): its first
+# argument is her object, used by the camera-relative controls
+@probe              800367BC probe_player_update
+# ...where it decides between running and pivoting, and where it applies this tick's
+# turn (the camera-relative controls steer there)
+@probe              8003BF14 probe_player_start
+@probe              8003C6B4 probe_player_steer

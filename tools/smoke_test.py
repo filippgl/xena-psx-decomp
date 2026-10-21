@@ -10,8 +10,10 @@ are reproducible.
 """
 import argparse
 import concurrent.futures as cf
+import math
 import os
 import random
+import struct
 import subprocess
 import sys
 import time
@@ -56,6 +58,7 @@ SCENARIOS = [
     ("native_4x3", 9700, START_LEVEL1 + f",{MENU + 1100}:UP:300", ["--opt", "renderer=software", "--render-scale", "1", "--aspect", "4:3",
                                                                     "--opt", "perspective=0", "--opt", "texture_filter=0"], False),
     ("memcard_selftest", 7400, "", ["--selftest", "memcard", "7350"], False),
+    ("modern_controls", 8760, START_LEVEL1 + f",{MENU + 1240}:RIGHT:120", ["--ramdump", "{out}", "8760"], False),
     ("gl_8x_219_ssaa", 9700, START_LEVEL1 + f",{MENU + 1100}:UP:300", ["--render-scale", "8", "--aspect", "21:9", "--opt", "ssaa=2"], False),
 ]
 
@@ -74,10 +77,29 @@ def audio_ok(path):
     return float(np.sqrt((tail ** 2).mean())) > 30.0, float(np.sqrt((tail ** 2).mean()))
 
 
+def check_modern_controls(out, log):
+    """Right with camera-relative controls: Xena turns 90 degrees right of the camera and
+    runs that way (the camera starts at yaw 402 on level 1; she moves along rotY + 2048)."""
+    ram = open(os.path.join(out, "ram_008760.bin"), "rb").read()
+    obj = int(log.split("player object ")[-1].split()[0], 16) & 0x1FFFFF
+    tr = struct.unpack_from("<I", ram, (struct.unpack_from("<I", ram, obj + 0xA8)[0] & 0x1FFFFF) + 0x18)[0] & 0x1FFFFF
+    x, _, z = struct.unpack_from("<iii", ram, tr)
+    heading = (struct.unpack_from("<H", ram, tr + 0xE)[0] + 2048) & 4095
+    err = (heading - (402 + 1024) + 2048) % 4096 - 2048
+    moved = math.hypot(x + 7821, z + 17988)
+    if abs(err) > 64 or moved < 1000:
+        return f"heading {heading} (off by {err}), moved {moved:.0f}"
+    return None
+
+
+CHECKS = {"modern_controls": check_modern_controls}
+
+
 def run(s, args):
     name, frames, script, extra, want_audio = s
     out = os.path.join(args.out, name)
     os.makedirs(out, exist_ok=True)
+    extra = [e.replace("{out}", out) for e in extra]
     cmd = [args.exe, "--headless", "--frames", str(frames), "--shots", str(frames), out,
            "--wav", os.path.join(out, "audio.wav")] + extra
     if script:
@@ -105,6 +127,10 @@ def run(s, args):
         Image.open(shot).convert("RGB").save(shot[:-4] + ".png")
     else:
         problems.append("no screenshot")
+    if name in CHECKS and not problems:
+        msg = CHECKS[name](out, log)
+        if msg:
+            problems.append(msg)
     if want_audio:
         ok, rms = audio_ok(os.path.join(out, "audio.wav"))
         if not ok:

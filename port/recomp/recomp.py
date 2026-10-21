@@ -217,6 +217,13 @@ class Recompiler:
         self.names = names
         self.hle = hle
         self.warnings = []
+        # "@probe ADDR fn": call a native function on entry, or before the instruction at
+        # ADDR inside a function (the original code still runs)
+        self.probes = {}
+        for item in hle.get("@probe", "").split(","):
+            if item:
+                addr, fn = item.split(":")
+                self.probes[int(addr, 16)] = fn
         self.funcs = sorted((Func(a, s, n) for a, (s, n) in regions.items()), key=lambda f: f.start)
         self._fix_overlaps()
         self.starts = [f.start for f in self.funcs]
@@ -397,6 +404,8 @@ class Recompiler:
             i = self.insns[va]
             if va in labels:
                 emit(f"L_{va:08X}:;")
+            if va in self.probes and va != entry:
+                emit(f"    {self.probes[va]}();")
             if i.has_delay():
                 d = self.insns.get(va + 4) if va + 4 < f.end else None
                 dcode = translate(d, self) if d is not None else ""
@@ -417,7 +426,9 @@ class Recompiler:
         # the next function, like the original straight-line code would.
         emit(f"L_{f.end:08X}:;")
         emit(f"    {self.fname(f.end)}(); return;" if f.end in self.entry_points else "    return;")
-        out.append(f"void {name}(void) {{\n    TRACE(0x{entry:08X}u);\n")
+        probe = self.probes.get(entry)
+        probe_call = f"    {probe}();\n" if probe else ""
+        out.append(f"void {name}(void) {{\n    TRACE(0x{entry:08X}u);\n{probe_call}")
         out.append("\n".join(body))
         out.append("\n}\n\n")
 
@@ -531,7 +542,11 @@ def load_hle(path):
         for line in open(path):
             line = line.split("#")[0].strip()
             if line:
-                sym, impl = line.split()
+                parts = line.split()
+                if parts[0] == "@probe":
+                    sym, impl = "@probe", f"{parts[1]}:{parts[2]}"
+                else:
+                    sym, impl = parts
                 if sym in hle:
                     impl = hle[sym] + "," + impl
                 hle[sym] = impl

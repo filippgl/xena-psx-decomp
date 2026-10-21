@@ -29,6 +29,7 @@ typedef struct {
     int fast_cd;         /* faster loading */
     int mouse_enabled;
     int mouse_turn;
+    int modern_controls; /* directions are relative to the camera */
     float mouse_sensitivity;
     int rumble;
     float stick_deadzone;

@@ -53,6 +53,8 @@ static SDL_GameController* pads[MAX_PADS];
 static u16 pad_map[SDL_CONTROLLER_BUTTON_MAX];
 static u16 trig_l, trig_r;
 static u16 rs_left, rs_right, rs_up, rs_down;
+static float stick_x, stick_y; /* strongest left stick this frame, +y = down */
+static u16 turn_bits;           /* right stick and mouse turning, this frame */
 
 static u16 lookup_binding(const Binding* list, int n, const char* name) {
     for (int i = 0; i < n; i++)
@@ -342,6 +344,7 @@ static u16 pad_state(SDL_GameController* p) {
     float lx = SDL_GameControllerGetAxis(p, SDL_CONTROLLER_AXIS_LEFTX) / 32767.0f;
     float ly = SDL_GameControllerGetAxis(p, SDL_CONTROLLER_AXIS_LEFTY) / 32767.0f;
     if (sqrtf(lx * lx + ly * ly) > g_cfg.stick_deadzone) {
+        if (lx * lx + ly * ly > stick_x * stick_x + stick_y * stick_y) { stick_x = lx; stick_y = ly; }
         float a = atan2f(ly, lx); /* -pi..pi, 0 = right, +y = down */
         int sector = ((int)floorf(a / (3.14159265f / 4) + 0.5f) + 8) & 7;
         static const u16 dirs[8] = {B_RIGHT, B_RIGHT | B_DOWN, B_DOWN, B_DOWN | B_LEFT,
@@ -350,16 +353,63 @@ static u16 pad_state(SDL_GameController* p) {
     }
     float rx = SDL_GameControllerGetAxis(p, SDL_CONTROLLER_AXIS_RIGHTX) / 32767.0f;
     float ry = SDL_GameControllerGetAxis(p, SDL_CONTROLLER_AXIS_RIGHTY) / 32767.0f;
-    if (rx < -0.5f) b |= rs_left;
-    if (rx > 0.5f) b |= rs_right;
-    if (ry < -0.5f) b |= rs_up;
-    if (ry > 0.5f) b |= rs_down;
+    /* right stick: turning in the original controls (see pad_buttons) */
+    if (rx < -0.5f) turn_bits |= rs_left;
+    if (rx > 0.5f) turn_bits |= rs_right;
+    if (ry < -0.5f) turn_bits |= rs_up;
+    if (ry > 0.5f) turn_bits |= rs_down;
     return b;
 }
 
 static u16 frame_buttons;
 static long frame_buttons_stamp = -1;
 extern long g_frame_no;
+
+/* ---------------- modern (camera-relative) controls ----------------
+ * In the original, Up runs along the camera's direction, Down turns her round and Left/
+ * Right run in a circle. Here the direction pressed is a direction on screen: it is turned
+ * into a heading from the camera's yaw (0x800F0F28), the game is told "run" (Up), and a hook
+ * in her control update (probe_player_steer) turns her toward that heading. Angles are
+ * 12-bit, increasing to the right; she moves along rotY + 2048 and a camera behind her has
+ * yaw = rotY + 2048. Outside her normal movement (menus, cutscenes, attacks, jumps...)
+ * the buttons pass through unchanged. */
+#define CAM_YAW 0x800F0F28u
+
+static int wrap12(int a) { return ((a + 2048) & 4095) - 2048; }
+
+static int modern_active; /* directions were translated this frame */
+
+static u16 modern_controls(u16 b) {
+    static int latched, ref_cam, last_in;
+    extern int g_steer_active, g_steer_target;
+    extern long g_steer_frame;
+    extern u32 g_player_state;
+    g_steer_active = modern_active = 0;
+    /* standing, running, pivoting; attacks, jumps, climbing... keep the original buttons */
+    int moving = g_player_state == 0 || (g_player_state >= 0x14 && g_player_state <= 0x17) ||
+                 g_player_state == 0x2B || g_player_state == 0x2C;
+    if (!g_cfg.modern_controls || g_frame_no - g_steer_frame > 3 || !moving) { latched = 0; return b; }
+    modern_active = 1;
+    /* screen-space direction: right = +x, forward (away from the camera) = +y */
+    float ix, iy;
+    if (stick_x * stick_x + stick_y * stick_y > 0) { ix = stick_x; iy = -stick_y; }
+    else {
+        ix = (b & B_RIGHT ? 1.f : 0.f) - (b & B_LEFT ? 1.f : 0.f);
+        iy = (b & B_UP ? 1.f : 0.f) - (b & B_DOWN ? 1.f : 0.f);
+    }
+    if (ix == 0 && iy == 0) { latched = 0; return b; }
+    int cam = mem_r16(CAM_YAW) & 4095;
+    int in = (int)lrintf(atan2f(ix, iy) * (2048.0f / 3.14159265f));
+    /* the camera swings round after her: keep the yaw it had when this direction was
+     * chosen, otherwise holding Right would run in circles */
+    if (!latched || abs(wrap12(in - last_in)) > 400) { ref_cam = cam; latched = 1; }
+    last_in = in;
+    /* running forward follows the camera (scripted camera turns, corners) */
+    if (abs(in) < 512) ref_cam = (ref_cam + wrap12(cam - ref_cam) / 32) & 4095;
+    g_steer_target = (ref_cam + in + 2048) & 4095; /* rotY that runs along ref_cam + in */
+    g_steer_active = 1;
+    return (u16)((b & ~(B_UP | B_DOWN | B_LEFT | B_RIGHT)) | B_UP);
+}
 
 u16 pad_buttons(int port) {
     if (port != 0) return 0;
@@ -371,11 +421,15 @@ u16 pad_buttons(int port) {
             Uint32 mb = SDL_GetMouseState(NULL, NULL);
             for (int i = 1; i <= 5; i++)
                 if (mb & SDL_BUTTON(i)) b |= mouse_buttons[i];
-            if (g_cfg.mouse_turn) b |= mouse_turn_buttons();
         }
+        stick_x = stick_y = 0;
+        turn_bits = 0;
+        if (mouse_captured && g_cfg.mouse_turn) turn_bits |= mouse_turn_buttons();
         for (int i = 0; i < MAX_PADS; i++)
             if (pads[i]) b |= pad_state(pads[i]);
-        frame_buttons = b;
+        /* tank-style turning only makes sense with the original controls */
+        frame_buttons = modern_controls(b);
+        if (!modern_active) frame_buttons |= turn_bits;
     }
     return frame_buttons;
 }

@@ -43,7 +43,7 @@ static int draw_text(const char* s, int x, int y, float scale, u32 rgb, int meas
 
 enum {
     MI_RENDERER, MI_SCALE, MI_ASPECT, MI_SSAA, MI_TEXPACK, MI_TEXFILTER, MI_PERSP, MI_SUBPIXEL, MI_UPSCALE,
-    MI_FULLSCREEN, MI_VSYNC, MI_WINDOW, MI_RUMBLE, MI_MOUSETURN, MI_MOUSESENS, MI_FASTCD, MI_DUMP, MI_BACK, MI_COUNT
+    MI_FULLSCREEN, MI_VSYNC, MI_WINDOW, MI_RUMBLE, MI_CONTROLS, MI_MOUSETURN, MI_MOUSESENS, MI_FASTCD, MI_DUMP, MI_BACK, MI_COUNT
 };
 
 static const char* menu_label(int i) {
@@ -61,6 +61,7 @@ static const char* menu_label(int i) {
     case MI_VSYNC: return "Вертикальная синхронизация";
     case MI_WINDOW: return "Высота окна";
     case MI_RUMBLE: return "Вибрация геймпада";
+    case MI_CONTROLS: return "Управление";
     case MI_MOUSETURN: return "Поворот мышью";
     case MI_MOUSESENS: return "Чувствительность мыши";
     case MI_FASTCD: return "Быстрая загрузка";
@@ -84,7 +85,8 @@ static const char* menu_hint(int i) {
     case MI_VSYNC: return "Убирает разрывы кадра. На мониторах ниже 60 Гц игра замедлится.";
     case MI_WINDOW: return "Размер окна в оконном режиме.";
     case MI_RUMBLE: return "Вибрация DualShock на современных геймпадах.";
-    case MI_MOUSETURN: return "Движение мыши влево-вправо поворачивает героиню.";
+    case MI_CONTROLS: return "Современное: героиня бежит туда, куда нажато относительно камеры. Классическое: танковое, как на PS1.";
+    case MI_MOUSETURN: return "Движение мыши влево-вправо поворачивает героиню (при классическом управлении).";
     case MI_MOUSESENS: return "Скорость поворота мышью.";
     case MI_FASTCD: return "Уровни грузятся в несколько раз быстрее; музыка и ролики не ускоряются.";
     case MI_DUMP: return "Сохранять текстуры уровней в texture_dump для перерисовки.";
@@ -112,6 +114,7 @@ static void menu_value(int i, char* buf, size_t n) {
     case MI_VSYNC: SDL_snprintf(buf, n, "%s", g_cfg.vsync ? "Вкл" : "Выкл"); break;
     case MI_WINDOW: SDL_snprintf(buf, n, "%d", g_cfg.window_height); break;
     case MI_RUMBLE: SDL_snprintf(buf, n, "%s", g_cfg.rumble ? "Вкл" : "Выкл"); break;
+    case MI_CONTROLS: SDL_snprintf(buf, n, "%s", g_cfg.modern_controls ? "Современное" : "Классическое"); break;
     case MI_MOUSETURN: SDL_snprintf(buf, n, "%s", g_cfg.mouse_turn ? "Вкл" : "Выкл"); break;
     case MI_MOUSESENS: SDL_snprintf(buf, n, "%.2f", g_cfg.mouse_sensitivity); break;
     case MI_DUMP: SDL_snprintf(buf, n, "%s", g_cfg.dump_textures ? "Вкл" : "Выкл"); break;
@@ -150,6 +153,7 @@ static int menu_change(int i, int dir) {
         break;
     }
     case MI_RUMBLE: g_cfg.rumble ^= 1; if (g_cfg.rumble) platform_rumble(1, 160); break;
+    case MI_CONTROLS: g_cfg.modern_controls ^= 1; break;
     case MI_MOUSETURN: g_cfg.mouse_turn ^= 1; if (!g_cfg.mouse_turn) set_mouse_capture(0); break;
     case MI_FASTCD: g_cfg.fast_cd ^= 1; break;
     case MI_DUMP: { extern void texdump_set(int on); g_cfg.dump_textures ^= 1; texdump_set(g_cfg.dump_textures); break; }

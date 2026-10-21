@@ -148,6 +148,9 @@ typedef struct {
 extern const FuncEntry g_func_table[];
 extern const int g_func_count;
 void call_indirect(u32 addr);
+void probe_player_update(void);
+void probe_player_steer(void);
+void probe_player_start(void);
 
 /* "Interrupt" delivery point, emitted on loop back-edges */
 /* Virtual time: every loop iteration (back-edge) costs CYCLES_PER_LOOP cycles of the

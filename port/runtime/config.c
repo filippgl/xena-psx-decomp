@@ -21,6 +21,7 @@ Config g_cfg = {
     .fast_cd = 1,
     .mouse_enabled = 1,
     .mouse_turn = 0,
+    .modern_controls = 1,
     .mouse_sensitivity = 1.0f,
     .rumble = 1,
     .stick_deadzone = 0.35f,
@@ -58,6 +59,11 @@ static const char* default_ini =
     "; anti-aliasing by supersampling: 1 = off, 2 = 4 samples, 3 = 9 samples\n"
     "ssaa = 1\n"
     "\n"
+    "[controls]\n"
+    "; 1 = directions are relative to the camera (Xena turns and runs where you push),\n"
+    "; 0 = original tank controls (Up runs forward, Left/Right turn)\n"
+    "modern = 1\n"
+    "\n"
     "[keyboard]\n"
     "; key names as SDL names them: W, Up, Space, Return, Escape, Left Shift, Keypad 8...\n"
     "Up = W, Up\n"
@@ -87,7 +93,7 @@ static const char* default_ini =
     "WheelDown = R1\n"
     "; horizontal mouse movement turns left/right (click the window to capture the mouse,\n"
     "; press Alt to release it)\n"
-    "turn = 1\n"
+    "turn = 0\n"
     "sensitivity = 1.0\n"
     "\n"
     "[gamepad]\n"
@@ -177,6 +183,7 @@ void config_set_video(const char* key, const char* val) {
     else if (!strcmp(key, "texture_pack")) g_cfg.texture_pack = atoi(val);
     else if (!strcmp(key, "dump_textures")) g_cfg.dump_textures = atoi(val);
     else if (!strcmp(key, "fast_cd")) g_cfg.fast_cd = atoi(val);
+    else if (!strcmp(key, "modern_controls")) g_cfg.modern_controls = atoi(val);
 }
 
 static void parse(char* text) {
@@ -208,6 +215,8 @@ static void parse(char* text) {
             else if (!strcmp(key, "perspective")) g_cfg.perspective = atoi(val);
             else if (!strcmp(key, "texture_filter")) g_cfg.texture_filter = atoi(val);
             else if (!strcmp(key, "ssaa")) g_cfg.ssaa = atoi(val);
+        } else if (!strcmp(section, "controls")) {
+            if (!strcmp(key, "modern")) g_cfg.modern_controls = atoi(val);
         } else if (!strcmp(section, "keyboard")) {
             /* rescanned in a second pass (strtok is not reentrant) */
         } else if (!strcmp(section, "mouse")) {
@@ -385,6 +394,7 @@ void config_save(void) {
     SETI("video", "texture_pack", g_cfg.texture_pack);
     SETI("video", "dump_textures", g_cfg.dump_textures);
     SETI("video", "fast_cd", g_cfg.fast_cd);
+    SETI("controls", "modern", g_cfg.modern_controls);
     SETI("mouse", "turn", g_cfg.mouse_turn);
     snprintf(v, sizeof(v), "%.2f", g_cfg.mouse_sensitivity);
     text = ini_set(text, "mouse", "sensitivity", v);

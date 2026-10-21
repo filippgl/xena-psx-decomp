@@ -14,6 +14,9 @@ static const char* opts[16];
 static long menu_shot_frame = -1;
 static const char* opt_textures;
 static const char* opt_selftest;
+static long ramdump_frames[32];
+static int nramdumps;
+static const char* ramdump_dir;
 /* --poke frame:addr:value[:size] (testing: write guest memory at a frame) */
 typedef struct { long frame; u32 addr, value; int size; } Poke;
 static Poke pokes[16];
@@ -219,6 +222,13 @@ void host_frame(void) {
         if (platform_settings_requested()) platform_settings_menu();
     }
     pace_frame();
+    for (int k = 0; k < nramdumps; k++)
+        if (ramdump_frames[k] == frame_no) {
+            char path[512];
+            SDL_snprintf(path, sizeof(path), "%s/ram_%06ld.bin", ramdump_dir, frame_no);
+            FILE* f = fopen(path, "wb");
+            if (f) { fwrite(g_ram, 1, RAM_SIZE, f); fclose(f); }
+        }
     for (int k = 0; k < npokes; k++)
         if (pokes[k].frame == frame_no) {
             if (pokes[k].size == 1) mem_w8(pokes[k].addr, pokes[k].value);
@@ -341,15 +351,26 @@ static const char* resolve_disc_path(const char* p) {
 }
 
 static void usage(void) {
-    log_msg("usage: xena [options] [disc.bin]\n"
-            "  --scale N        window scale (default 3)\n"
-            "  --headless       no window (for automated tests)\n"
-            "  --frames N       exit after N frames\n"
-            "  --shots N DIR    save a screenshot every N frames into DIR\n"
-            "  --script S       scripted input, e.g. 300:START,420:CROSS:10\n"
-            "  --verbose        log hardware/BIOS activity\n"
-            "keys: arrows, Z/Space=X, X=O, A=Square, S=Triangle, Enter=Start, Backspace=Select,\n"
-            "      Q/W=L1/R1, E/R=L2/R2, Tab=fast forward, Esc=quit");
+    log_msg("usage: xena [options] [disc.bin]   (settings and key bindings: xena.ini, F1 in game)\n"
+            "  --scale N              window scale\n"
+            "  --render-scale N       internal resolution 1..8\n"
+            "  --aspect 4:3|16:9|21:9\n"
+            "  --opt key=value        a [video] setting or modern_controls=0/1\n"
+            "  --textures DIR         texture replacement folder\n"
+            "  --dump-textures DIR    collect the textures in use into DIR\n"
+            "  --vsync\n"
+            "testing:\n"
+            "  --headless             no window\n"
+            "  --frames N             exit after N frames\n"
+            "  --shots N DIR          save a screenshot every N frames into DIR\n"
+            "  --menu-shot N FILE     screenshot of the settings menu at frame N\n"
+            "  --script S             scripted input, e.g. 300:START,420:CROSS:10,500:UP+RIGHT:60\n"
+            "  --poke F:ADDR:VAL[:SZ] write guest memory at frame F\n"
+            "  --ramdump DIR F1,F2..  save main RAM at these frames\n"
+            "  --watch A1,A2..        log these words every frame\n"
+            "  --selftest NAME F      run a self test (memcard) at frame F\n"
+            "  --wav FILE             record the audio\n"
+            "  --verbose, --trace     log hardware/BIOS activity, first call of every function");
 }
 
 #ifdef _WIN32
@@ -375,6 +396,11 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--vsync")) opt_vsync = 1;
         else if (!strcmp(argv[i], "--menu-shot") && i + 2 < argc) { menu_shot_frame = atol(argv[++i]); menu_shot_file = argv[++i]; }
         else if (!strcmp(argv[i], "--dump-textures") && i + 1 < argc) { extern void texdump_enable(const char*); texdump_enable(argv[++i]); }
+        else if (!strcmp(argv[i], "--ramdump") && i + 2 < argc) { /* --ramdump DIR f1,f2,... */
+            ramdump_dir = argv[++i];
+            char* p = argv[++i];
+            while (*p && nramdumps < 32) { ramdump_frames[nramdumps++] = strtol(p, &p, 10); if (*p == ',') p++; }
+        }
         else if (!strcmp(argv[i], "--poke") && i + 1 < argc && npokes < 16) {
             Poke* pk = &pokes[npokes++];
             char* p = argv[++i];
