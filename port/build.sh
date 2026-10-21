@@ -24,6 +24,8 @@ export -f compile
 export CC CFLAGS OUT
 ls $OUT/gen/*.c port/runtime/*.c | xargs -P "$(nproc)" -I{} bash -c 'compile {}'
 
-$CC -o $OUT/xena.exe $OUT/obj/*.o -L$SDL/lib -lmingw32 -lSDL2main -lSDL2 -mconsole -static-libgcc
+# xena.exe: windowed game (logs to xena.log); xena-console.exe: same with a console for testing
+$CC -o $OUT/xena.exe $OUT/obj/*.o -L$SDL/lib -lmingw32 -lSDL2main -lSDL2 -mwindows -static-libgcc
+$CC -o $OUT/xena-console.exe $OUT/obj/*.o -L$SDL/lib -lmingw32 -lSDL2main -lSDL2 -mconsole -static-libgcc
 cp $SDL/bin/SDL2.dll $OUT/
 echo "built $OUT/xena.exe"

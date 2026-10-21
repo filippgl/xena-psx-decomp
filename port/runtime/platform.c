@@ -27,6 +27,8 @@ s64 platform_ticks_us(void) {
     return (s64)(SDL_GetPerformanceCounter() * 1000000ull / freq);
 }
 
+int g_vsync;
+
 int platform_init(int scale) {
     headless = scale <= 0;
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_AUDIO) != 0) {
@@ -37,7 +39,9 @@ int platform_init(int scale) {
     win = SDL_CreateWindow("Xena: Warrior Princess", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                            320 * scale, 240 * scale, SDL_WINDOW_RESIZABLE);
     if (!win) return 0;
-    ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    /* frame pacing is done by the runtime; vsync is optional because a display slower than
+     * 60 Hz (e.g. virtual machines) would otherwise slow the whole game down */
+    ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | (g_vsync ? SDL_RENDERER_PRESENTVSYNC : 0));
     if (!ren) ren = SDL_CreateRenderer(win, -1, 0);
     SDL_RenderSetLogicalSize(ren, 320 * scale, 240 * scale);
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
@@ -58,6 +62,18 @@ void platform_present(const u32* px, int w, int h) {
     SDL_RenderClear(ren);
     SDL_RenderCopy(ren, tex, NULL, NULL);
     SDL_RenderPresent(ren);
+
+    static int frames;
+    static s64 last_us;
+    s64 now = platform_ticks_us();
+    frames++;
+    if (now - last_us >= 1000000) {
+        char title[64];
+        SDL_snprintf(title, sizeof(title), "Xena: Warrior Princess  [%d fps]", (int)(frames * 1000000LL / (now - last_us)));
+        SDL_SetWindowTitle(win, title);
+        frames = 0;
+        last_us = now;
+    }
 }
 
 static u16 key_bit(SDL_Keycode k) {

@@ -301,10 +301,26 @@ static void usage(void) {
             "      Q/W=L1/R1, E/R=L2/R2, Tab=fast forward, Esc=quit");
 }
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 int main(int argc, char** argv) {
+#ifdef _WIN32
+    /* GUI build: without a console, keep the log in xena.log next to the program */
+    if (!GetConsoleWindow()) {
+        char* base = SDL_GetBasePath();
+        char path[1024];
+        SDL_snprintf(path, sizeof(path), "%sxena.log", base ? base : "");
+        freopen(path, "w", stderr);
+        SDL_snprintf(path, sizeof(path), "%sxena_stdout.log", base ? base : "");
+        freopen(path, "w", stdout);
+    }
+#endif
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--scale") && i + 1 < argc) opt_scale = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--headless")) opt_scale = 0;
+        else if (!strcmp(argv[i], "--vsync")) { extern int g_vsync; g_vsync = 1; }
         else if (!strcmp(argv[i], "--frames") && i + 1 < argc) opt_frames = atol(argv[++i]);
         else if (!strcmp(argv[i], "--shots") && i + 2 < argc) { opt_shot_every = atol(argv[++i]); opt_shot_dir = argv[++i]; }
         else if (!strcmp(argv[i], "--script") && i + 1 < argc) parse_script(argv[++i]);
