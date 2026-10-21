@@ -13,6 +13,7 @@ import concurrent.futures as cf
 import math
 import os
 import random
+import shutil
 import struct
 import subprocess
 import sys
@@ -59,6 +60,10 @@ SCENARIOS = [
                                                                     "--opt", "perspective=0", "--opt", "texture_filter=0"], False),
     ("memcard_selftest", 7400, "", ["--selftest", "memcard", "7350"], False),
     ("modern_controls", 8760, START_LEVEL1 + f",{MENU + 1240}:RIGHT:120", ["--ramdump", "{out}", "8760"], False),
+    # save through the game's save screen (game mode 4) on level 4, then load it from the
+    # main menu in a second run: the load screen must offer it and stage 5 must start
+    ("save_load", 9600, "7400:DOWN,7500:CROSS,7800:CROSS,8100:CROSS,8400:CROSS,8700:CROSS",
+     ["--memcard", "{out}/card", "--watch", "800EE200"], False),
     ("gl_8x_219_ssaa", 9700, START_LEVEL1 + f",{MENU + 1100}:UP:300", ["--render-scale", "8", "--aspect", "21:9", "--opt", "ssaa=2"], False),
 ]
 
@@ -92,7 +97,27 @@ def check_modern_controls(out, log):
     return None
 
 
-CHECKS = {"modern_controls": check_modern_controls}
+def prepare_save_load(args, out):
+    """First run of save_load: start level 4 and save it."""
+    shutil.rmtree(os.path.join(out, "card"), ignore_errors=True)
+    subprocess.run([args.exe, "--headless", "--frames", "9300", "--memcard", os.path.join(out, "card"),
+                    "--poke", f"{MENU + 20}:800EE200:4", "--poke", "9000:800F2648:4",
+                    "--script", START_LEVEL1, args.disc], capture_output=True, timeout=600)
+    if not os.path.exists(os.path.join(out, "card", "bu00", "BASLUS-00977")):
+        return "the game did not write a save"
+    return None
+
+
+def check_save_load(out, log):
+    # the level variable holds the level being loaded, then goes back to -1
+    levels = {int(l.split("=")[-1], 16) & 0xFFFF for l in log.splitlines() if l.startswith("watch")}
+    if 5 not in levels:
+        return f"stage 5 was not loaded (level variable: {sorted(levels)})"
+    return None
+
+
+CHECKS = {"modern_controls": check_modern_controls, "save_load": check_save_load}
+PREPARE = {"save_load": prepare_save_load}
 
 
 def run(s, args):
@@ -100,6 +125,10 @@ def run(s, args):
     out = os.path.join(args.out, name)
     os.makedirs(out, exist_ok=True)
     extra = [e.replace("{out}", out) for e in extra]
+    if name in PREPARE:
+        msg = PREPARE[name](args, out)
+        if msg:
+            return name, False, msg, 0.0
     cmd = [args.exe, "--headless", "--frames", str(frames), "--shots", str(frames), out,
            "--wav", os.path.join(out, "audio.wav")] + extra
     if script:

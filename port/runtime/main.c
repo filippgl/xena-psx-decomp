@@ -14,6 +14,7 @@ static const char* opts[16];
 static long menu_shot_frame = -1;
 static const char* opt_textures;
 static const char* opt_selftest;
+static const char* opt_memcard;
 static long ramdump_frames[32];
 static int nramdumps;
 static const char* ramdump_dir;
@@ -411,6 +412,7 @@ int main(int argc, char** argv) {
         }
         else if (!strcmp(argv[i], "--selftest") && i + 2 < argc) { opt_selftest = argv[++i]; opt_selftest_frame = atol(argv[++i]); }
         else if (!strcmp(argv[i], "--textures") && i + 1 < argc) opt_textures = argv[++i];
+        else if (!strcmp(argv[i], "--memcard") && i + 1 < argc) opt_memcard = argv[++i];
         else if (!strcmp(argv[i], "--opt") && i + 1 < argc && nopts < 16) opts[nopts++] = argv[++i];
         else if (!strcmp(argv[i], "--render-scale") && i + 1 < argc) opt_render_scale = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--aspect") && i + 1 < argc) {
@@ -469,7 +471,7 @@ int main(int argc, char** argv) {
         char* base = SDL_GetBasePath();
         char dir[1024];
         SDL_snprintf(dir, sizeof(dir), "%smemcard", base ? base : "");
-        bios_set_card_dir(dir);
+        bios_set_card_dir(opt_memcard ? opt_memcard : dir);
     }
 
     gpu_init();
