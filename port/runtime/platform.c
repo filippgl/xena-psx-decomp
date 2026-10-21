@@ -366,18 +366,26 @@ static long frame_buttons_stamp = -1;
 extern long g_frame_no;
 
 /* ---------------- modern (camera-relative) controls ----------------
- * In the original, Up runs along the camera's direction, Down turns her round and Left/
+ * In the original, Up runs along the level's guide direction, Down turns her round and Left/
  * Right run in a circle. Here the direction pressed is a direction on screen: it is turned
  * into a heading from the camera's yaw (0x800F0F28), the game is told "run" (Up), and a hook
  * in her control update (probe_player_steer) turns her toward that heading. Angles are
  * 12-bit, increasing to the right; she moves along rotY + 2048 and a camera behind her has
- * yaw = rotY + 2048. Outside her normal movement (menus, cutscenes, attacks, jumps...)
- * the buttons pass through unchanged. */
+ * yaw = rotY + 2048. Menus, cutscenes and the states run_state leaves out keep the
+ * original buttons. */
 #define CAM_YAW 0x800F0F28u
 
 static int wrap12(int a) { return ((a + 2048) & 4095) - 2048; }
 
 static int modern_active; /* directions were translated this frame */
+
+/* States (obj+0xD0) where the game moves her only while Up is held: standing, running
+ * (14-17), pivoting (2B/2C), jumping (2F), leaping (1A/1E). Attacks already turn her to
+ * the pressed direction relative to the camera; those and everything else (hits, falls,
+ * ledges, special moves) keep the original buttons. */
+static int run_state(u32 st) {
+    return st == 0x00 || (st >= 0x14 && st <= 0x17) || st == 0x2B || st == 0x2C || st == 0x2F || st == 0x1A || st == 0x1E;
+}
 
 static u16 modern_controls(u16 b) {
     static int latched, ref_cam, last_in;
@@ -385,10 +393,7 @@ static u16 modern_controls(u16 b) {
     extern long g_steer_frame;
     extern u32 g_player_state;
     g_steer_active = modern_active = 0;
-    /* standing, running, pivoting; attacks, jumps, climbing... keep the original buttons */
-    int moving = g_player_state == 0 || (g_player_state >= 0x14 && g_player_state <= 0x17) ||
-                 g_player_state == 0x2B || g_player_state == 0x2C;
-    if (!g_cfg.modern_controls || g_frame_no - g_steer_frame > 3 || !moving) { latched = 0; return b; }
+    if (!g_cfg.modern_controls || g_frame_no - g_steer_frame > 3 || !run_state(g_player_state)) { latched = 0; return b; }
     modern_active = 1;
     /* screen-space direction: right = +x, forward (away from the camera) = +y */
     float ix, iy;
