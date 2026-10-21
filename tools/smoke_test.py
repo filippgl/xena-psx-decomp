@@ -27,6 +27,10 @@ MENU = 7400  # frame at which the main menu accepts input (intro skipped by wait
 START_LEVEL1 = f"{MENU}:CROSS,{MENU + 300}:CROSS,{MENU + 600}:CROSS,{MENU + 900}:CROSS"
 START_ARENA = f"{MENU}:DOWN,{MENU + 60}:DOWN,{MENU + 120}:CROSS,{MENU + 400}:CROSS,{MENU + 700}:CROSS,{MENU + 1000}:CROSS"
 
+START_ARENA_SHORT = f"{MENU}:DOWN,{MENU + 60}:DOWN,{MENU + 120}:CROSS,{MENU + 400}:CROSS,{MENU + 700}:CROSS,{MENU + 1000}:CROSS"
+NATIVE_1X = ["--render-scale", "1", "--aspect", "4:3", "--opt", "perspective=0", "--opt", "texture_filter=0",
+             "--opt", "subpixel=0"]
+
 BUTTONS = ["UP", "DOWN", "LEFT", "RIGHT", "CROSS", "SQUARE", "CIRCLE", "TRIANGLE", "L1", "R1", "L2", "R2"]
 
 
@@ -64,6 +68,10 @@ SCENARIOS = [
     # main menu in a second run: the load screen must offer it and stage 5 must start
     ("save_load", 9600, "7400:DOWN,7500:CROSS,7800:CROSS,8100:CROSS,8400:CROSS,8700:CROSS",
      ["--memcard", "{out}/card", "--watch", "800EE200"], False),
+    # the HD renderer at 1x without enhancements against the native rasterizer, in the
+    # arena: at most 1% of pixels may differ beyond colour precision and 1-pixel shifts
+    ("hd_matches_native", 9300, START_ARENA_SHORT, NATIVE_1X + ["--opt", "renderer=software", "--opt", "force_hd=1"], False),
+    ("gl_matches_native", 9300, START_ARENA_SHORT, NATIVE_1X + ["--opt", "renderer=opengl", "--opt", "force_hd=1"], False),
     ("gl_8x_219_ssaa", 9700, START_LEVEL1 + f",{MENU + 1100}:UP:300", ["--render-scale", "8", "--aspect", "21:9", "--opt", "ssaa=2"], False),
 ]
 
@@ -116,8 +124,38 @@ def check_save_load(out, log):
     return None
 
 
-CHECKS = {"modern_controls": check_modern_controls, "save_load": check_save_load}
-PREPARE = {"save_load": prepare_save_load}
+def prepare_hd_matches_native(args, out):
+    """Reference picture from the native rasterizer."""
+    ref = os.path.join(out, "native")
+    os.makedirs(ref, exist_ok=True)
+    subprocess.run([args.exe, "--headless", "--frames", "9300", "--shots", "9300", ref, "--opt", "renderer=software"]
+                   + NATIVE_1X + ["--script", START_ARENA_SHORT, args.disc], capture_output=True, timeout=600)
+    return None if os.path.exists(os.path.join(ref, "frame_009300.bmp")) else "no native picture"
+
+
+def structural_diff(a, b, tol=24):
+    """Pixels of b with no pixel of a within one pixel whose colour is within tol (so
+    true-colour precision and one-texel shifts don't count)."""
+    h, w, _ = a.shape
+    pad = np.pad(a, ((1, 1), (1, 1), (0, 0)), mode="edge")
+    best = np.full((h, w), 1 << 30)
+    for dy in range(3):
+        for dx in range(3):
+            best = np.minimum(best, np.abs(pad[dy:dy + h, dx:dx + w] - b).max(2))
+    return best > tol
+
+
+def check_hd_matches_native(out, log):
+    a = np.asarray(Image.open(os.path.join(out, "native", "frame_009300.bmp")).convert("RGB")).astype(int)
+    b = np.asarray(Image.open(os.path.join(out, "frame_009300.bmp")).convert("RGB")).astype(int)
+    n = int((structural_diff(a, b) | structural_diff(b, a)).sum())
+    return f"{n} pixels differ ({n * 100 / a[..., 0].size:.1f}%)" if n * 100 > a[..., 0].size else None
+
+
+CHECKS = {"modern_controls": check_modern_controls, "save_load": check_save_load,
+          "hd_matches_native": check_hd_matches_native, "gl_matches_native": check_hd_matches_native}
+PREPARE = {"save_load": prepare_save_load, "hd_matches_native": prepare_hd_matches_native,
+           "gl_matches_native": prepare_hd_matches_native}
 
 
 def run(s, args):

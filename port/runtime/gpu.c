@@ -268,6 +268,26 @@ static int cmd_length(u32 cmd) {
     return 1;
 }
 
+/* debugging: XENA_PRIMLOG=frame,x0,y0,x1,y1 logs the primitives drawn over that
+ * rectangle (drawing coordinates, offset included) during that frame */
+static void primlog(const char* kind, int n, const int* xs, const int* ys, u32 tp, u32 clut, int semi_mode) {
+    static int r[5] = {-1};
+    extern long g_frame_no;
+    if (r[0] == -1) {
+        const char* e = getenv("XENA_PRIMLOG");
+        if (!e || sscanf(e, "%d,%d,%d,%d,%d", &r[0], &r[1], &r[2], &r[3], &r[4]) != 5) r[0] = -2;
+    }
+    if (r[0] == -2 || g_frame_no != r[0]) return;
+    int x0 = xs[0], x1 = xs[0], y0 = ys[0], y1 = ys[0];
+    for (int i = 1; i < n; i++) {
+        if (xs[i] < x0) x0 = xs[i]; if (xs[i] > x1) x1 = xs[i];
+        if (ys[i] < y0) y0 = ys[i]; if (ys[i] > y1) y1 = ys[i];
+    }
+    if (x1 < r[1] || x0 > r[3] || y1 < r[2] || y0 > r[4]) return;
+    log_msg("prim %s op=%02X tp=%04X clut=%04X semi=%d bbox=%d,%d..%d,%d mask=%d%d", kind, fifo[0] >> 24, tp, clut,
+            semi_mode, x0, y0, x1, y1, mask_set, mask_check);
+}
+
 static void exec_polygon(void) {
     u32 op = fifo[0] >> 24;
     int quad = op & 8, gour = op & 0x10, tex = op & 4, semi = op & 2, raw = op & 1;
@@ -317,6 +337,7 @@ static void exec_polygon(void) {
         }
         texdump_record(tp, clut, umin, vmin, umax, vmax, tagged >= 2);
     }
+    { int xs[4], ys[4]; for (int i = 0; i < nv; i++) { xs[i] = v[i].x; ys[i] = v[i].y; } primlog("poly", nv, xs, ys, tp, clut, semi_mode); }
     draw_triangle(v[0], v[1], v[2], gour, tex, raw, semi, semi_mode, &ts);
     if (quad) draw_triangle(v[1], v[2], v[3], gour, tex, raw, semi, semi_mode, &ts);
     hd_polygon(v, xyw, xya, nv, gour, tex, raw, semi, semi_mode, &ts);
@@ -346,6 +367,7 @@ static void exec_rect(void) {
     TexState ts;
     if (tex) set_texstate(&ts, texpage, clut);
     if (tex && dump_dir) texdump_record(texpage, clut, u, v, u + w - 1, v + h - 1, 0);
+    { int xs[2] = {x, x + w - 1}, ys[2] = {y, y + h - 1}; primlog("rect", 2, xs, ys, texpage, clut, (texpage >> 5) & 3); }
     draw_rect(x, y, w, h, fifo[0], tex, raw, semi, (texpage >> 5) & 3, u, v, &ts);
     hd_rect(x, y, w, h, fifo[0], tex, raw, semi, (texpage >> 5) & 3, u, v, &ts, xy, fifo_addr[1]);
 }

@@ -184,6 +184,7 @@ void config_set_video(const char* key, const char* val) {
     else if (!strcmp(key, "dump_textures")) g_cfg.dump_textures = atoi(val);
     else if (!strcmp(key, "fast_cd")) g_cfg.fast_cd = atoi(val);
     else if (!strcmp(key, "modern_controls")) g_cfg.modern_controls = atoi(val);
+    else if (!strcmp(key, "force_hd")) g_cfg.force_hd = atoi(val);
 }
 
 static void parse(char* text) {

@@ -215,7 +215,7 @@ void gpu_hd_configure(void) {
     hd_scale = g_cfg.render_scale * hd_ssaa;
     float aspect = config_aspect_ratio();
     hd_wide = aspect / (4.0f / 3.0f);
-    hd_enabled = hd_scale > 1 || g_cfg.aspect != ASPECT_4_3 || g_cfg.perspective || g_cfg.texture_filter;
+    hd_enabled = hd_scale > 1 || g_cfg.aspect != ASPECT_4_3 || g_cfg.perspective || g_cfg.texture_filter || g_cfg.force_hd;
     /* GTE horizontal squeeze for widescreen: 4:3 / target */
     switch (g_cfg.aspect) {
     case ASPECT_16_9: g_gte_ws_num = 3; g_gte_ws_den = 4; break;
@@ -639,6 +639,14 @@ static void push_tri(int si, const HdSurf* s, int wide, const HV* a, const HV* b
 }
 
 /* a polygon from gpu.c; xy holds the raw GP0 vertex words (before the drawing offset) */
+/* the GPU skips triangles spanning 1024+ pixels across or 512+ down (draw_triangle) */
+static inline int hw_rejects(const Vtx* a, const Vtx* b, const Vtx* c) {
+    int x0 = a->x, x1 = a->x, y0 = a->y, y1 = a->y;
+    if (b->x < x0) x0 = b->x; if (b->x > x1) x1 = b->x; if (c->x < x0) x0 = c->x; if (c->x > x1) x1 = c->x;
+    if (b->y < y0) y0 = b->y; if (b->y > y1) y1 = b->y; if (c->y < y0) y0 = c->y; if (c->y > y1) y1 = c->y;
+    return x1 - x0 >= 1024 || y1 - y0 >= 512;
+}
+
 static void hd_polygon(const Vtx* v, const u32* xy, const u32* xya, int nv, int gour, int tex, int raw, int semi,
                        int mode, const TexState* ts) {
     if (!hd_enabled || !hd_nsurf) return;
@@ -691,8 +699,10 @@ static void hd_polygon(const Vtx* v, const u32* xy, const u32* xya, int nv, int 
         int wide = tagged >= 2 || (hd_mode3d && minx <= s->ox && maxx >= s->ox + s->w - 1);
         HV h[4];
         for (int i = 0; i < nv; i++) {
-            h[i].x = map_x(s, fx[i], wide);
-            h[i].y = map_y(s, fy[i]);
+            /* the GPU samples pixel n at n, we sample at pixel centres: move the polygon by
+             * half a PS1 pixel so both land on the same texels (exactly so at 1x) */
+            h[i].x = map_x(s, fx[i] + 0.5f, wide);
+            h[i].y = map_y(s, fy[i] + 0.5f);
             h[i].r = (float)v[i].r; h[i].g = (float)v[i].g; h[i].b = (float)v[i].b;
             float q = persp ? 1024.0f / fz[i] : 1.0f;
             /* PS1 texels are sampled at integer coordinates; centre them for filtering */
@@ -701,8 +711,8 @@ static void hd_polygon(const Vtx* v, const u32* xy, const u32* xya, int nv, int 
             h[i].v = (v[i].v + off) * q;
             h[i].q = q;
         }
-        push_tri(si, s, wide, &h[0], &h[1], &h[2], gour, tex, raw, semi, mode, ts);
-        if (nv == 4) push_tri(si, s, wide, &h[1], &h[2], &h[3], gour, tex, raw, semi, mode, ts);
+        if (!hw_rejects(&v[0], &v[1], &v[2])) push_tri(si, s, wide, &h[0], &h[1], &h[2], gour, tex, raw, semi, mode, ts);
+        if (nv == 4 && !hw_rejects(&v[1], &v[2], &v[3])) push_tri(si, s, wide, &h[1], &h[2], &h[3], gour, tex, raw, semi, mode, ts);
     }
 }
 

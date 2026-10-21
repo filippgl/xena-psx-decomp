@@ -30,6 +30,7 @@ typedef struct {
     int mouse_enabled;
     int mouse_turn;
     int modern_controls; /* directions are relative to the camera */
+    int force_hd;        /* testing: HD renderer even at 1x without enhancements (not saved) */
     float mouse_sensitivity;
     int rumble;
     float stick_deadzone;
