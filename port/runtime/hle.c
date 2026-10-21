@@ -47,3 +47,12 @@ void probe_player_steer(void) {
     if (!g_steer_active) return;
     steer_step(obj, STEER_MAX);
 }
+
+/* --verbose: every file the game looks up in XENA.UDA (func_800A4B1C, its CdSearchFile) */
+void probe_file_lookup(void) {
+    char name[64];
+    int i = 0;
+    for (u32 a = cpu.r[4]; i < 63 && (name[i] = (char)mem_r8(a)) != 0; a++, i++) {}
+    name[i] = 0;
+    LOG("file: %s", name);
+}

@@ -16,3 +16,5 @@ _remove_ChgclrPAD   hle_nop
 # turn (the camera-relative controls steer there)
 @probe              8003BF14 probe_player_start
 @probe              8003C6B4 probe_player_steer
+# file lookups in XENA.UDA (logged with --verbose)
+@probe              800A4B1C probe_file_lookup
