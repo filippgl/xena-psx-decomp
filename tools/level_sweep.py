@@ -47,8 +47,9 @@ def run(level, args):
         return level, False, "timeout", 0
     open(os.path.join(out, "log.txt"), "w", encoding="utf-8").write(log)
     problems = []
-    if "FATAL" in log:
-        problems.append(log[log.index("FATAL"):].splitlines()[0])
+    for bad in ("FATAL", "game halted"):
+        if bad in log:
+            problems.append(log[log.index(bad):].splitlines()[0])
     if f"reached frame {end}" not in log:
         problems.append("did not finish")
     shots = sorted(f for f in os.listdir(out) if f.endswith(".bmp"))

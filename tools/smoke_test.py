@@ -180,8 +180,9 @@ def run(s, args):
         return name, False, "timeout", time.time() - t0
     open(os.path.join(out, "log.txt"), "w", encoding="utf-8").write(log)
     problems = []
-    if "FATAL" in log:
-        problems.append(log[log.index("FATAL"):].splitlines()[0])
+    for bad in ("FATAL", "game halted"):
+        if bad in log:
+            problems.append(log[log.index(bad):].splitlines()[0])
     if "--selftest" in extra and "selftest memcard: PASS" not in log:
         problems.append("self test failed")
     if f"reached frame {frames}" not in log:

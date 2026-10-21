@@ -134,7 +134,7 @@ def translate(i, ctx):
         if fn == 0x06: return W(rd, f"{R(rt)} >> ({R(rs)} & 31)")
         if fn == 0x07: return W(rd, f"(u32)((s32){R(rt)} >> ({R(rs)} & 31))")
         if fn == 0x0C: return f"bios_syscall(0x{i.va:08X});"
-        if fn == 0x0D: return f"cpu_break(0x{i.va:08X}, {(i.w >> 6) & 0xFFFFF});"
+        if fn == 0x0D: return f"cpu_break(0x{i.va:08X}, {(i.w >> 16) & 0x3FF});"
         if fn == 0x10: return W(rd, "HI")
         if fn == 0x11: return f"HI = {R(rs)};"
         if fn == 0x12: return W(rd, "LO")

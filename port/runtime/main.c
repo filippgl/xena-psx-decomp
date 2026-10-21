@@ -106,9 +106,11 @@ void call_indirect(u32 addr) {
     fatal("call to unknown address %08X (ra=%08X)", addr, cpu.r[31]);
 }
 
+/* BREAK has no handler in the game; the one it hits (800AE540, after printing an error
+ * code on screen) is its halt loop */
 void cpu_break(u32 pc, u32 code) {
     static int n;
-    if (n++ < 16) log_msg("break %u at %08X", code, pc);
+    if (n++ == 0) log_msg("game halted: break %u at %08X", code, pc);
 }
 
 void cpu_bad_insn(u32 pc, u32 w) { fatal("unknown instruction %08X at %08X", w, pc); }
