@@ -14,6 +14,10 @@ static const char* opts[16];
 static long menu_shot_frame = -1;
 static const char* opt_textures;
 static const char* opt_selftest;
+/* --poke frame:addr:value[:size] (testing: write guest memory at a frame) */
+typedef struct { long frame; u32 addr, value; int size; } Poke;
+static Poke pokes[16];
+static int npokes;
 static long opt_selftest_frame = -1;
 static const char* menu_shot_file;
 static int nopts;
@@ -215,6 +219,12 @@ void host_frame(void) {
         if (platform_settings_requested()) platform_settings_menu();
     }
     pace_frame();
+    for (int k = 0; k < npokes; k++)
+        if (pokes[k].frame == frame_no) {
+            if (pokes[k].size == 1) mem_w8(pokes[k].addr, pokes[k].value);
+            else if (pokes[k].size == 4) mem_w32(pokes[k].addr, pokes[k].value);
+            else mem_w16(pokes[k].addr, pokes[k].value);
+        }
     if (frame_no == opt_selftest_frame) { extern void selftest_run(const char*); selftest_run(opt_selftest); }
     if (frame_no % 120 == 0) { extern void texdump_write(void); texdump_write(); }
 
@@ -365,6 +375,14 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--vsync")) opt_vsync = 1;
         else if (!strcmp(argv[i], "--menu-shot") && i + 2 < argc) { menu_shot_frame = atol(argv[++i]); menu_shot_file = argv[++i]; }
         else if (!strcmp(argv[i], "--dump-textures") && i + 1 < argc) { extern void texdump_enable(const char*); texdump_enable(argv[++i]); }
+        else if (!strcmp(argv[i], "--poke") && i + 1 < argc && npokes < 16) {
+            Poke* pk = &pokes[npokes++];
+            char* p = argv[++i];
+            pk->frame = strtol(p, &p, 10); if (*p == ':') p++;
+            pk->addr = (u32)strtoul(p, &p, 16); if (*p == ':') p++;
+            pk->value = (u32)strtoul(p, &p, 0); pk->size = 2;
+            if (*p == ':') pk->size = atoi(p + 1);
+        }
         else if (!strcmp(argv[i], "--selftest") && i + 2 < argc) { opt_selftest = argv[++i]; opt_selftest_frame = atol(argv[++i]); }
         else if (!strcmp(argv[i], "--textures") && i + 1 < argc) opt_textures = argv[++i];
         else if (!strcmp(argv[i], "--opt") && i + 1 < argc && nopts < 16) opts[nopts++] = argv[++i];
