@@ -1,0 +1,24 @@
+# Copyrighted game data: never commit
+*.bin
+*.exe
+*.EXE
+disc/
+xena.exe.sha1.local
+
+# Generated
+asm/
+build/
+build.ninja
+.ninja_*
+xena.exe.ld
+xena.exe.d
+undefined_funcs_auto.txt
+undefined_syms_auto.txt
+__pycache__/
+
+# Tooling
+.venv/
+.venv-linux/
+tools/gcc-*/
+tools/maspsx/
+tools/psyq_sigs/

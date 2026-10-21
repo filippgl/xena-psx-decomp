@@ -1,0 +1,78 @@
+name: Xena Warrior Princess (SLUS-00977)
+sha1: f31a850d445fa3e92b9098d8ef7f9732d2733130
+options:
+  basename: Xena Warrior Princess (SLUS-00977)
+  target_path: xena.exe
+  elf_path: build/xena.exe.elf
+  base_path: ..
+  platform: psx
+  compiler: PSYQ
+
+  asm_path: asm
+  src_path: src
+  build_path: build
+  # create_asm_dependencies: True
+
+  ld_script_path: xena.exe.ld
+  ld_dependencies: True
+
+  find_file_boundaries: False
+  gp_value: 0x800EC210
+  # ld_gp_expression: main_SCOMMON_START + 0x7FF0
+
+  o_as_suffix: True
+  use_legacy_include_asm: False
+
+  section_order: [".rodata", ".text", ".data", ".bss"]
+  # auto_link_sections: [".data", ".rodata", ".bss"]
+
+  symbol_addrs_path:
+    - symbol_addrs.txt
+  reloc_addrs_path:
+    - reloc_addrs.txt
+
+  undefined_funcs_auto_path: undefined_funcs_auto.txt
+  undefined_syms_auto_path: undefined_syms_auto.txt
+
+  extensions_path: tools/splat_ext
+
+  subalign: 2
+  ld_align_segment_vram_end: False
+  ld_align_section_vram_end: False
+  ld_bss_is_noload: True
+
+  string_encoding: ASCII
+  data_string_encoding: ASCII
+  rodata_string_guesser_level: 2
+  data_string_guesser_level: 2
+
+  # Uncomment this line if you need to use the maspsx reorder workaround hack
+  # https://github.com/mkst/maspsx?tab=readme-ov-file#include_asm-reordering-workaround-hack
+  include_asm_macro_style: maspsx_hack
+segments:
+  - name: header
+    type: header
+    start: 0x0
+
+  - name: gte
+    type: code
+    start: 0x800
+    vram: 0x80010000
+    align: 4
+    subsegments:
+      - [0x800, asm, gte_asm]
+
+  - name: main
+    type: code
+    start: 0x71AC
+    vram: 0x800169AC
+    align: 4
+    bss_size: 0x112C0
+    subsegments:
+      - [0x71AC, .rodata, game]
+      - [0x89B4, rodata, psyq_rodata]
+      - [0x9A24, c, game]
+      - [0x791AC, asm, psyq]
+      - [0xB0680, data, data]
+      - { start: 0xE11D8, type: bss, vram: 0x800F09D8, name: bss }
+  - [0xE1800]
