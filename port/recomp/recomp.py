@@ -231,6 +231,12 @@ class Recompiler:
         for i in list(self.insns.values()):
             if i.is_jal():
                 self.add_entry(i.target)
+            elif i.is_branch() or i.is_j():
+                # branches leaving their function (hand-written asm) become tail calls
+                t = i.branch_target() if i.is_branch() else i.target
+                f = self.func_at(i.va)
+                if f is not None and not f.contains(t):
+                    self.add_entry(t)
         self.add_pointer_entries()
         # setjmp-style functions: their callers are resumed right after the call
         for target in hle.get("@return_entries", "").split(","):

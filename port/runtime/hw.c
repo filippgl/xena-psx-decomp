@@ -311,10 +311,8 @@ u32 io_read(u32 p, int size) {
     }
     if (p >= 0x1F801800 && p < 0x1F801804) return cd_read_reg(p);
     if (p >= 0x1F801000 && p < 0x1F801040) return memctrl[(p >> 2) & 15];
-    if (p >= 0x1F801040 && p < 0x1F801060) {
-        if ((p & 0xF) == 4) return 0x7; /* SIO stat: tx ready, rx empty */
-        return 0xFF;
-    }
+    if (p >= 0x1F801040 && p < 0x1F801050) return sio_read(p, size);
+    if (p >= 0x1F801050 && p < 0x1F801060) return (p & 0xF) == 4 ? 0x5 : 0; /* SIO1 */
     if (p >= 0x1F000000 && p < 0x1F800000) return 0xFFFFFFFF; /* expansion 1 */
     if (p >= 0x1FC00000 && p < 0x1FC80000) return 0;           /* BIOS ROM */
     if (p == 0x1F801060) return 0xB88;
@@ -350,7 +348,8 @@ void io_write(u32 p, u32 v, int size) {
     }
     if (p >= 0x1F801800 && p < 0x1F801804) { cd_write_reg(p, (u8)v); return; }
     if (p >= 0x1F801000 && p < 0x1F801040) { memctrl[(p >> 2) & 15] = v; return; }
-    if (p >= 0x1F801040 && p < 0x1F801060) return; /* SIO: pads go through BIOS HLE */
+    if (p >= 0x1F801040 && p < 0x1F801050) { sio_write(p, v, size); return; }
+    if (p >= 0x1F801050 && p < 0x1F801060) return; /* SIO1 (serial port) */
     if (p == 0x1F801060) return;
     if (p >= 0x1F802000 && p < 0x1F803000) return; /* expansion 2 / debug */
     LOG("io_write%d unhandled %08X = %08X", size * 8, p, v);

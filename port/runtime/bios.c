@@ -289,6 +289,7 @@ void bios_vblank(void) {
 /* ---------------- exception dispatch ---------------- */
 
 static u32 hook_jmpbuf; /* SetCustomExitFromException (HookEntryInt) */
+static u32 intrp[4][8];   /* SysEnqIntRP handler chains by priority */
 static jmp_buf irq_env;
 
 void irq_deliver(void) {
@@ -311,6 +312,16 @@ void irq_deliver(void) {
         if (rcnt_autoclear[t]) g_istat &= ~bit;
     }
 
+    /* kernel interrupt handler chains: func1 verifies, func2 handles */
+    for (int pr = 0; pr < 4; pr++)
+        for (int i = 0; i < 8; i++) {
+            u32 h = intrp[pr][i];
+            if (!h) continue;
+            u32 f2 = mem_r32(h + 4), f1 = mem_r32(h + 8);
+            if (!f1) continue;
+            call_guest(f1, 0, 0, 1);
+            if (cpu.r[2] && f2) call_guest(f2, cpu.r[2], 0, 1);
+        }
     {
         static int n;
         if (g_verbose && n++ < 8)
@@ -404,10 +415,10 @@ static void bios_b0(u32 fn) {
         break;
     case 0x0C: if ((e = ev_get(a0)) && e->status) e->status = 0x2000; cpu.r[2] = 1; break;
     case 0x0D: if ((e = ev_get(a0)) && e->status) e->status = 0x1000; cpu.r[2] = 1; break;
-    case 0x12: pad_buf[0] = a0; pad_size[0] = a1; pad_buf[1] = a2; pad_size[1] = a3; cpu.r[2] = 2; break;
-    case 0x13: pad_started = 1; cpu.r[2] = 1; break;
+    case 0x12: LOG("InitPad(%08X,%u,%08X,%u)", a0, a1, a2, a3); pad_buf[0] = a0; pad_size[0] = a1; pad_buf[1] = a2; pad_size[1] = a3; cpu.r[2] = 2; break;
+    case 0x13: LOG("StartPad"); pad_started = 1; cpu.r[2] = 1; break;
     case 0x14: pad_started = 0; cpu.r[2] = 1; break;
-    case 0x15: pad_old_dest = a1; pad_started = 1; cpu.r[2] = 2; break;
+    case 0x15: LOG("OutdatedPadInitAndStart(%u,%08X)", a0, a1); pad_old_dest = a1; pad_started = 1; cpu.r[2] = 2; break;
     case 0x17: return_from_exception(); break;
     case 0x18: hook_jmpbuf = 0; break;
     case 0x19: hook_jmpbuf = a0; LOG("HookEntryInt(%08X)", a0); break;
@@ -445,8 +456,18 @@ static void bios_b0(u32 fn) {
 static void bios_c0(u32 fn) {
     u32 a0 = cpu.r[4], a1 = cpu.r[5];
     switch (fn) {
-    case 0x02: LOG("SysEnqIntRP(%u, %08X)", a0, a1); cpu.r[2] = 0; break;
-    case 0x03: cpu.r[2] = 0; break;
+    case 0x02: /* SysEnqIntRP(priority, handler) */
+        LOG("SysEnqIntRP(%u, %08X)", a0, a1);
+        if (a0 < 4) {
+            for (int i = 0; i < 8; i++) if (intrp[a0][i] == a1) { cpu.r[2] = 0; return; }
+            for (int i = 0; i < 8; i++) if (!intrp[a0][i]) { intrp[a0][i] = a1; break; }
+        }
+        cpu.r[2] = 0;
+        break;
+    case 0x03: /* SysDeqIntRP */
+        if (a0 < 4) for (int i = 0; i < 8; i++) if (intrp[a0][i] == a1) intrp[a0][i] = 0;
+        cpu.r[2] = 0;
+        break;
     case 0x0A: /* ChangeClearRCnt */
         LOG("ChangeClearRCnt(%u, %u)", a0, a1);
         if (a0 < 4) { cpu.r[2] = (u32)rcnt_autoclear[a0]; rcnt_autoclear[a0] = (int)a1; }

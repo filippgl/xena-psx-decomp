@@ -31,7 +31,7 @@ s64 hw_now(void);
 typedef void (*EventFn)(void);
 void sched_event(int id, s64 delay_cycles, EventFn fn);
 void sched_cancel(int id);
-enum { EV_VBLANK, EV_CD, EV_CD2, EV_TMR0, EV_TMR1, EV_TMR2, EV_SPU, EV_COUNT };
+enum { EV_VBLANK, EV_CD, EV_CD2, EV_TMR0, EV_TMR1, EV_TMR2, EV_SPU, EV_SIO, EV_COUNT };
 
 /* interrupt controller */
 extern u32 g_istat, g_imask;
@@ -88,6 +88,8 @@ u32 mdec_dma_out(void);
 int mdec_out_ready(void);
 
 /* pads */
+void sio_write(u32 addr, u32 v, int size);
+u32 sio_read(u32 addr, int size);
 void pad_poll_host(void);
 u16 pad_buttons(int port); /* active-high PS1 button bits */
 
