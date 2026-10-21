@@ -3,6 +3,10 @@
 
 extern int g_gte_ws_num, g_gte_ws_den;
 void gte_tag_vertex(int x, int y, float fx, float fy, float z);
+void gte_tag_address(u32 addr, u32 value, float fx, float fy, float z);
+
+/* precise screen position and depth of SXY0..SXY2 (z = 0: unknown) */
+static struct { float fx, fy, z; } sxy_prec[3];
 
 static s32 D[32]; /* data registers */
 static s32 C[32]; /* control registers */
@@ -115,6 +119,9 @@ static inline void push_sxy(s64 x, s64 y) {
     else if (y > 0x3FF) { FLAG |= 1u << 13; y = 0x3FF; }
     SXY0 = SXY1; SXY1 = SXY2;
     SXY2 = (s32)(((u32)(u16)(s16)y << 16) | (u16)(s16)x);
+    sxy_prec[0] = sxy_prec[1];
+    sxy_prec[1] = sxy_prec[2];
+    sxy_prec[2].z = 0;
 }
 
 static inline void push_color(void) {
@@ -187,7 +194,10 @@ static void rtp(int v, int sf, int lm, int last) {
     set_mac0(sx);
     set_mac0(sy);
     push_sxy(sx >> 16, sy >> 16);
-    gte_tag_vertex((s16)SXY2, (s16)(SXY2 >> 16), (float)((double)sx / 65536.0), (float)((double)sy / 65536.0), (float)SZ3);
+    sxy_prec[2].fx = (float)((double)sx / 65536.0);
+    sxy_prec[2].fy = (float)((double)sy / 65536.0);
+    sxy_prec[2].z = (float)SZ3;
+    gte_tag_vertex((s16)SXY2, (s16)(SXY2 >> 16), sxy_prec[2].fx, sxy_prec[2].fy, (float)SZ3);
     if (last) {
         s64 dq = (s64)DQA * div + DQB;
         set_mac0(dq);
@@ -435,6 +445,11 @@ void gte_write_data(int r, u32 v) {
     switch (r) {
     case 15:
         SXY0 = SXY1; SXY1 = SXY2; SXY2 = (s32)v;
+        sxy_prec[0] = sxy_prec[1]; sxy_prec[1] = sxy_prec[2]; sxy_prec[2].z = 0;
+        break;
+    case 12: case 13: case 14:
+        D[r] = (s32)v;
+        sxy_prec[r - 12].z = 0;
         break;
     case 28:
         IR1 = (s32)((v & 0x1F) * 0x80);
@@ -475,4 +490,11 @@ void gte_write_ctrl(int r, u32 v) {
         return;
     }
     C[r] = (s32)v;
+}
+
+void gte_store_sxy(u32 addr, int reg) {
+    u32 v = (u32)D[reg];
+    mem_w32(addr, v);
+    if (sxy_prec[reg - 12].z > 0)
+        gte_tag_address(addr, v, sxy_prec[reg - 12].fx, sxy_prec[reg - 12].fy, sxy_prec[reg - 12].z);
 }

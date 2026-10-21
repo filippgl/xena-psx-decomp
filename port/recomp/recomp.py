@@ -182,6 +182,7 @@ def translate(i, ctx):
     if op == 0x2B: return f"mem_w32({a}, {R(rt)});"
     if op == 0x2E: return f"mem_swr({a}, {R(rt)});"
     if op == 0x32: return f"gte_write_data({rt}, mem_r32({a}));"
+    if op == 0x3A and rt in (12, 13, 14): return f"gte_store_sxy({a}, {rt});"
     if op == 0x3A: return f"mem_w32({a}, gte_read_data({rt}));"
     ctx.warn(f"unknown instruction {i.w:08X} at {i.va:08X}")
     return f"cpu_bad_insn(0x{i.va:08X}, 0x{i.w:08X});"

@@ -289,7 +289,8 @@ int platform_pump(void) {
             key_event(e.key.keysym.sym, 0);
             break;
         case SDL_MOUSEBUTTONDOWN:
-            if (g_cfg.mouse_enabled && !mouse_captured) set_mouse_capture(1); /* first click captures */
+            /* the mouse is only captured when it is used for turning */
+            if (g_cfg.mouse_enabled && g_cfg.mouse_turn && !mouse_captured) set_mouse_capture(1);
             break;
         case SDL_MOUSEWHEEL:
             if (!mouse_captured) break;

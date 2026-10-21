@@ -150,7 +150,7 @@ static int menu_change(int i, int dir) {
         break;
     }
     case MI_RUMBLE: g_cfg.rumble ^= 1; if (g_cfg.rumble) platform_rumble(1, 160); break;
-    case MI_MOUSETURN: g_cfg.mouse_turn ^= 1; break;
+    case MI_MOUSETURN: g_cfg.mouse_turn ^= 1; if (!g_cfg.mouse_turn) set_mouse_capture(0); break;
     case MI_FASTCD: g_cfg.fast_cd ^= 1; break;
     case MI_DUMP: { extern void texdump_set(int on); g_cfg.dump_textures ^= 1; texdump_set(g_cfg.dump_textures); break; }
     case MI_MOUSESENS: {

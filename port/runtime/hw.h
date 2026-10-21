@@ -52,6 +52,7 @@ void timer_write(u32 addr, u32 val);
 /* GPU */
 void gpu_init(void);
 void gpu_gp0(u32 v);
+extern u32 g_gp0_addr; /* RAM address of the GP0 word being sent by DMA, or ~0 */
 void gpu_gp1(u32 v);
 u32 gpu_read(void);
 u32 gpu_stat(void);

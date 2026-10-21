@@ -45,12 +45,14 @@ static unsigned hd_rep_texture(int rep);
 
 /* ---------------- GTE vertex tags (3D detection + sub-pixel positions) ---------------- */
 
-u32 g_stat_rtp, g_stat_poly, g_stat_poly_tagged, g_stat_vtx_tagged;
+u32 g_stat_rtp, g_stat_poly, g_stat_poly_tagged, g_stat_vtx_tagged, g_stat_persp, g_stat_partial, g_stat_collide, g_stat_addr_hit;
 
 #define TAG_SLOTS (1 << 16)
+#define TAG_CANDS 4
 typedef struct {
     u32 key;   /* xy key | generation << 22 */
-    float fx, fy, z;
+    int n;     /* candidates (different vertices projected to this pixel this frame) */
+    float fx[TAG_CANDS], fy[TAG_CANDS], z[TAG_CANDS];
 } Tag;
 static Tag tags[TAG_SLOTS];
 static u32 tag_gen = 1;
@@ -65,32 +67,82 @@ void gte_tag_vertex(int x, int y, float fx, float fy, float z) {
     for (int i = 0; i < 8; i++) {
         Tag* t = &tags[(h + i) & (TAG_SLOTS - 1)];
         u32 gen = t->key >> 22;
-        if ((t->key & 0x3FFFFF) == k || (gen != tag_gen && gen != ((tag_gen - 1) & 0x3FF))) {
+        int same_key = (t->key & 0x3FFFFF) == k;
+        if (same_key && gen == tag_gen) {
+            for (int c = 0; c < t->n; c++)
+                if (fabsf(t->z[c] - z) < 1 && fabsf(t->fx[c] - fx) < 0.05f && fabsf(t->fy[c] - fy) < 0.05f) return;
+            if (t->n < TAG_CANDS) {
+                t->fx[t->n] = fx; t->fy[t->n] = fy; t->z[t->n] = z; t->n++;
+            }
+            g_stat_collide++;
+            return;
+        }
+        if (same_key || (gen != tag_gen && gen != ((tag_gen - 1) & 0x3FF))) {
             t->key = k | (tag_gen << 22);
-            t->fx = fx;
-            t->fy = fy;
-            t->z = z;
+            t->n = 1;
+            t->fx[0] = fx; t->fy[0] = fy; t->z[0] = z;
             return;
         }
     }
 }
 
-static float tag_last_z;
+/* exact tags: RAM address where a GTE result was stored (swc2) */
+#define ATAG_SLOTS (1 << 16)
+typedef struct { u32 addr, value, gen; float fx, fy, z; } AddrTag;
+static AddrTag atags[ATAG_SLOTS];
 
-static int tag_lookup(u32 xyword, float* fx, float* fy) {
+void gte_tag_address(u32 addr, u32 value, float fx, float fy, float z) {
+    if (!hd_enabled) return;
+    u32 p = addr & 0x1FFFFC;
+    AddrTag* t = &atags[(p >> 2) & (ATAG_SLOTS - 1)];
+    t->addr = p; t->value = value; t->gen = tag_gen; t->fx = fx; t->fy = fy; t->z = z;
+}
+
+static float tag_last_z;
+static float tag_hint_z; /* depth of the polygon's other vertices, 0 = none */
+
+/* Is this GP0 vertex a GTE result? Sets precise position and depth (tag_last_z, 0 if
+ * the vertex is ambiguous: several different vertices hit this pixel this frame and the
+ * depth hint can't tell them apart). */
+static int tag_lookup(u32 xyword, u32 waddr, float* fx, float* fy) {
     int x = sx11(xyword), y = sx11(xyword >> 16);
+    if (waddr != 0xFFFFFFFFu) {
+        const AddrTag* a = &atags[(waddr >> 2) & (ATAG_SLOTS - 1)];
+        if (a->addr == waddr && a->value == xyword && (a->gen == tag_gen || a->gen == ((tag_gen - 1) & 0x3FF)) &&
+            fabsf(a->fx - x) < 1.0f && fabsf(a->fy - y) < 1.0f) {
+            *fx = a->fx;
+            *fy = a->fy;
+            tag_last_z = a->z;
+            g_stat_addr_hit++;
+            return 1;
+        }
+    }
     u32 k = tag_key(x, y);
     u32 h = (k * 2654435761u) >> 16;
     for (int i = 0; i < 8; i++) {
         Tag* t = &tags[(h + i) & (TAG_SLOTS - 1)];
         u32 gen = t->key >> 22;
-        if ((t->key & 0x3FFFFF) == k && (gen == tag_gen || gen == ((tag_gen - 1) & 0x3FF))) {
-            /* only trust the precise value when it rounds to the same pixel */
-            if (fabsf(t->fx - x) < 1.0f && fabsf(t->fy - y) < 1.0f) { *fx = t->fx; *fy = t->fy; }
-            else { *fx = (float)x; *fy = (float)y; }
-            tag_last_z = t->z;
-            return 1;
+        if ((t->key & 0x3FFFFF) != k || (gen != tag_gen && gen != ((tag_gen - 1) & 0x3FF))) continue;
+        int best = 0;
+        if (t->n > 1) {
+            if (tag_hint_z <= 0) { /* ambiguous without a hint */
+                *fx = (float)x; *fy = (float)y; tag_last_z = 0;
+                return 1;
+            }
+            float bd = 1e30f;
+            for (int c = 0; c < t->n; c++) {
+                float d = fabsf(t->z[c] - tag_hint_z);
+                if (d < bd) { bd = d; best = c; }
+            }
+            /* reject if even the best candidate is far from the polygon's depth */
+            if (bd > tag_hint_z * 0.25f + 16) { *fx = (float)x; *fy = (float)y; tag_last_z = 0; return 1; }
         }
+        if (fabsf(t->fx[best] - x) < 1.0f && fabsf(t->fy[best] - y) < 1.0f) {
+            *fx = t->fx[best]; *fy = t->fy[best]; tag_last_z = t->z[best];
+        } else {
+            *fx = (float)x; *fy = (float)y; tag_last_z = 0;
+        }
+        return 1;
     }
     return 0;
 }
@@ -98,9 +150,9 @@ static int tag_lookup(u32 xyword, float* fx, float* fy) {
 /* called on every framebuffer flip, i.e. once per game frame */
 static void hd_new_frame(void) {
     if (g_verbose && g_stat_poly)
-        log_msg("hd: rtp=%u polys=%u wide=%u vtx_tagged=%u", g_stat_rtp, g_stat_poly, g_stat_poly_tagged, g_stat_vtx_tagged);
+        log_msg("hd: rtp=%u polys=%u wide=%u vtx_tagged=%u persp=%u partial=%u collisions=%u addr_hits=%u", g_stat_rtp, g_stat_poly, g_stat_poly_tagged, g_stat_vtx_tagged, g_stat_persp, g_stat_partial, g_stat_collide, g_stat_addr_hit);
     hd_mode3d = g_stat_poly_tagged >= 30;
-    g_stat_rtp = g_stat_poly = g_stat_poly_tagged = g_stat_vtx_tagged = 0;
+    g_stat_rtp = g_stat_poly = g_stat_poly_tagged = g_stat_vtx_tagged = g_stat_persp = g_stat_partial = g_stat_collide = g_stat_addr_hit = 0;
     tag_gen = (tag_gen + 1) & 0x3FF;
     if (!tag_gen) tag_gen = 1;
 }
@@ -311,9 +363,9 @@ static inline u32 hd_tex_bilinear(const HdCmd* c, float u, float v) {
     v -= 0.5f;
     int u0 = (int)floorf(u), v0 = (int)floorf(v);
     float fu = u - u0, fv = v - v0;
-    float acc_r = 0, acc_g = 0, acc_b = 0, aw = 0;
-    u16 nearest = 0;
-    float best = -1;
+    float acc_r = 0, acc_g = 0, acc_b = 0, aw = 0, cov = 0;
+    u16 nearest = 0, ts[4];
+    float ws[4], best = -1;
     for (int k = 0; k < 4; k++) {
         int du = k & 1, dv = k >> 1;
         int uu = u0 + du, vv = v0 + dv;
@@ -321,17 +373,22 @@ static inline u32 hd_tex_bilinear(const HdCmd* c, float u, float v) {
         if (uu > c->umax) uu = c->umax;
         if (vv < c->vmin) vv = c->vmin;
         if (vv > c->vmax) vv = c->vmax;
-        float w = (du ? fu : 1 - fu) * (dv ? fv : 1 - fv);
-        u16 t = hd_tex_fetch(&c->t, uu, vv);
-        if (w > best) { best = w; nearest = t; }
-        if (!t) continue;
-        u32 c24 = c15to24(t);
-        acc_r += w * ((c24 >> 16) & 255);
-        acc_g += w * ((c24 >> 8) & 255);
-        acc_b += w * (c24 & 255);
-        aw += w;
+        ws[k] = (du ? fu : 1 - fu) * (dv ? fv : 1 - fv);
+        ts[k] = hd_tex_fetch(&c->t, uu, vv);
+        if (ws[k] > best) { best = ws[k]; nearest = ts[k]; }
     }
-    if (aw < 0.5f) return 0;
+    /* semi-transparency is per texel: only blend texels of the nearest texel's class */
+    for (int k = 0; k < 4; k++) {
+        if (!ts[k]) continue;
+        cov += ws[k];
+        if ((ts[k] >> 15) != (nearest >> 15)) continue;
+        u32 c24 = c15to24(ts[k]);
+        acc_r += ws[k] * ((c24 >> 16) & 255);
+        acc_g += ws[k] * ((c24 >> 8) & 255);
+        acc_b += ws[k] * (c24 & 255);
+        aw += ws[k];
+    }
+    if (cov < 0.5f || !nearest) return 0;
     float inv = 1.0f / aw;
     u32 r = (u32)(acc_r * inv + 0.5f), g = (u32)(acc_g * inv + 0.5f), b = (u32)(acc_b * inv + 0.5f);
     return (r << 16 | g << 8 | b) | ((u32)(nearest >> 15) << 24) | 0x02000000u;
@@ -582,15 +639,25 @@ static void push_tri(int si, const HdSurf* s, int wide, const HV* a, const HV* b
 }
 
 /* a polygon from gpu.c; xy holds the raw GP0 vertex words (before the drawing offset) */
-static void hd_polygon(const Vtx* v, const u32* xy, int nv, int gour, int tex, int raw, int semi,
+static void hd_polygon(const Vtx* v, const u32* xy, const u32* xya, int nv, int gour, int tex, int raw, int semi,
                        int mode, const TexState* ts) {
     if (!hd_enabled || !hd_nsurf) return;
     float fx[4], fy[4], fz[4];
     int tagged = 0;
+    /* first pass without a depth hint, then resolve ambiguous vertices with the
+     * average depth of the polygon's unambiguous ones */
+    float zsum = 0;
+    int zn = 0;
+    tag_hint_z = 0;
+    for (int i = 0; i < nv; i++) {
+        float tx, ty;
+        if (tag_lookup(xy[i], xya[i], &tx, &ty) && tag_last_z > 0) { zsum += tag_last_z; zn++; }
+    }
+    tag_hint_z = zn ? zsum / zn : 0;
     for (int i = 0; i < nv; i++) {
         float tx, ty;
         fz[i] = 0;
-        if (tag_lookup(xy[i], &tx, &ty)) {
+        if (tag_lookup(xy[i], xya[i], &tx, &ty)) {
             tagged++;
             fz[i] = tag_last_z;
             g_stat_vtx_tagged++;
@@ -607,6 +674,7 @@ static void hd_polygon(const Vtx* v, const u32* xy, int nv, int gour, int tex, i
     int persp = g_cfg.perspective && tex && tagged == nv;
     for (int i = 0; i < nv && persp; i++) if (fz[i] <= 0) persp = 0;
     pt_persp = persp;
+    if (tex && tagged >= 2) { if (persp) g_stat_persp++; else if (tagged < nv) g_stat_partial++; }
     pt_bilinear = g_cfg.texture_filter && tex && tagged >= 2;
     pt_umin = pt_vmin = 255;
     pt_umax = pt_vmax = 0;
@@ -639,10 +707,11 @@ static void hd_polygon(const Vtx* v, const u32* xy, int nv, int gour, int tex, i
 }
 
 static void hd_rect(int x, int y, int w, int h, u32 color, int tex, int raw, int semi, int mode,
-                    int u0, int v0, const TexState* ts, u32 xyword) {
+                    int u0, int v0, const TexState* ts, u32 xyword, u32 xyaddr) {
     if (!hd_enabled || !hd_nsurf) return;
     float tx, ty;
-    int tagged = tag_lookup(xyword, &tx, &ty);
+    tag_hint_z = 0;
+    int tagged = tag_lookup(xyword, xyaddr, &tx, &ty);
     for (int si = 0; si < hd_nsurf; si++) {
         HdSurf* s = &hd_surf[si];
         if (!draw_area_touches(s)) continue;
@@ -680,10 +749,11 @@ static void hd_rect(int x, int y, int w, int h, u32 color, int tex, int raw, int
 }
 
 /* lines become thin quads (two triangles) as wide as one native pixel */
-static void hd_line(Vtx a, Vtx b, u32 xa, u32 xb, int gour, int semi, int mode) {
+static void hd_line(Vtx a, Vtx b, u32 xa, u32 xb, u32 aa, u32 ab, int gour, int semi, int mode) {
     if (!hd_enabled || !hd_nsurf) return;
     float ax, ay, bx, by;
-    int ta = tag_lookup(xa, &ax, &ay), tb = tag_lookup(xb, &bx, &by);
+    tag_hint_z = 0;
+    int ta = tag_lookup(xa, aa, &ax, &ay), tb = tag_lookup(xb, ab, &bx, &by);
     if (!ta || !g_cfg.subpixel) { ax = (float)a.x; ay = (float)a.y; } else { ax += off_x; ay += off_y; }
     if (!tb || !g_cfg.subpixel) { bx = (float)b.x; by = (float)b.y; } else { bx += off_x; by += off_y; }
     if (!gour) b.r = a.r, b.g = a.g, b.b = a.b;
@@ -753,6 +823,29 @@ static void hd_copy(int sx, int sy, int dx, int dy, int w, int h) {
         return;
     }
     hd_upload(dx, dy, w, h);
+}
+
+/* Widescreen: the areas outside the 4:3 centre are only covered by 3D geometry and
+ * full-width elements; clear them in the buffers being drawn at each flip so parts
+ * the game never redraws show black instead of stale pictures. */
+static void hd_clear_sides(int shown_x, int shown_y) {
+    if (!hd_enabled || hd_wide <= 1.0f) return;
+    for (int si = 0; si < hd_nsurf; si++) {
+        HdSurf* s = &hd_surf[si];
+        if (s->ox == shown_x && s->oy == shown_y) continue;
+        int l = (int)floorf(map_x(s, (float)s->ox, 0)), r = (int)ceilf(map_x(s, (float)(s->ox + s->w), 0));
+        for (int side = 0; side < 2; side++) {
+            HdCmd* c = hd_push();
+            c->type = HC_FILL;
+            c->surf = (u8)si;
+            c->x0 = side ? r : 0;
+            c->x1 = side ? s->W : l;
+            c->y0 = 0;
+            c->y1 = s->H;
+            c->fill.color = 0;
+            if (c->x0 >= c->x1) qn--;
+        }
+    }
 }
 
 /* ---------------- presentation ---------------- */

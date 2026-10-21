@@ -22,6 +22,8 @@ static int field;
 
 /* command FIFO */
 static u32 fifo[256];
+static u32 fifo_addr[256];
+u32 g_gp0_addr = 0xFFFFFFFFu;
 static int fifo_n, fifo_need;
 static int polyline;          /* 1 while receiving a polyline */
 /* CPU->VRAM / VRAM->CPU transfers */
@@ -274,9 +276,10 @@ static void exec_polygon(void) {
     /* layout: color0 xy0 [uv0] {color_i (gouraud only) xy_i [uv_i]}... */
     int idx = 1;
     u32 clut = 0, tp = texpage;
-    u32 xyw[4];
+    u32 xyw[4], xya[4];
     for (int i = 0; i < nv; i++) {
         u32 col = (i > 0 && gour) ? fifo[idx++] : fifo[0];
+        xya[i] = fifo_addr[idx];
         u32 xy = fifo[idx++];
         xyw[i] = xy;
         v[i].r = col & 255;
@@ -310,13 +313,13 @@ static void exec_polygon(void) {
             if (v[i].u > umax) umax = v[i].u;
             if (v[i].v < vmin) vmin = v[i].v;
             if (v[i].v > vmax) vmax = v[i].v;
-            tagged += tag_lookup(xyw[i], &fx, &fy);
+            tagged += tag_lookup(xyw[i], xya[i], &fx, &fy);
         }
         texdump_record(tp, clut, umin, vmin, umax, vmax, tagged >= 2);
     }
     draw_triangle(v[0], v[1], v[2], gour, tex, raw, semi, semi_mode, &ts);
     if (quad) draw_triangle(v[1], v[2], v[3], gour, tex, raw, semi, semi_mode, &ts);
-    hd_polygon(v, xyw, nv, gour, tex, raw, semi, semi_mode, &ts);
+    hd_polygon(v, xyw, xya, nv, gour, tex, raw, semi, semi_mode, &ts);
 }
 
 static void exec_rect(void) {
@@ -344,7 +347,7 @@ static void exec_rect(void) {
     if (tex) set_texstate(&ts, texpage, clut);
     if (tex && dump_dir) texdump_record(texpage, clut, u, v, u + w - 1, v + h - 1, 0);
     draw_rect(x, y, w, h, fifo[0], tex, raw, semi, (texpage >> 5) & 3, u, v, &ts);
-    hd_rect(x, y, w, h, fifo[0], tex, raw, semi, (texpage >> 5) & 3, u, v, &ts, xy);
+    hd_rect(x, y, w, h, fifo[0], tex, raw, semi, (texpage >> 5) & 3, u, v, &ts, xy, fifo_addr[1]);
 }
 
 static void exec_line(void) {
@@ -358,7 +361,7 @@ static void exec_line(void) {
     b.r = c2 & 255; b.g = (c2 >> 8) & 255; b.b = (c2 >> 16) & 255;
     b.x = sx11(xy2) + off_x; b.y = sx11(xy2 >> 16) + off_y;
     draw_line(a, b, gour, semi, (texpage >> 5) & 3);
-    hd_line(a, b, fifo[1], xy2, gour, semi, (texpage >> 5) & 3);
+    hd_line(a, b, fifo[1], xy2, fifo_addr[1], fifo_addr[gour ? 3 : 2], gour, semi, (texpage >> 5) & 3);
 }
 
 /* polyline state */
@@ -375,7 +378,7 @@ static void polyline_word(u32 w) {
     v.x = sx11(w) + off_x; v.y = sx11(w >> 16) + off_y;
     if (pl_have_first) {
         draw_line(pl_last, v, pl_gour, pl_semi, (texpage >> 5) & 3);
-        hd_line(pl_last, v, pl_last_word, w, pl_gour, pl_semi, (texpage >> 5) & 3);
+        hd_line(pl_last, v, pl_last_word, w, 0xFFFFFFFFu, 0xFFFFFFFFu, pl_gour, pl_semi, (texpage >> 5) & 3);
     }
     pl_last = v;
     pl_last_word = w;
@@ -491,6 +494,7 @@ void gpu_gp0(u32 w) {
         }
         fifo_need = cmd_length(w);
     }
+    fifo_addr[fifo_n] = g_gp0_addr;
     fifo[fifo_n++] = w;
     if (fifo_n >= fifo_need) {
         exec_fifo();
@@ -514,8 +518,10 @@ void gpu_gp1(u32 v) {
     case 0x05: {
         u32 nx = v & 0x3FE, ny = (v >> 10) & 0x1FF;
         if (nx != disp_x || ny != disp_y) hd_new_frame(); /* buffer flip = one game frame */
+        int flipped = nx != disp_x || ny != disp_y;
         disp_x = nx; disp_y = ny;
         hd_display_changed();
+        if (flipped) hd_clear_sides((int)nx, (int)ny);
         break;
     }
     case 0x06: hrange1 = v & 0xFFF; hrange2 = (v >> 12) & 0xFFF; break;

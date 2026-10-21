@@ -204,10 +204,12 @@ static void dma_run(int ch) {
             memcpy(&hdr, &g_ram[addr], 4);
             u32 n = hdr >> 24;
             for (u32 i = 0; i < n; i++) {
-                u32 w;
-                memcpy(&w, &g_ram[(addr + 4 + i * 4) & 0x1FFFFC], 4);
+                u32 w, wa = (addr + 4 + i * 4) & 0x1FFFFC;
+                memcpy(&w, &g_ram[wa], 4);
+                g_gp0_addr = wa;
                 gpu_gp0(w);
             }
+            g_gp0_addr = 0xFFFFFFFFu;
             if ((hdr & 0x800000) || ++guard > 0x100000) break;
             addr = hdr & 0x1FFFFC;
         }

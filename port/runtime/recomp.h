@@ -137,6 +137,7 @@ u32 gte_read_ctrl(int reg);
 void gte_write_data(int reg, u32 v);
 void gte_write_ctrl(int reg, u32 v);
 void gte_command(u32 cmd);
+void gte_store_sxy(u32 addr, int reg); /* swc2 of SXY0-2: remembers where vertices go */
 
 /* ---- control flow ---- */
 typedef void (*RecompFunc)(void);
