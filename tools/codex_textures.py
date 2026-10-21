@@ -59,29 +59,51 @@ def run_codex(workdir, w, h, is3d):
     return out if os.path.exists(out) else None
 
 
+def bleed(img, alpha, passes):
+    """Fill transparent pixels with the colour of nearby opaque ones, so texture filtering
+    never pulls in the colour of transparent areas."""
+    from PIL import ImageChops
+    rgb = img.convert("RGB")
+    mask = alpha.point(lambda a: 255 if a >= 128 else 0)
+    for _ in range(passes):
+        grown = rgb.filter(ImageFilter.MaxFilter(3))
+        grown_mask = mask.filter(ImageFilter.MaxFilter(3))
+        new_px = ImageChops.subtract(grown_mask, mask)
+        rgb = Image.composite(grown, rgb, new_px)
+        mask = grown_mask
+    return rgb
+
+
 def detail_transfer(orig_path, gen_path, scale):
+    import numpy as np
     orig = Image.open(orig_path).convert("RGBA")
     w, h = orig.size
     W, H = w * scale, h * scale
-    base = orig.convert("RGB").resize((W, H), Image.BICUBIC)
-    gen = Image.open(gen_path).convert("RGB").resize((W, H), Image.LANCZOS)
+    alpha_lo = orig.getchannel("A")
+    has_alpha = alpha_lo.getextrema()[0] < 128
+    base_rgb = bleed(orig, alpha_lo, 4) if has_alpha else orig.convert("RGB")
+    base = np.asarray(base_rgb.resize((W, H), Image.BICUBIC), dtype=np.float32)
+    gen_img = Image.open(gen_path).convert("RGB").resize((W, H), Image.LANCZOS)
+    gen = np.asarray(gen_img, dtype=np.float32)
     radius = scale * 1.2
-    gen_low = gen.filter(ImageFilter.GaussianBlur(radius))
-    base_low = base.filter(ImageFilter.GaussianBlur(radius))
-    # result = original low frequencies + generated high frequencies
-    bp, gp, glp, blp = base_low.load(), gen.load(), gen_low.load(), base_low.load()
-    out = Image.new("RGBA", (W, H))
-    op = out.load()
-    alpha = orig.getchannel("A").resize((W, H), Image.BICUBIC).filter(ImageFilter.GaussianBlur(scale * 0.3))
-    ap = alpha.load()
-    for y in range(H):
-        for x in range(W):
-            b = bp[x, y]
-            g = gp[x, y]
-            gl = glp[x, y]
-            px = tuple(max(0, min(255, b[i] + (g[i] - gl[i]))) for i in range(3))
-            op[x, y] = px + (255 if ap[x, y] >= 128 else 0,)
-    return out
+    gen_low = np.asarray(gen_img.filter(ImageFilter.GaussianBlur(radius)), dtype=np.float32)
+    detail = gen - gen_low
+    alpha = np.asarray(alpha_lo.resize((W, H), Image.BICUBIC).filter(ImageFilter.GaussianBlur(scale * 0.3)), dtype=np.float32)
+    if has_alpha:
+        # no detail near transparent edges or where the model kept the magenta key colour
+        solid = Image.fromarray((alpha >= 128).astype(np.uint8) * 255).filter(ImageFilter.MinFilter(2 * scale + 1))
+        weight = np.asarray(solid.filter(ImageFilter.GaussianBlur(scale)), dtype=np.float32) / 255.0
+        magenta = (gen[..., 0] > 180) & (gen[..., 2] > 180) & (gen[..., 1] < 110)
+        weight[magenta] = 0
+        detail *= weight[..., None]
+    out = np.clip(base + detail, 0, 255).astype(np.uint8)
+    a = np.where(alpha >= 128, 255, 0).astype(np.uint8)
+    rgba = np.dstack([out, a])
+    result = Image.fromarray(rgba, "RGBA")
+    if has_alpha:  # colour under transparent pixels: bleed again at full resolution
+        rgb = bleed(result, result.getchannel("A"), 2 * scale)
+        result = Image.merge("RGBA", (*rgb.split(), result.getchannel("A")))
+    return result
 
 
 def process(entry, args):
@@ -118,6 +140,8 @@ def main():
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--scale", type=int, default=4)
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--reprocess", action="store_true",
+                    help="rebuild outputs from saved Codex images without calling Codex")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
     args.raw = os.path.join(args.out, "_codex_raw")
@@ -132,6 +156,15 @@ def main():
     entries.sort(key=lambda e: (not e[3], -e[1] * e[2]))
     if args.limit:
         entries = entries[:args.limit]
+    if args.reprocess:
+        n = 0
+        for name, w, h, is3d in entries:
+            raw = os.path.join(args.raw, name + ".png")
+            if os.path.exists(raw):
+                detail_transfer(os.path.join(args.dump, name + ".png"), raw, args.scale).save(os.path.join(args.out, name + ".png"))
+                n += 1
+        print("reprocessed", n)
+        return
     t0 = time.time()
     done = 0
     with cf.ThreadPoolExecutor(args.workers) as ex:
