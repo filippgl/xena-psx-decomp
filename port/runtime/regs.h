@@ -1,0 +1,37 @@
+/* Register shorthands for generated code only (they clash with <windows.h>). */
+#pragma once
+#include "recomp.h"
+
+#define R1 cpu.r[1]
+#define R2 cpu.r[2]
+#define R3 cpu.r[3]
+#define R4 cpu.r[4]
+#define R5 cpu.r[5]
+#define R6 cpu.r[6]
+#define R7 cpu.r[7]
+#define R8 cpu.r[8]
+#define R9 cpu.r[9]
+#define R10 cpu.r[10]
+#define R11 cpu.r[11]
+#define R12 cpu.r[12]
+#define R13 cpu.r[13]
+#define R14 cpu.r[14]
+#define R15 cpu.r[15]
+#define R16 cpu.r[16]
+#define R17 cpu.r[17]
+#define R18 cpu.r[18]
+#define R19 cpu.r[19]
+#define R20 cpu.r[20]
+#define R21 cpu.r[21]
+#define R22 cpu.r[22]
+#define R23 cpu.r[23]
+#define R24 cpu.r[24]
+#define R25 cpu.r[25]
+#define R26 cpu.r[26]
+#define R27 cpu.r[27]
+#define R28 cpu.r[28]
+#define R29 cpu.r[29]
+#define R30 cpu.r[30]
+#define R31 cpu.r[31]
+#define HI cpu.hi
+#define LO cpu.lo

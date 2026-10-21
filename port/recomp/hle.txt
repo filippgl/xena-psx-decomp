@@ -1,0 +1,10 @@
+# symbol            replacement   (functions replaced by native code)
+# libapi/libcard patch the BIOS kernel in RAM; our BIOS is native, so these are no-ops.
+_patch_pad          hle_nop
+_patch_card         hle_nop
+_patch_card2        hle_nop
+_copy_memcard_patch hle_nop
+_remove_ChgclrPAD   hle_nop
+
+# setjmp (libetc): the BIOS later resumes execution right after these calls
+@return_entries     8009192C

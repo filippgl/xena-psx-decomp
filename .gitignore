@@ -22,3 +22,8 @@ __pycache__/
 tools/gcc-*/
 tools/maspsx/
 tools/psyq_sigs/
+
+# Port: downloaded SDKs
+port/third_party/
+memcard/
+shots*/
