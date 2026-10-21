@@ -47,3 +47,11 @@ don't build on it as if it were.
   attacks the pressed direction snaps her in 8 camera-relative steps. *Measured.*
 - Camera yaw copy: `0x800F0F28` (camera object +0x1A); a camera behind her has yaw =
   rotY + 2048. *Measured.*
+
+## Video
+
+- MDEC output matches ffmpeg's decoder: UNILOGO 160/160 non-black frames at ~50 dB PSNR
+  (15-bit output vs ffmpeg's 24-bit). *tools/fmv_check.py.*
+- **Open:** the port shows EA_LOGO up to frame 123 of 128 and then starts UNILOGO; the last
+  five (fading) frames never appear. Whether the game stops there on a PlayStation too is
+  not known (needs a reference capture).
