@@ -1,0 +1,133 @@
+#!/usr/bin/env python3
+"""Automated smoke tests for the native port.
+
+usage: smoke_test.py [--exe build/port/xena-console.exe] [--disc ../Xena.bin] [--only NAME] [--jobs N]
+
+Each scenario boots the game headless with scripted input and checks that it ran to the
+requested frame without a fatal error, that the last frame is not blank, and (where the
+scenario has sound) that the audio is not silent. Random input is seeded, so failures
+are reproducible.
+"""
+import argparse
+import concurrent.futures as cf
+import os
+import random
+import subprocess
+import sys
+import time
+import wave
+
+import numpy as np
+from PIL import Image
+
+MENU = 7400  # frame at which the main menu accepts input (intro skipped by waiting)
+START_LEVEL1 = f"{MENU}:CROSS,{MENU + 300}:CROSS,{MENU + 600}:CROSS,{MENU + 900}:CROSS"
+START_ARENA = f"{MENU}:DOWN,{MENU + 60}:DOWN,{MENU + 120}:CROSS,{MENU + 400}:CROSS,{MENU + 700}:CROSS,{MENU + 1000}:CROSS"
+
+BUTTONS = ["UP", "DOWN", "LEFT", "RIGHT", "CROSS", "SQUARE", "CIRCLE", "TRIANGLE", "L1", "R1", "L2", "R2"]
+
+
+def fuzz(start, end, seed, allow_start=False):
+    rng = random.Random(seed)
+    steps = []
+    f = start
+    pool = BUTTONS + (["START"] if allow_start else [])
+    while f < end:
+        n = rng.choice([1, 1, 2])
+        combo = "+".join(rng.sample(pool, n))
+        length = rng.choice([4, 8, 15, 30, 60, 120])
+        steps.append(f"{f}:{combo}:{length}")
+        f += length + rng.randint(5, 90)
+    return ",".join(steps)
+
+
+SCENARIOS = [
+    # name, frames, script, extra args, expect audio
+    ("intro_fmv", 1500, "", [], True),
+    ("main_menu", 7350, "", [], True),
+    ("level1_walk", 9700, START_LEVEL1 + f",{MENU + 1100}:UP:600", [], True),
+    ("level1_fuzz", 30000, START_LEVEL1 + "," + fuzz(MENU + 1100, 30000, 1), [], True),
+    ("level1_fuzz2", 30000, START_LEVEL1 + "," + fuzz(MENU + 1100, 30000, 2), [], True),
+    ("arena_fuzz", 25000, START_ARENA + "," + fuzz(MENU + 1300, 25000, 3), [], True),
+    ("pause_menu", 12000, START_LEVEL1 + "," + fuzz(MENU + 1100, 12000, 4, allow_start=True), [], False),
+    ("options_menu", 8200, f"{MENU}:DOWN,{MENU + 60}:DOWN,{MENU + 120}:DOWN,{MENU + 200}:CROSS,{MENU + 400}:DOWN,{MENU + 500}:RIGHT", [], False),
+    ("load_menu", 7900, f"{MENU}:DOWN,{MENU + 100}:CROSS", [], False),
+    ("software_hd", 9700, START_LEVEL1 + f",{MENU + 1100}:UP:300", ["--opt", "renderer=software", "--render-scale", "2", "--aspect", "16:9"], False),
+    ("native_4x3", 9700, START_LEVEL1 + f",{MENU + 1100}:UP:300", ["--opt", "renderer=software", "--render-scale", "1", "--aspect", "4:3",
+                                                                    "--opt", "perspective=0", "--opt", "texture_filter=0"], False),
+    ("gl_8x_219_ssaa", 9700, START_LEVEL1 + f",{MENU + 1100}:UP:300", ["--render-scale", "8", "--aspect", "21:9", "--opt", "ssaa=2"], False),
+]
+
+
+def frame_ok(path):
+    im = np.asarray(Image.open(path).convert("L"), dtype=np.float32)
+    return float(im.std()) > 4.0, float(im.mean())
+
+
+def audio_ok(path):
+    with wave.open(path) as w:
+        data = np.frombuffer(w.readframes(w.getnframes()), dtype="<i2").astype(np.float32)
+    if not len(data):
+        return False, 0.0
+    tail = data[-44100 * 2 * 20:]  # last 20 seconds
+    return float(np.sqrt((tail ** 2).mean())) > 30.0, float(np.sqrt((tail ** 2).mean()))
+
+
+def run(s, args):
+    name, frames, script, extra, want_audio = s
+    out = os.path.join(args.out, name)
+    os.makedirs(out, exist_ok=True)
+    cmd = [args.exe, "--headless", "--frames", str(frames), "--shots", str(frames), out,
+           "--wav", os.path.join(out, "audio.wav")] + extra
+    if script:
+        cmd += ["--script", script]
+    cmd.append(args.disc)
+    t0 = time.time()
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
+        log = p.stdout + p.stderr
+    except subprocess.TimeoutExpired:
+        return name, False, "timeout", time.time() - t0
+    open(os.path.join(out, "log.txt"), "w", encoding="utf-8").write(log)
+    problems = []
+    if "FATAL" in log:
+        problems.append(log[log.index("FATAL"):].splitlines()[0])
+    if f"reached frame {frames}" not in log:
+        problems.append("did not reach the last frame")
+    shot = os.path.join(out, f"frame_{frames:06d}.bmp")
+    if os.path.exists(shot):
+        ok, mean = frame_ok(shot)
+        if not ok:
+            problems.append(f"blank final frame (mean {mean:.0f})")
+        Image.open(shot).convert("RGB").save(shot[:-4] + ".png")
+    else:
+        problems.append("no screenshot")
+    if want_audio:
+        ok, rms = audio_ok(os.path.join(out, "audio.wav"))
+        if not ok:
+            problems.append(f"silent audio (rms {rms:.0f})")
+    return name, not problems, "; ".join(problems) or "ok", time.time() - t0
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--exe", default="build/port/xena-console.exe")
+    ap.add_argument("--disc", default="../Xena Warrior Princess.bin")
+    ap.add_argument("--out", default="build/smoke")
+    ap.add_argument("--only")
+    ap.add_argument("--jobs", type=int, default=6)
+    args = ap.parse_args()
+    args.exe = os.path.abspath(args.exe)
+    args.disc = os.path.abspath(args.disc)
+    todo = [s for s in SCENARIOS if not args.only or s[0] == args.only]
+    failed = 0
+    with cf.ThreadPoolExecutor(args.jobs) as ex:
+        for name, ok, msg, dt in ex.map(lambda s: run(s, args), todo):
+            print(f"{'PASS' if ok else 'FAIL'}  {name:16s} {dt:6.1f}s  {msg}", flush=True)
+            failed += not ok
+    print(f"{len(todo) - failed}/{len(todo)} passed")
+    sys.exit(1 if failed else 0)
+
+
+if __name__ == "__main__":
+    main()
