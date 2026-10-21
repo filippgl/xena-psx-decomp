@@ -1,6 +1,9 @@
 /* Geometry Transformation Engine (COP2), following the psx-spx specification. */
 #include "recomp.h"
 
+extern int g_gte_ws_num, g_gte_ws_den;
+void gte_tag_vertex(int x, int y, float fx, float fy);
+
 static s32 D[32]; /* data registers */
 static s32 C[32]; /* control registers */
 static u32 FLAG;
@@ -178,11 +181,13 @@ static void rtp(int v, int sf, int lm, int last) {
     }
     push_sz(mac_check(3, z) >> 12);
     u32 div = gte_divide(H, (u32)SZ3);
-    s64 sx = (s64)div * (s16)IR1 + OFX;
+    /* widescreen: squeeze X towards the centre; the HD renderer stretches it back */
+    s64 sx = (s64)div * (s16)IR1 * g_gte_ws_num / g_gte_ws_den + OFX;
     s64 sy = (s64)div * (s16)IR2 + OFY;
     set_mac0(sx);
     set_mac0(sy);
     push_sxy(sx >> 16, sy >> 16);
+    gte_tag_vertex((s16)SXY2, (s16)(SXY2 >> 16), (float)((double)sx / 65536.0), (float)((double)sy / 65536.0));
     if (last) {
         s64 dq = (s64)DQA * div + DQB;
         set_mac0(dq);

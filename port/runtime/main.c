@@ -1,5 +1,6 @@
 /* Native PC runtime for the statically recompiled Xena: Warrior Princess. */
 #include "hw.h"
+#include "config.h"
 #include <stdlib.h>
 #include <SDL.h>
 
@@ -8,10 +9,12 @@ extern u16 g_script_buttons;
 
 static const char* disc_path;
 static int opt_scale = 3;
+static int opt_render_scale, opt_aspect = -1, opt_vsync;
 static long opt_frames = -1;      /* exit after N frames (testing) */
 static long opt_shot_every = 0;   /* dump a screenshot every N frames */
 static const char* opt_shot_dir = "shots";
-static long frame_no;
+long g_frame_no;
+#define frame_no g_frame_no
 static u32 watch_addr[16];
 static int nwatch;
 static void pace_frame(void);
@@ -178,8 +181,15 @@ void host_frame(void) {
     if (g_verbose && frame_no % 30 == 0)
         log_msg("frame %ld: SR=%08X istat=%03X imask=%03X etc_init=%04X etc_mask=%04X vbcb=%08X", frame_no, cop0_read(12), g_istat, g_imask, mem_r16(0x800D34F0), mem_r16(0x800D3520), mem_r32(0x800D34F4));
     int w, h;
-    gpu_get_display(frame_px, &w, &h, 640, 480);
-    platform_present(frame_px, w, h);
+    extern const u32* gpu_hd_frame(int* w, int* h);
+    const u32* shown = gpu_hd_frame(&w, &h);
+    if (shown) {
+        platform_present(shown, w, h, config_aspect_ratio());
+    } else {
+        gpu_get_display(frame_px, &w, &h, 640, 480);
+        platform_present(frame_px, w, h, 4.0f / 3.0f);
+        shown = frame_px;
+    }
     if (!platform_pump()) exit(0);
     pace_frame();
 
@@ -191,7 +201,7 @@ void host_frame(void) {
     if (opt_shot_every && frame_no % opt_shot_every == 0) {
         char path[300];
         SDL_snprintf(path, sizeof(path), "%s/frame_%06ld.bmp", opt_shot_dir, frame_no);
-        write_bmp(path, frame_px, w, h);
+        write_bmp(path, shown, w, h);
         if (g_verbose) { /* full VRAM for debugging */
             static u32 vram_px[1024 * 512];
             for (int i = 0; i < 1024 * 512; i++) {
@@ -308,7 +318,8 @@ static void usage(void) {
 int main(int argc, char** argv) {
 #ifdef _WIN32
     /* GUI build: without a console, keep the log in xena.log next to the program */
-    if (!GetConsoleWindow()) {
+    HANDLE herr = GetStdHandle(STD_ERROR_HANDLE);
+    if (herr == NULL || herr == INVALID_HANDLE_VALUE) {
         char* base = SDL_GetBasePath();
         char path[1024];
         SDL_snprintf(path, sizeof(path), "%sxena.log", base ? base : "");
@@ -320,7 +331,12 @@ int main(int argc, char** argv) {
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--scale") && i + 1 < argc) opt_scale = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--headless")) opt_scale = 0;
-        else if (!strcmp(argv[i], "--vsync")) { extern int g_vsync; g_vsync = 1; }
+        else if (!strcmp(argv[i], "--vsync")) opt_vsync = 1;
+        else if (!strcmp(argv[i], "--render-scale") && i + 1 < argc) opt_render_scale = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "--aspect") && i + 1 < argc) {
+            const char* a = argv[++i];
+            opt_aspect = !strcmp(a, "21:9") ? ASPECT_21_9 : !strcmp(a, "16:9") ? ASPECT_16_9 : ASPECT_4_3;
+        }
         else if (!strcmp(argv[i], "--frames") && i + 1 < argc) opt_frames = atol(argv[++i]);
         else if (!strcmp(argv[i], "--shots") && i + 2 < argc) { opt_shot_every = atol(argv[++i]); opt_shot_dir = argv[++i]; }
         else if (!strcmp(argv[i], "--script") && i + 1 < argc) parse_script(argv[++i]);
@@ -341,7 +357,18 @@ int main(int argc, char** argv) {
         usage();
         return 1;
     }
+    {
+        char* base = SDL_GetBasePath();
+        char ini[1024];
+        SDL_snprintf(ini, sizeof(ini), "%sxena.ini", base ? base : "");
+        config_load(ini);
+        if (opt_render_scale) g_cfg.render_scale = opt_render_scale;
+        if (opt_aspect >= 0) g_cfg.aspect = opt_aspect;
+        if (opt_vsync) g_cfg.vsync = 1;
+    }
     if (!platform_init(opt_scale)) return 1;
+    extern void gpu_hd_configure(void);
+    gpu_hd_configure();
     {
         extern void bios_set_card_dir(const char* dir);
         char* base = SDL_GetBasePath();

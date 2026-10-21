@@ -1,13 +1,13 @@
-/* SDL2 window, input, timing and audio. */
+/* SDL2 window, input (keyboard, mouse, game controllers), timing and audio. */
 #include "hw.h"
+#include "config.h"
 #include <SDL.h>
+#include <math.h>
 
 static SDL_Window* win;
 static SDL_Renderer* ren;
 static SDL_Texture* tex;
-static int tex_w, tex_h;
-static SDL_GameController* pad;
-static u16 keys_state;
+static int tex_w, tex_h, tex_linear;
 int g_turbo;
 static int headless;
 
@@ -27,40 +27,158 @@ s64 platform_ticks_us(void) {
     return (s64)(SDL_GetPerformanceCounter() * 1000000ull / freq);
 }
 
-int g_vsync;
+/* ---------------- input state ---------------- */
+
+typedef struct {
+    SDL_Keycode key;
+    u16 buttons;
+    int ff;
+} KeyBind;
+static KeyBind keybinds[MAX_BINDINGS];
+static int nkeybinds;
+static u16 keys_down;          /* buttons held through the keyboard */
+static int ff_down;
+
+static u16 mouse_buttons[6];   /* SDL button index -> PS1 buttons */
+static u16 wheel_up, wheel_down;
+static u16 wheel_pulse;        /* wheel presses are held for a few frames */
+static int wheel_frames;
+static float mouse_acc;        /* horizontal motion waiting to become turn presses */
+static int mouse_captured;
+
+#define MAX_PADS 4
+static SDL_GameController* pads[MAX_PADS];
+static u16 pad_map[SDL_CONTROLLER_BUTTON_MAX];
+static u16 trig_l, trig_r;
+static u16 rs_left, rs_right, rs_up, rs_down;
+
+static u16 lookup_binding(const Binding* list, int n, const char* name) {
+    for (int i = 0; i < n; i++)
+        if (!SDL_strcasecmp(list[i].name, name)) return list[i].buttons;
+    return 0;
+}
+
+static void input_setup(void) {
+    nkeybinds = 0;
+    for (int i = 0; i < g_cfg.nkeys && nkeybinds < MAX_BINDINGS; i++) {
+        SDL_Keycode k = SDL_GetKeyFromName(g_cfg.keys[i].name);
+        if (k == SDLK_UNKNOWN && SDL_strlen(g_cfg.keys[i].name) == 1) k = (SDL_Keycode)SDL_tolower(g_cfg.keys[i].name[0]);
+        if (k == SDLK_UNKNOWN) { log_msg("xena.ini: unknown key '%s'", g_cfg.keys[i].name); continue; }
+        keybinds[nkeybinds].key = k;
+        keybinds[nkeybinds].buttons = g_cfg.keys[i].buttons;
+        keybinds[nkeybinds].ff = g_cfg.keys[i].fast_forward;
+        nkeybinds++;
+    }
+    mouse_buttons[SDL_BUTTON_LEFT] = lookup_binding(g_cfg.mouse, g_cfg.nmouse, "Left");
+    mouse_buttons[SDL_BUTTON_RIGHT] = lookup_binding(g_cfg.mouse, g_cfg.nmouse, "Right");
+    mouse_buttons[SDL_BUTTON_MIDDLE] = lookup_binding(g_cfg.mouse, g_cfg.nmouse, "Middle");
+    mouse_buttons[SDL_BUTTON_X1] = lookup_binding(g_cfg.mouse, g_cfg.nmouse, "X1");
+    mouse_buttons[SDL_BUTTON_X2] = lookup_binding(g_cfg.mouse, g_cfg.nmouse, "X2");
+    wheel_up = lookup_binding(g_cfg.mouse, g_cfg.nmouse, "WheelUp");
+    wheel_down = lookup_binding(g_cfg.mouse, g_cfg.nmouse, "WheelDown");
+
+    static const struct { const char* n; SDL_GameControllerButton b; } pb[] = {
+        {"A", SDL_CONTROLLER_BUTTON_A}, {"B", SDL_CONTROLLER_BUTTON_B},
+        {"X", SDL_CONTROLLER_BUTTON_X}, {"Y", SDL_CONTROLLER_BUTTON_Y},
+        {"LeftShoulder", SDL_CONTROLLER_BUTTON_LEFTSHOULDER}, {"RightShoulder", SDL_CONTROLLER_BUTTON_RIGHTSHOULDER},
+        {"Start", SDL_CONTROLLER_BUTTON_START}, {"Back", SDL_CONTROLLER_BUTTON_BACK},
+        {"Guide", SDL_CONTROLLER_BUTTON_GUIDE}, {"Misc", SDL_CONTROLLER_BUTTON_MISC1},
+        {"LeftStick", SDL_CONTROLLER_BUTTON_LEFTSTICK}, {"RightStick", SDL_CONTROLLER_BUTTON_RIGHTSTICK},
+    };
+    memset(pad_map, 0, sizeof(pad_map));
+    for (size_t i = 0; i < sizeof(pb) / sizeof(pb[0]); i++) pad_map[pb[i].b] = lookup_binding(g_cfg.pad, g_cfg.npad, pb[i].n);
+    pad_map[SDL_CONTROLLER_BUTTON_DPAD_UP] = B_UP;
+    pad_map[SDL_CONTROLLER_BUTTON_DPAD_DOWN] = B_DOWN;
+    pad_map[SDL_CONTROLLER_BUTTON_DPAD_LEFT] = B_LEFT;
+    pad_map[SDL_CONTROLLER_BUTTON_DPAD_RIGHT] = B_RIGHT;
+    trig_l = lookup_binding(g_cfg.pad, g_cfg.npad, "LeftTrigger");
+    trig_r = lookup_binding(g_cfg.pad, g_cfg.npad, "RightTrigger");
+    rs_left = lookup_binding(g_cfg.pad, g_cfg.npad, "RightStickLeft");
+    rs_right = lookup_binding(g_cfg.pad, g_cfg.npad, "RightStickRight");
+    rs_up = lookup_binding(g_cfg.pad, g_cfg.npad, "RightStickUp");
+    rs_down = lookup_binding(g_cfg.pad, g_cfg.npad, "RightStickDown");
+}
+
+static void open_pad(int index) {
+    if (!SDL_IsGameController(index)) return;
+    for (int i = 0; i < MAX_PADS; i++)
+        if (!pads[i]) {
+            pads[i] = SDL_GameControllerOpen(index);
+            if (pads[i]) log_msg("controller: %s", SDL_GameControllerName(pads[i]));
+            return;
+        }
+}
+
+static void close_pad(SDL_JoystickID id) {
+    for (int i = 0; i < MAX_PADS; i++)
+        if (pads[i] && SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(pads[i])) == id) {
+            SDL_GameControllerClose(pads[i]);
+            pads[i] = NULL;
+        }
+}
+
+static void set_mouse_capture(int on) {
+    if (headless || !g_cfg.mouse_enabled) return;
+    mouse_captured = on;
+    mouse_acc = 0;
+    SDL_SetRelativeMouseMode(on ? SDL_TRUE : SDL_FALSE);
+}
+
+/* ---------------- window ---------------- */
+
+static int window_width(void) { return (int)(g_cfg.window_height * config_aspect_ratio() + 0.5f); }
 
 int platform_init(int scale) {
     headless = scale <= 0;
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_AUDIO) != 0) {
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS4_RUMBLE, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS5_RUMBLE, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_AUDIO) != 0 &&
+        SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) != 0) {
         log_msg("SDL_Init: %s", SDL_GetError());
         return 0;
     }
+    input_setup();
     if (headless) return 1;
+    if (scale > 0 && scale != 3) g_cfg.window_height = 240 * scale; /* --scale overrides xena.ini */
     win = SDL_CreateWindow("Xena: Warrior Princess", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                           320 * scale, 240 * scale, SDL_WINDOW_RESIZABLE);
+                           window_width(), g_cfg.window_height,
+                           SDL_WINDOW_RESIZABLE | (g_cfg.fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0));
     if (!win) return 0;
     /* frame pacing is done by the runtime; vsync is optional because a display slower than
      * 60 Hz (e.g. virtual machines) would otherwise slow the whole game down */
-    ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | (g_vsync ? SDL_RENDERER_PRESENTVSYNC : 0));
+    ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | (g_cfg.vsync ? SDL_RENDERER_PRESENTVSYNC : 0));
     if (!ren) ren = SDL_CreateRenderer(win, -1, 0);
-    SDL_RenderSetLogicalSize(ren, 320 * scale, 240 * scale);
-    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
-    for (int i = 0; i < SDL_NumJoysticks(); i++)
-        if (SDL_IsGameController(i)) { pad = SDL_GameControllerOpen(i); break; }
+    SDL_RenderSetLogicalSize(ren, window_width(), g_cfg.window_height);
+    for (int i = 0; i < SDL_NumJoysticks(); i++) open_pad(i);
     return 1;
 }
 
-void platform_present(const u32* px, int w, int h) {
+static void apply_aspect(void) {
+    if (!win) return;
+    if (!(SDL_GetWindowFlags(win) & SDL_WINDOW_FULLSCREEN_DESKTOP)) SDL_SetWindowSize(win, window_width(), g_cfg.window_height);
+    SDL_RenderSetLogicalSize(ren, window_width(), g_cfg.window_height);
+}
+
+/* content_aspect: aspect ratio the picture occupies inside the output (4:3 for FMVs) */
+void platform_present(const u32* px, int w, int h, float content_aspect) {
     if (headless) return;
-    if (!tex || w != tex_w || h != tex_h) {
+    if (!tex || w != tex_w || h != tex_h || tex_linear != g_cfg.linear_filter) {
         if (tex) SDL_DestroyTexture(tex);
+        SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, g_cfg.linear_filter ? "linear" : "nearest");
         tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_XRGB8888, SDL_TEXTUREACCESS_STREAMING, w, h);
         tex_w = w;
         tex_h = h;
+        tex_linear = g_cfg.linear_filter;
     }
     SDL_UpdateTexture(tex, NULL, px, w * 4);
+    SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
     SDL_RenderClear(ren);
-    SDL_RenderCopy(ren, tex, NULL, NULL);
+    int lw = window_width(), lh = g_cfg.window_height;
+    int cw = (int)(lh * content_aspect + 0.5f);
+    if (cw > lw) cw = lw;
+    SDL_Rect dst = {(lw - cw) / 2, 0, cw, lh};
+    SDL_RenderCopy(ren, tex, NULL, &dst);
     SDL_RenderPresent(ren);
 
     static int frames;
@@ -68,90 +186,152 @@ void platform_present(const u32* px, int w, int h) {
     s64 now = platform_ticks_us();
     frames++;
     if (now - last_us >= 1000000) {
-        char title[64];
-        SDL_snprintf(title, sizeof(title), "Xena: Warrior Princess  [%d fps]", (int)(frames * 1000000LL / (now - last_us)));
+        static const char* asp[] = {"4:3", "16:9", "21:9"};
+        char title[160];
+        SDL_snprintf(title, sizeof(title), "Xena: Warrior Princess  [%d fps | %dx | %s]%s",
+                     (int)(frames * 1000000LL / (now - last_us)), g_cfg.render_scale, asp[g_cfg.aspect],
+                     mouse_captured ? "  Alt: release mouse" : "");
         SDL_SetWindowTitle(win, title);
         frames = 0;
         last_us = now;
     }
 }
 
-static u16 key_bit(SDL_Keycode k) {
-    switch (k) {
-    case SDLK_UP: return B_UP;
-    case SDLK_DOWN: return B_DOWN;
-    case SDLK_LEFT: return B_LEFT;
-    case SDLK_RIGHT: return B_RIGHT;
-    case SDLK_z: case SDLK_SPACE: return B_CROSS;
-    case SDLK_x: return B_CIRCLE;
-    case SDLK_a: return B_SQUARE;
-    case SDLK_s: return B_TRIANGLE;
-    case SDLK_RETURN: return B_START;
-    case SDLK_BACKSPACE: case SDLK_RSHIFT: return B_SELECT;
-    case SDLK_q: return B_L1;
-    case SDLK_w: return B_R1;
-    case SDLK_e: return B_L2;
-    case SDLK_r: return B_R2;
+void gpu_hd_configure(void);
+
+static void key_event(SDL_Keycode k, int down) {
+    for (int i = 0; i < nkeybinds; i++) {
+        if (keybinds[i].key != k) continue;
+        if (keybinds[i].ff) ff_down = down;
+        else if (down) keys_down |= keybinds[i].buttons;
     }
-    return 0;
+    if (!down) { /* rebuild from the keys still held: several keys may share a button */
+        keys_down = 0;
+        const Uint8* st = SDL_GetKeyboardState(NULL);
+        for (int j = 0; j < nkeybinds; j++)
+            if (!keybinds[j].ff && st[SDL_GetScancodeFromKey(keybinds[j].key)]) keys_down |= keybinds[j].buttons;
+    }
 }
 
 int platform_pump(void) {
     SDL_Event e;
+    if (wheel_frames > 0 && --wheel_frames == 0) wheel_pulse = 0;
     while (SDL_PollEvent(&e)) {
         switch (e.type) {
         case SDL_QUIT: return 0;
         case SDL_KEYDOWN:
-            if (e.key.keysym.sym == SDLK_ESCAPE) return 0;
+            if (e.key.repeat) break;
             if (e.key.keysym.sym == SDLK_F11 ||
                 (e.key.keysym.sym == SDLK_RETURN && (e.key.keysym.mod & KMOD_ALT))) {
                 int fs = SDL_GetWindowFlags(win) & SDL_WINDOW_FULLSCREEN_DESKTOP;
                 SDL_SetWindowFullscreen(win, fs ? 0 : SDL_WINDOW_FULLSCREEN_DESKTOP);
                 break;
             }
-            if (e.key.keysym.sym == SDLK_TAB) g_turbo = 1;
-            keys_state |= key_bit(e.key.keysym.sym);
+            if (e.key.keysym.sym == SDLK_F5) { g_cfg.aspect = (g_cfg.aspect + 1) % 3; apply_aspect(); gpu_hd_configure(); break; }
+            if (e.key.keysym.sym == SDLK_F6) { g_cfg.render_scale = g_cfg.render_scale % 8 + 1; gpu_hd_configure(); break; }
+            if (e.key.keysym.sym == SDLK_LALT || e.key.keysym.sym == SDLK_RALT) set_mouse_capture(0);
+            key_event(e.key.keysym.sym, 1);
             break;
         case SDL_KEYUP:
-            if (e.key.keysym.sym == SDLK_TAB) g_turbo = 0;
-            keys_state &= ~key_bit(e.key.keysym.sym);
+            key_event(e.key.keysym.sym, 0);
             break;
-        case SDL_CONTROLLERDEVICEADDED:
-            if (!pad) pad = SDL_GameControllerOpen(e.cdevice.which);
+        case SDL_MOUSEBUTTONDOWN:
+            if (g_cfg.mouse_enabled && !mouse_captured) set_mouse_capture(1); /* first click captures */
             break;
+        case SDL_MOUSEWHEEL:
+            if (!mouse_captured) break;
+            if (e.wheel.y > 0) { wheel_pulse = wheel_up; wheel_frames = 6; }
+            else if (e.wheel.y < 0) { wheel_pulse = wheel_down; wheel_frames = 6; }
+            break;
+        case SDL_MOUSEMOTION:
+            if (mouse_captured && g_cfg.mouse_turn) mouse_acc += e.motion.xrel * g_cfg.mouse_sensitivity;
+            break;
+        case SDL_WINDOWEVENT:
+            if (e.window.event == SDL_WINDOWEVENT_FOCUS_LOST) { set_mouse_capture(0); keys_down = 0; ff_down = 0; }
+            break;
+        case SDL_CONTROLLERDEVICEADDED: open_pad(e.cdevice.which); break;
+        case SDL_CONTROLLERDEVICEREMOVED: close_pad(e.cdevice.which); break;
         }
     }
+    g_turbo = ff_down;
     return 1;
 }
 
-u16 pad_buttons(int port) {
-    if (port != 0) return 0;
-    u16 b = keys_state | g_script_buttons;
-    if (pad) {
-        static const struct { SDL_GameControllerButton sb; u16 bit; } map[] = {
-            {SDL_CONTROLLER_BUTTON_A, B_CROSS}, {SDL_CONTROLLER_BUTTON_B, B_CIRCLE},
-            {SDL_CONTROLLER_BUTTON_X, B_SQUARE}, {SDL_CONTROLLER_BUTTON_Y, B_TRIANGLE},
-            {SDL_CONTROLLER_BUTTON_START, B_START}, {SDL_CONTROLLER_BUTTON_BACK, B_SELECT},
-            {SDL_CONTROLLER_BUTTON_LEFTSHOULDER, B_L1}, {SDL_CONTROLLER_BUTTON_RIGHTSHOULDER, B_R1},
-            {SDL_CONTROLLER_BUTTON_DPAD_UP, B_UP}, {SDL_CONTROLLER_BUTTON_DPAD_DOWN, B_DOWN},
-            {SDL_CONTROLLER_BUTTON_DPAD_LEFT, B_LEFT}, {SDL_CONTROLLER_BUTTON_DPAD_RIGHT, B_RIGHT},
-            {SDL_CONTROLLER_BUTTON_LEFTSTICK, B_L3}, {SDL_CONTROLLER_BUTTON_RIGHTSTICK, B_R3},
-        };
-        for (size_t i = 0; i < sizeof(map) / sizeof(map[0]); i++)
-            if (SDL_GameControllerGetButton(pad, map[i].sb)) b |= map[i].bit;
-        if (SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_TRIGGERLEFT) > 16000) b |= B_L2;
-        if (SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > 16000) b |= B_R2;
-        int lx = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTX);
-        int ly = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTY);
-        if (lx < -16000) b |= B_LEFT;
-        if (lx > 16000) b |= B_RIGHT;
-        if (ly < -16000) b |= B_UP;
-        if (ly > 16000) b |= B_DOWN;
-    }
+/* mouse turning: accumulated motion becomes left/right presses, one per frame */
+static u16 mouse_turn_buttons(void) {
+    const float step = 6.0f; /* mouse counts per frame of turning */
+    u16 b = 0;
+    if (mouse_acc > step) { b = B_RIGHT; mouse_acc -= step; }
+    else if (mouse_acc < -step) { b = B_LEFT; mouse_acc += step; }
+    else mouse_acc *= 0.8f; /* small leftovers fade instead of turning later */
+    if (mouse_acc > step * 10) mouse_acc = step * 10;
+    if (mouse_acc < -step * 10) mouse_acc = -step * 10;
     return b;
 }
 
+static u16 pad_state(SDL_GameController* p) {
+    u16 b = 0;
+    for (int i = 0; i < SDL_CONTROLLER_BUTTON_MAX; i++)
+        if (pad_map[i] && SDL_GameControllerGetButton(p, (SDL_GameControllerButton)i)) b |= pad_map[i];
+    if (SDL_GameControllerGetAxis(p, SDL_CONTROLLER_AXIS_TRIGGERLEFT) > 12000) b |= trig_l;
+    if (SDL_GameControllerGetAxis(p, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > 12000) b |= trig_r;
+    /* left stick: 8-way digital directions with a radial deadzone */
+    float lx = SDL_GameControllerGetAxis(p, SDL_CONTROLLER_AXIS_LEFTX) / 32767.0f;
+    float ly = SDL_GameControllerGetAxis(p, SDL_CONTROLLER_AXIS_LEFTY) / 32767.0f;
+    if (sqrtf(lx * lx + ly * ly) > g_cfg.stick_deadzone) {
+        float a = atan2f(ly, lx); /* -pi..pi, 0 = right, +y = down */
+        int sector = ((int)floorf(a / (3.14159265f / 4) + 0.5f) + 8) & 7;
+        static const u16 dirs[8] = {B_RIGHT, B_RIGHT | B_DOWN, B_DOWN, B_DOWN | B_LEFT,
+                                    B_LEFT, B_LEFT | B_UP, B_UP, B_UP | B_RIGHT};
+        b |= dirs[sector];
+    }
+    float rx = SDL_GameControllerGetAxis(p, SDL_CONTROLLER_AXIS_RIGHTX) / 32767.0f;
+    float ry = SDL_GameControllerGetAxis(p, SDL_CONTROLLER_AXIS_RIGHTY) / 32767.0f;
+    if (rx < -0.5f) b |= rs_left;
+    if (rx > 0.5f) b |= rs_right;
+    if (ry < -0.5f) b |= rs_up;
+    if (ry > 0.5f) b |= rs_down;
+    return b;
+}
+
+static u16 frame_buttons;
+static long frame_buttons_stamp = -1;
+extern long g_frame_no;
+
+u16 pad_buttons(int port) {
+    if (port != 0) return 0;
+    /* sampled once per frame so turn pulses and wheel presses stay consistent */
+    if (frame_buttons_stamp != g_frame_no) {
+        frame_buttons_stamp = g_frame_no;
+        u16 b = keys_down | g_script_buttons | wheel_pulse;
+        if (mouse_captured) {
+            Uint32 mb = SDL_GetMouseState(NULL, NULL);
+            for (int i = 1; i <= 5; i++)
+                if (mb & SDL_BUTTON(i)) b |= mouse_buttons[i];
+            if (g_cfg.mouse_turn) b |= mouse_turn_buttons();
+        }
+        for (int i = 0; i < MAX_PADS; i++)
+            if (pads[i]) b |= pad_state(pads[i]);
+        frame_buttons = b;
+    }
+    return frame_buttons;
+}
+
 void pad_poll_host(void) {}
+
+/* DualShock motors: small = on/off, large = 0..255 */
+void platform_rumble(int small, int large) {
+    if (!g_cfg.rumble) return;
+    static int last_small = -1, last_large = -1;
+    static s64 last_us;
+    s64 now = platform_ticks_us();
+    if (small == last_small && large == last_large && now - last_us < 150000) return;
+    last_small = small;
+    last_large = large;
+    last_us = now;
+    for (int i = 0; i < MAX_PADS; i++)
+        if (pads[i]) SDL_GameControllerRumble(pads[i], (Uint16)(large * 257), small ? 0xFFFF : 0, 250);
+}
 
 /* ---------------- audio ---------------- */
 

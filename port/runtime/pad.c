@@ -68,8 +68,19 @@ static void param_byte(int idx, u8 v) {
     if (cur_cmd == 0x4D && idx < 6) vib_map[idx] = v;
 }
 
+void platform_rumble(int small, int large);
+
 static void finish_command(void) {
     switch (cur_cmd) {
+    case 0x42: { /* motor bytes travel in the poll, routed by the 0x4D mapping */
+        int small = 0, large = 0;
+        for (int i = 0; i < 6; i++) {
+            if (vib_map[i] == 0x00) small = params_rx[i] & 1;
+            else if (vib_map[i] == 0x01) large = params_rx[i];
+        }
+        platform_rumble(small, large);
+        break;
+    }
     case 0x43:
         config_mode = params_rx[0] == 1;
         break;

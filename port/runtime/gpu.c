@@ -239,6 +239,8 @@ static void draw_rect(int x, int y, int w, int h, u32 color, int textured, int r
 
 static inline int sx11(u32 v) { return ((s32)(v << 21)) >> 21; }
 
+#include "gpu_hd.inc"
+
 static int cmd_length(u32 cmd) {
     u32 op = cmd >> 24;
     if (op >= 0x20 && op < 0x40) {
@@ -271,9 +273,11 @@ static void exec_polygon(void) {
     /* layout: color0 xy0 [uv0] {color_i (gouraud only) xy_i [uv_i]}... */
     int idx = 1;
     u32 clut = 0, tp = texpage;
+    u32 xyw[4];
     for (int i = 0; i < nv; i++) {
         u32 col = (i > 0 && gour) ? fifo[idx++] : fifo[0];
         u32 xy = fifo[idx++];
+        xyw[i] = xy;
         v[i].r = col & 255;
         v[i].g = (col >> 8) & 255;
         v[i].b = (col >> 16) & 255;
@@ -299,6 +303,7 @@ static void exec_polygon(void) {
     }
     draw_triangle(v[0], v[1], v[2], gour, tex, raw, semi, semi_mode, &ts);
     if (quad) draw_triangle(v[1], v[2], v[3], gour, tex, raw, semi, semi_mode, &ts);
+    hd_polygon(v, xyw, nv, gour, tex, raw, semi, semi_mode, &ts);
 }
 
 static void exec_rect(void) {
@@ -325,6 +330,7 @@ static void exec_rect(void) {
     TexState ts;
     if (tex) set_texstate(&ts, texpage, clut);
     draw_rect(x, y, w, h, fifo[0], tex, raw, semi, (texpage >> 5) & 3, u, v, &ts);
+    hd_rect(x, y, w, h, fifo[0], tex, raw, semi, (texpage >> 5) & 3, u, v, &ts, xy);
 }
 
 static void exec_line(void) {
@@ -338,10 +344,12 @@ static void exec_line(void) {
     b.r = c2 & 255; b.g = (c2 >> 8) & 255; b.b = (c2 >> 16) & 255;
     b.x = sx11(xy2) + off_x; b.y = sx11(xy2 >> 16) + off_y;
     draw_line(a, b, gour, semi, (texpage >> 5) & 3);
+    hd_line(a, b, fifo[1], xy2, gour, semi, (texpage >> 5) & 3);
 }
 
 /* polyline state */
 static Vtx pl_last;
+static u32 pl_last_word;
 static u32 pl_color;
 static int pl_gour, pl_semi, pl_expect_color, pl_have_first;
 
@@ -351,8 +359,12 @@ static void polyline_word(u32 w) {
     Vtx v;
     v.r = pl_color & 255; v.g = (pl_color >> 8) & 255; v.b = (pl_color >> 16) & 255;
     v.x = sx11(w) + off_x; v.y = sx11(w >> 16) + off_y;
-    if (pl_have_first) draw_line(pl_last, v, pl_gour, pl_semi, (texpage >> 5) & 3);
+    if (pl_have_first) {
+        draw_line(pl_last, v, pl_gour, pl_semi, (texpage >> 5) & 3);
+        hd_line(pl_last, v, pl_last_word, w, pl_gour, pl_semi, (texpage >> 5) & 3);
+    }
     pl_last = v;
+    pl_last_word = w;
     pl_have_first = 1;
     pl_expect_color = 1;
 }
@@ -364,6 +376,7 @@ static void vram_fill(void) {
     int w = ((fifo[2] & 0x3FF) + 15) & ~15, h = (fifo[2] >> 16) & 0x1FF;
     for (int j = 0; j < h; j++)
         for (int i = 0; i < w; i++) VRAM(x + i, y + j) = col;
+    hd_fill(x, y, w, h, col);
 }
 
 static void vram_copy(void) {
@@ -379,6 +392,7 @@ static void vram_copy(void) {
             *p = line[i] | (mask_set ? 0x8000 : 0);
         }
     }
+    hd_copy(sx, sy, dx, dy, w, h);
 }
 
 static void exec_env(u32 w) {
@@ -430,7 +444,10 @@ static void xfer_in_pixel(u16 px) {
     if (!(mask_check && (*p & 0x8000))) *p = px | (mask_set ? 0x8000 : 0);
     if (++xfer_in.cx >= xfer_in.w) {
         xfer_in.cx = 0;
-        if (++xfer_in.cy >= xfer_in.h) xfer_in.active = 0;
+        if (++xfer_in.cy >= xfer_in.h) {
+            xfer_in.active = 0;
+            hd_upload(xfer_in.x, xfer_in.y, xfer_in.w, xfer_in.h);
+        }
     }
 }
 
@@ -476,10 +493,16 @@ void gpu_gp1(u32 v) {
     case 0x02: gpu_irq = 0; break;
     case 0x03: disp_on = !(v & 1); LOG("gpu: display %s", disp_on ? "on" : "off"); break;
     case 0x04: dma_dir = v & 3; break;
-    case 0x05: disp_x = v & 0x3FE; disp_y = (v >> 10) & 0x1FF; break;
+    case 0x05: {
+        u32 nx = v & 0x3FE, ny = (v >> 10) & 0x1FF;
+        if (nx != disp_x || ny != disp_y) hd_new_frame(); /* buffer flip = one game frame */
+        disp_x = nx; disp_y = ny;
+        hd_display_changed();
+        break;
+    }
     case 0x06: hrange1 = v & 0xFFF; hrange2 = (v >> 12) & 0xFFF; break;
     case 0x07: vrange1 = v & 0x3FF; vrange2 = (v >> 10) & 0x3FF; break;
-    case 0x08: disp_mode = v & 0xFF; break;
+    case 0x08: disp_mode = v & 0xFF; hd_display_changed(); break;
     case 0x10:
         switch (v & 7) {
         case 2: gpuread_latch = (tw_mask_x) | (tw_mask_y << 5) | (tw_off_x << 10) | (tw_off_y << 15); break;

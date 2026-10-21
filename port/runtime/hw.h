@@ -103,7 +103,8 @@ void irq_deliver(void);
 
 /* platform */
 int platform_init(int scale);
-void platform_present(const u32* pixels, int w, int h);
+void platform_present(const u32* pixels, int w, int h, float content_aspect);
+void platform_rumble(int small, int large);
 int platform_pump(void); /* returns 0 when the window was closed */
 void platform_wait_until(s64 cycles);
 s64 platform_ticks_us(void);
