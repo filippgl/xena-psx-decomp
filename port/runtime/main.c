@@ -10,6 +10,10 @@ extern u16 g_script_buttons;
 static const char* disc_path;
 static int opt_scale = 3;
 static int opt_render_scale, opt_aspect = -1, opt_vsync;
+static const char* opts[16];
+static long menu_shot_frame = -1;
+static const char* menu_shot_file;
+static int nopts;
 static long opt_frames = -1;      /* exit after N frames (testing) */
 static long opt_shot_every = 0;   /* dump a screenshot every N frames */
 static const char* opt_shot_dir = "shots";
@@ -191,6 +195,13 @@ void host_frame(void) {
         shown = frame_px;
     }
     if (!platform_pump()) exit(0);
+    {
+        extern int platform_settings_requested(void);
+        extern void platform_settings_menu(void);
+        extern const char* g_menu_shot;
+        if (frame_no == menu_shot_frame) { g_menu_shot = menu_shot_file; platform_settings_menu(); }
+        if (platform_settings_requested()) platform_settings_menu();
+    }
     pace_frame();
 
     g_script_buttons = 0;
@@ -332,6 +343,8 @@ int main(int argc, char** argv) {
         if (!strcmp(argv[i], "--scale") && i + 1 < argc) opt_scale = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--headless")) opt_scale = 0;
         else if (!strcmp(argv[i], "--vsync")) opt_vsync = 1;
+        else if (!strcmp(argv[i], "--menu-shot") && i + 2 < argc) { menu_shot_frame = atol(argv[++i]); menu_shot_file = argv[++i]; }
+        else if (!strcmp(argv[i], "--opt") && i + 1 < argc && nopts < 16) opts[nopts++] = argv[++i];
         else if (!strcmp(argv[i], "--render-scale") && i + 1 < argc) opt_render_scale = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--aspect") && i + 1 < argc) {
             const char* a = argv[++i];
@@ -365,6 +378,12 @@ int main(int argc, char** argv) {
         if (opt_render_scale) g_cfg.render_scale = opt_render_scale;
         if (opt_aspect >= 0) g_cfg.aspect = opt_aspect;
         if (opt_vsync) g_cfg.vsync = 1;
+        for (int k = 0; k < nopts; k++) {
+            char kv[128];
+            SDL_snprintf(kv, sizeof(kv), "%s", opts[k]);
+            char* eq = SDL_strchr(kv, '=');
+            if (eq) { *eq = 0; config_set_video(kv, eq + 1); }
+        }
     }
     if (!platform_init(opt_scale)) return 1;
     extern void gpu_hd_configure(void);

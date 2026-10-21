@@ -2,7 +2,7 @@
 #include "recomp.h"
 
 extern int g_gte_ws_num, g_gte_ws_den;
-void gte_tag_vertex(int x, int y, float fx, float fy);
+void gte_tag_vertex(int x, int y, float fx, float fy, float z);
 
 static s32 D[32]; /* data registers */
 static s32 C[32]; /* control registers */
@@ -187,7 +187,7 @@ static void rtp(int v, int sf, int lm, int last) {
     set_mac0(sx);
     set_mac0(sy);
     push_sxy(sx >> 16, sy >> 16);
-    gte_tag_vertex((s16)SXY2, (s16)(SXY2 >> 16), (float)((double)sx / 65536.0), (float)((double)sy / 65536.0));
+    gte_tag_vertex((s16)SXY2, (s16)(SXY2 >> 16), (float)((double)sx / 65536.0), (float)((double)sy / 65536.0), (float)SZ3);
     if (last) {
         s64 dq = (s64)DQA * div + DQB;
         set_mac0(dq);

@@ -13,6 +13,9 @@ Config g_cfg = {
     .vsync = 0,
     .linear_filter = 0,
     .subpixel = 1,
+    .perspective = 1,
+    .texture_filter = 1,
+    .ssaa = 1,
     .mouse_enabled = 1,
     .mouse_turn = 1,
     .mouse_sensitivity = 1.0f,
@@ -37,6 +40,12 @@ static const char* default_ini =
     "linear_filter = 0\n"
     "; sub-pixel precise 3D vertices (less polygon jitter)\n"
     "subpixel = 1\n"
+    "; perspective-correct textures (no texture warping)\n"
+    "perspective = 1\n"
+    "; texture filtering for 3D: 0 = sharp texels, 1 = bilinear\n"
+    "texture_filter = 1\n"
+    "; anti-aliasing by supersampling: 1 = off, 2 = 4 samples, 3 = 9 samples\n"
+    "ssaa = 1\n"
     "\n"
     "[keyboard]\n"
     "; key names as SDL names them: W, Up, Space, Return, Escape, Left Shift, Keypad 8...\n"
@@ -142,6 +151,19 @@ static void set_binding(Binding* list, int* n, const char* src, const char* valu
     (*n)++;
 }
 
+void config_set_video(const char* key, const char* val) {
+    if (!strcmp(key, "window_height")) g_cfg.window_height = atoi(val);
+    else if (!strcmp(key, "render_scale")) g_cfg.render_scale = atoi(val);
+    else if (!strcmp(key, "aspect")) g_cfg.aspect = !strcmp(val, "21:9") ? ASPECT_21_9 : !strcmp(val, "16:9") ? ASPECT_16_9 : ASPECT_4_3;
+    else if (!strcmp(key, "fullscreen")) g_cfg.fullscreen = atoi(val);
+    else if (!strcmp(key, "vsync")) g_cfg.vsync = atoi(val);
+    else if (!strcmp(key, "linear_filter")) g_cfg.linear_filter = atoi(val);
+    else if (!strcmp(key, "subpixel")) g_cfg.subpixel = atoi(val);
+    else if (!strcmp(key, "perspective")) g_cfg.perspective = atoi(val);
+    else if (!strcmp(key, "texture_filter")) g_cfg.texture_filter = atoi(val);
+    else if (!strcmp(key, "ssaa")) g_cfg.ssaa = atoi(val);
+}
+
 static void parse(char* text) {
     char section[32] = "";
     for (char* line = strtok(text, "\n"); line; line = strtok(NULL, "\n")) {
@@ -159,6 +181,8 @@ static void parse(char* text) {
         char* key = trim(l);
         char* val = trim(eq + 1);
         if (!strcmp(section, "video")) {
+            config_set_video(key, val);
+        } else if (0) {
             if (!strcmp(key, "window_height")) g_cfg.window_height = atoi(val);
             else if (!strcmp(key, "render_scale")) g_cfg.render_scale = atoi(val);
             else if (!strcmp(key, "aspect")) g_cfg.aspect = !strcmp(val, "21:9") ? ASPECT_21_9 : !strcmp(val, "16:9") ? ASPECT_16_9 : ASPECT_4_3;
@@ -166,6 +190,9 @@ static void parse(char* text) {
             else if (!strcmp(key, "vsync")) g_cfg.vsync = atoi(val);
             else if (!strcmp(key, "linear_filter")) g_cfg.linear_filter = atoi(val);
             else if (!strcmp(key, "subpixel")) g_cfg.subpixel = atoi(val);
+            else if (!strcmp(key, "perspective")) g_cfg.perspective = atoi(val);
+            else if (!strcmp(key, "texture_filter")) g_cfg.texture_filter = atoi(val);
+            else if (!strcmp(key, "ssaa")) g_cfg.ssaa = atoi(val);
         } else if (!strcmp(section, "keyboard")) {
             /* rescanned in a second pass (strtok is not reentrant) */
         } else if (!strcmp(section, "mouse")) {
@@ -212,7 +239,10 @@ static void parse_bindings(const char* text) {
     }
 }
 
+void config_set_path(const char* path);
+
 void config_load(const char* path) {
+    config_set_path(path);
     FILE* f = fopen(path, "rb");
     if (!f) {
         f = fopen(path, "wb");
@@ -240,6 +270,8 @@ void config_load(const char* path) {
     if (g_cfg.render_scale < 1) g_cfg.render_scale = 1;
     if (g_cfg.render_scale > 8) g_cfg.render_scale = 8;
     if (g_cfg.window_height < 240) g_cfg.window_height = 240;
+    if (g_cfg.ssaa < 1) g_cfg.ssaa = 1;
+    if (g_cfg.ssaa > 3) g_cfg.ssaa = 3;
 }
 
 float config_aspect_ratio(void) {
@@ -248,4 +280,98 @@ float config_aspect_ratio(void) {
     case ASPECT_21_9: return 21.0f / 9.0f;
     default: return 4.0f / 3.0f;
     }
+}
+
+/* ---------------- saving ---------------- */
+
+static char ini_path[1024];
+
+void config_set_path(const char* path) { snprintf(ini_path, sizeof(ini_path), "%s", path); }
+
+/* replace "key = value" inside [section] of the ini text, appending it when missing */
+static char* ini_set(char* text, const char* section, const char* key, const char* value) {
+    size_t cap = strlen(text) + 256;
+    char* out = malloc(cap + strlen(key) + strlen(value) + 64);
+    out[0] = 0;
+    char cur[32] = "";
+    int done = 0, in_section = 0;
+    const char* p = text;
+    while (*p) {
+        const char* e = strchr(p, '\n');
+        size_t n = e ? (size_t)(e - p + 1) : strlen(p);
+        char line[512];
+        size_t m = n < sizeof(line) - 1 ? n : sizeof(line) - 1;
+        memcpy(line, p, m);
+        line[m] = 0;
+        char tmp[512];
+        snprintf(tmp, sizeof(tmp), "%s", line);
+        char* t = trim(tmp);
+        if (*t == '[') {
+            if (in_section && !done) { /* leaving the section without the key: append it */
+                strcat(out, key); strcat(out, " = "); strcat(out, value); strcat(out, "\n");
+                done = 1;
+            }
+            char* b = strchr(t, ']');
+            if (b) *b = 0;
+            snprintf(cur, sizeof(cur), "%s", t + 1);
+            in_section = !strcmp(cur, section);
+        } else if (in_section && !done && *t != ';') {
+            char* eq = strchr(t, '=');
+            if (eq) {
+                *eq = 0;
+                if (!strcmp(trim(t), key)) {
+                    strcat(out, key); strcat(out, " = "); strcat(out, value); strcat(out, "\n");
+                    done = 1;
+                    p += n;
+                    continue;
+                }
+            }
+        }
+        strncat(out, p, n);
+        p += n;
+    }
+    if (!done) {
+        if (!in_section) { strcat(out, "\n["); strcat(out, section); strcat(out, "]\n"); }
+        strcat(out, key); strcat(out, " = "); strcat(out, value); strcat(out, "\n");
+    }
+    free(text);
+    return out;
+}
+
+void config_save(void) {
+    if (!ini_path[0]) return;
+    FILE* f = fopen(ini_path, "rb");
+    char* text;
+    if (f) {
+        fseek(f, 0, SEEK_END);
+        long n = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        text = malloc((size_t)n + 1);
+        n = (long)fread(text, 1, (size_t)n, f);
+        text[n] = 0;
+        fclose(f);
+    } else {
+        text = strdup(default_ini);
+    }
+    static const char* aspects[] = {"4:3", "16:9", "21:9"};
+    char v[32];
+#define SETI(sec, k, val) do { snprintf(v, sizeof(v), "%d", (int)(val)); text = ini_set(text, sec, k, v); } while (0)
+    SETI("video", "window_height", g_cfg.window_height);
+    SETI("video", "render_scale", g_cfg.render_scale);
+    text = ini_set(text, "video", "aspect", aspects[g_cfg.aspect]);
+    SETI("video", "fullscreen", g_cfg.fullscreen);
+    SETI("video", "vsync", g_cfg.vsync);
+    SETI("video", "linear_filter", g_cfg.linear_filter);
+    SETI("video", "subpixel", g_cfg.subpixel);
+    SETI("video", "perspective", g_cfg.perspective);
+    SETI("video", "texture_filter", g_cfg.texture_filter);
+    SETI("video", "ssaa", g_cfg.ssaa);
+    SETI("mouse", "turn", g_cfg.mouse_turn);
+    snprintf(v, sizeof(v), "%.2f", g_cfg.mouse_sensitivity);
+    text = ini_set(text, "mouse", "sensitivity", v);
+    SETI("gamepad", "rumble", g_cfg.rumble);
+#undef SETI
+    f = fopen(ini_path, "wb");
+    if (f) { fputs(text, f); fclose(f); }
+    free(text);
 }

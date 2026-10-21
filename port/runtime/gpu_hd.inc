@@ -33,6 +33,7 @@ static int hd_scale = 1;     /* vertical (and narrow horizontal) scale */
 static float hd_wide = 1.0f; /* extra horizontal factor for widescreen */
 static int hd_enabled;
 static int hd_mode3d;        /* previous game frame contained 3D geometry */
+static int hd_ssaa = 1;      /* supersampling factor (surfaces are this much larger) */
 
 int g_gte_ws_num = 1, g_gte_ws_den = 1;
 
@@ -45,14 +46,14 @@ u32 g_stat_rtp, g_stat_poly, g_stat_poly_tagged, g_stat_vtx_tagged;
 #define TAG_SLOTS (1 << 16)
 typedef struct {
     u32 key;   /* xy key | generation << 22 */
-    float fx, fy;
+    float fx, fy, z;
 } Tag;
 static Tag tags[TAG_SLOTS];
 static u32 tag_gen = 1;
 
 static inline u32 tag_key(int x, int y) { return ((u32)x & 0x7FF) | (((u32)y & 0x7FF) << 11); }
 
-void gte_tag_vertex(int x, int y, float fx, float fy) {
+void gte_tag_vertex(int x, int y, float fx, float fy, float z) {
     if (!hd_enabled) return;
     g_stat_rtp++;
     u32 k = tag_key(x, y);
@@ -64,10 +65,13 @@ void gte_tag_vertex(int x, int y, float fx, float fy) {
             t->key = k | (tag_gen << 22);
             t->fx = fx;
             t->fy = fy;
+            t->z = z;
             return;
         }
     }
 }
+
+static float tag_last_z;
 
 static int tag_lookup(u32 xyword, float* fx, float* fy) {
     int x = sx11(xyword), y = sx11(xyword >> 16);
@@ -80,6 +84,7 @@ static int tag_lookup(u32 xyword, float* fx, float* fy) {
             /* only trust the precise value when it rounds to the same pixel */
             if (fabsf(t->fx - x) < 1.0f && fabsf(t->fy - y) < 1.0f) { *fx = t->fx; *fy = t->fy; }
             else { *fx = (float)x; *fy = (float)y; }
+            tag_last_z = t->z;
             return 1;
         }
     }
@@ -140,10 +145,11 @@ void gpu_hd_configure(void) {
     hd_flush();
     for (int i = 0; i < hd_nsurf; i++) { free(hd_surf[i].px); hd_surf[i].px = NULL; }
     hd_nsurf = 0;
-    hd_scale = g_cfg.render_scale;
+    hd_ssaa = g_cfg.ssaa;
+    hd_scale = g_cfg.render_scale * hd_ssaa;
     float aspect = config_aspect_ratio();
     hd_wide = aspect / (4.0f / 3.0f);
-    hd_enabled = hd_scale > 1 || g_cfg.aspect != ASPECT_4_3;
+    hd_enabled = hd_scale > 1 || g_cfg.aspect != ASPECT_4_3 || g_cfg.perspective || g_cfg.texture_filter;
     /* GTE horizontal squeeze for widescreen: 4:3 / target */
     switch (g_cfg.aspect) {
     case ASPECT_16_9: g_gte_ws_num = 3; g_gte_ws_den = 4; break;
@@ -186,7 +192,7 @@ static void hd_upload(int x, int y, int w, int h) {
 enum { HC_TRI, HC_RECT, HC_FILL };
 
 typedef struct {
-    float x, y, r, g, b, u, v;
+    float x, y, r, g, b, u, v, q; /* q = 1/z for perspective correction (u, v premultiplied) */
 } HV;
 
 typedef struct {
@@ -195,7 +201,8 @@ typedef struct {
 } HdTex;
 
 typedef struct {
-    u8 type, surf, gour, tex, raw, semi, mode, mset, mcheck, flipx, flipy;
+    u8 type, surf, gour, tex, raw, semi, mode, mset, mcheck, flipx, flipy, persp, bilinear;
+    s16 umin, umax, vmin, vmax;     /* texture coordinate range of the primitive */
     int x0, y0, x1, y1;             /* clip (TRI) or covered area (RECT/FILL), exclusive */
     union {
         struct { HV a, b, c; } tri;
@@ -276,6 +283,48 @@ static inline u32 hd_texel(u16 t, int r, int g, int b, int raw) {
     return (u32)(tr << 16 | tg << 8 | tb) | (c & 0x01000000u);
 }
 
+/* bilinear sample with PS1 transparency (texel 0 = transparent); returns 0 when the
+ * filtered coverage is below half, else 24-bit colour | stp bit 24 | bit 25 set */
+static inline u32 hd_tex_bilinear(const HdCmd* c, float u, float v) {
+    u -= 0.5f;
+    v -= 0.5f;
+    int u0 = (int)floorf(u), v0 = (int)floorf(v);
+    float fu = u - u0, fv = v - v0;
+    float acc_r = 0, acc_g = 0, acc_b = 0, aw = 0;
+    u16 nearest = 0;
+    float best = -1;
+    for (int k = 0; k < 4; k++) {
+        int du = k & 1, dv = k >> 1;
+        int uu = u0 + du, vv = v0 + dv;
+        if (uu < c->umin) uu = c->umin;
+        if (uu > c->umax) uu = c->umax;
+        if (vv < c->vmin) vv = c->vmin;
+        if (vv > c->vmax) vv = c->vmax;
+        float w = (du ? fu : 1 - fu) * (dv ? fv : 1 - fv);
+        u16 t = hd_tex_fetch(&c->t, uu, vv);
+        if (w > best) { best = w; nearest = t; }
+        if (!t) continue;
+        u32 c24 = c15to24(t);
+        acc_r += w * ((c24 >> 16) & 255);
+        acc_g += w * ((c24 >> 8) & 255);
+        acc_b += w * (c24 & 255);
+        aw += w;
+    }
+    if (aw < 0.5f) return 0;
+    float inv = 1.0f / aw;
+    u32 r = (u32)(acc_r * inv + 0.5f), g = (u32)(acc_g * inv + 0.5f), b = (u32)(acc_b * inv + 0.5f);
+    return (r << 16 | g << 8 | b) | ((u32)(nearest >> 15) << 24) | 0x02000000u;
+}
+
+static inline u32 hd_modulate24(u32 c, int r, int g, int b, int raw) {
+    if (raw) return c & 0x01FFFFFF;
+    int tr = (int)((c >> 16) & 255) * r >> 7, tg = (int)((c >> 8) & 255) * g >> 7, tb = (int)(c & 255) * b >> 7;
+    if (tr > 255) tr = 255;
+    if (tg > 255) tg = 255;
+    if (tb > 255) tb = 255;
+    return (u32)(tr << 16 | tg << 8 | tb) | (c & 0x01000000u);
+}
+
 static inline int ffloor(float f) {
     int i = (int)f;
     return i - (f < (float)i);
@@ -303,7 +352,7 @@ static void hdx_tri(const HdCmd* c, int band0, int band1) {
 #define GRAD(f, dx, dy) \
     float dx = ((b->f - a->f) * (cc->y - a->y) - (cc->f - a->f) * (b->y - a->y)) * inv; \
     float dy = ((cc->f - a->f) * (b->x - a->x) - (b->f - a->f) * (cc->x - a->x)) * inv;
-    GRAD(r, drx, dry) GRAD(g, dgx, dgy) GRAD(b, dbx, dby) GRAD(u, dux, duy) GRAD(v, dvx, dvy)
+    GRAD(r, drx, dry) GRAD(g, dgx, dgy) GRAD(b, dbx, dby) GRAD(u, dux, duy) GRAD(v, dvx, dvy) GRAD(q, dqx, dqy)
 #undef GRAD
     u32 flat = (u32)((int)a->r << 16 | (int)a->g << 8 | (int)a->b);
     int fr = (int)a->r, fg = (int)a->g, fb = (int)a->b;
@@ -328,8 +377,29 @@ static void hdx_tri(const HdCmd* c, int band0, int band1) {
         float px = xs + 0.5f, ox = px - a->x, oy = py - a->y;
         float r = a->r + drx * ox + dry * oy, g = a->g + dgx * ox + dgy * oy, bl = a->b + dbx * ox + dby * oy;
         float u = a->u + dux * ox + duy * oy, v = a->v + dvx * ox + dvy * oy;
+        float qq = a->q + dqx * ox + dqy * oy;
         u32* row = s->px + (size_t)Y * s->W;
-        if (c->tex) {
+        if (c->tex && (c->persp || c->bilinear)) {
+            for (int X = xs; X < xe; X++, r += drx, g += dgx, bl += dbx, u += dux, v += dvx, qq += dqx) {
+                float tu = u, tv = v;
+                if (c->persp) { float iq = 1.0f / qq; tu = u * iq; tv = v * iq; }
+                /* keep inside the primitive's texels (perspective/filter overshoot at edges) */
+                if (tu < c->umin) tu = c->umin;
+                if (tu > c->umax + 0.999f) tu = c->umax + 0.999f;
+                if (tv < c->vmin) tv = c->vmin;
+                if (tv > c->vmax + 0.999f) tv = c->vmax + 0.999f;
+                int ir = c->gour ? (int)r : fr, ig = c->gour ? (int)g : fg, ib = c->gour ? (int)bl : fb;
+                if (c->bilinear) {
+                    u32 t = hd_tex_bilinear(c, tu, tv);
+                    if (!t) continue;
+                    hd_plot(&row[X], hd_modulate24(t, ir, ig, ib, c->raw), c->semi && (t & 0x01000000u), c);
+                } else {
+                    u16 t = hd_tex_fetch(&c->t, (int)tu, (int)tv);
+                    if (t == 0) continue;
+                    hd_plot(&row[X], hd_texel(t, ir, ig, ib, c->raw), c->semi && (t & 0x8000), c);
+                }
+            }
+        } else if (c->tex) {
             for (int X = xs; X < xe; X++, r += drx, g += dgx, bl += dbx, u += dux, v += dvx) {
                 u16 t = hd_tex_fetch(&c->t, ffloor(u), ffloor(v));
                 if (t == 0) continue;
@@ -461,6 +531,9 @@ static inline int draw_area_touches(const HdSurf* s) {
     return !(da_x2 < s->ox || da_x1 >= s->ox + s->w || da_y2 < s->oy || da_y1 >= s->oy + s->h);
 }
 
+static int pt_persp, pt_bilinear;           /* set by hd_polygon for the next push_tri calls */
+static int pt_umin, pt_umax, pt_vmin, pt_vmax;
+
 static void push_tri(int si, const HdSurf* s, int wide, const HV* a, const HV* b, const HV* cc,
                      int gour, int tex, int raw, int semi, int mode, const TexState* ts) {
     float area = (b->x - a->x) * (cc->y - a->y) - (b->y - a->y) * (cc->x - a->x);
@@ -475,6 +548,9 @@ static void push_tri(int si, const HdSurf* s, int wide, const HV* a, const HV* b
     c->tri.a = *a;
     if (area > 0) { c->tri.b = *b; c->tri.c = *cc; }
     else { c->tri.b = *cc; c->tri.c = *b; }
+    c->persp = (u8)(tex && pt_persp);
+    c->bilinear = (u8)(tex && pt_bilinear);
+    c->umin = (s16)pt_umin; c->umax = (s16)pt_umax; c->vmin = (s16)pt_vmin; c->vmax = (s16)pt_vmax;
     if (tex) hd_capture_tex(&c->t, ts);
 }
 
@@ -482,12 +558,14 @@ static void push_tri(int si, const HdSurf* s, int wide, const HV* a, const HV* b
 static void hd_polygon(const Vtx* v, const u32* xy, int nv, int gour, int tex, int raw, int semi,
                        int mode, const TexState* ts) {
     if (!hd_enabled || !hd_nsurf) return;
-    float fx[4], fy[4];
+    float fx[4], fy[4], fz[4];
     int tagged = 0;
     for (int i = 0; i < nv; i++) {
         float tx, ty;
+        fz[i] = 0;
         if (tag_lookup(xy[i], &tx, &ty)) {
             tagged++;
+            fz[i] = tag_last_z;
             g_stat_vtx_tagged++;
             if (g_cfg.subpixel) { fx[i] = tx + off_x; fy[i] = ty + off_y; continue; }
         }
@@ -498,6 +576,19 @@ static void hd_polygon(const Vtx* v, const u32* xy, int nv, int gour, int tex, i
     if (tagged >= 2) g_stat_poly_tagged++;
     int minx = v[0].x, maxx = v[0].x;
     for (int i = 1; i < nv; i++) { if (v[i].x < minx) minx = v[i].x; if (v[i].x > maxx) maxx = v[i].x; }
+    /* perspective needs a depth for every vertex; filtering is for 3D only (keeps UI crisp) */
+    int persp = g_cfg.perspective && tex && tagged == nv;
+    for (int i = 0; i < nv && persp; i++) if (fz[i] <= 0) persp = 0;
+    pt_persp = persp;
+    pt_bilinear = g_cfg.texture_filter && tex && tagged >= 2;
+    pt_umin = pt_vmin = 255;
+    pt_umax = pt_vmax = 0;
+    for (int i = 0; i < nv; i++) {
+        if (v[i].u < pt_umin) pt_umin = v[i].u;
+        if (v[i].u > pt_umax) pt_umax = v[i].u;
+        if (v[i].v < pt_vmin) pt_vmin = v[i].v;
+        if (v[i].v > pt_vmax) pt_vmax = v[i].v;
+    }
     for (int si = 0; si < hd_nsurf; si++) {
         HdSurf* s = &hd_surf[si];
         if (!draw_area_touches(s)) continue;
@@ -507,7 +598,12 @@ static void hd_polygon(const Vtx* v, const u32* xy, int nv, int gour, int tex, i
             h[i].x = map_x(s, fx[i], wide);
             h[i].y = map_y(s, fy[i]);
             h[i].r = (float)v[i].r; h[i].g = (float)v[i].g; h[i].b = (float)v[i].b;
-            h[i].u = (float)v[i].u; h[i].v = (float)v[i].v;
+            float q = persp ? 1024.0f / fz[i] : 1.0f;
+            /* PS1 texels are sampled at integer coordinates; centre them for filtering */
+            float off = pt_bilinear ? 0.5f : 0.0f;
+            h[i].u = (v[i].u + off) * q;
+            h[i].v = (v[i].v + off) * q;
+            h[i].q = q;
         }
         push_tri(si, s, wide, &h[0], &h[1], &h[2], gour, tex, raw, semi, mode, ts);
         if (nv == 4) push_tri(si, s, wide, &h[1], &h[2], &h[3], gour, tex, raw, semi, mode, ts);
@@ -574,7 +670,9 @@ static void hd_line(Vtx a, Vtx b, u32 xa, u32 xb, int gour, int semi, int mode) 
             const Vtx* src = i < 2 ? &a : &b;
             p[i].r = (float)src->r; p[i].g = (float)src->g; p[i].b = (float)src->b;
             p[i].u = p[i].v = 0;
+            p[i].q = 1;
         }
+        pt_persp = pt_bilinear = 0;
         p[0].x = x0 + nx; p[0].y = y0 + ny;
         p[1].x = x0 - nx; p[1].y = y0 - ny;
         p[2].x = x1 + nx; p[2].y = y1 + ny;
@@ -642,7 +740,30 @@ const u32* gpu_hd_frame(int* w, int* h) {
     int dh = ((disp_mode & 0x24) == 0x24) ? 480 : 240;
     HdSurf* s = hd_get_surface((int)disp_x, (int)disp_y, dw, dh, 1);
     hd_flush();
-    *w = s->W;
-    *h = s->H;
-    return s->px;
+    if (hd_ssaa <= 1) {
+        *w = s->W;
+        *h = s->H;
+        return s->px;
+    }
+    /* supersampling: box-filter the surface down by the SSAA factor */
+    static u32* down;
+    static size_t down_cap;
+    int f = hd_ssaa, ow = s->W / f, oh = s->H / f;
+    if ((size_t)ow * oh > down_cap) {
+        down_cap = (size_t)ow * oh;
+        down = realloc(down, down_cap * 4);
+    }
+    int n = f * f;
+    for (int y = 0; y < oh; y++)
+        for (int x = 0; x < ow; x++) {
+            u32 r = 0, g = 0, b = 0;
+            for (int j = 0; j < f; j++) {
+                const u32* src = s->px + (size_t)(y * f + j) * s->W + x * f;
+                for (int i = 0; i < f; i++) { r += (src[i] >> 16) & 255; g += (src[i] >> 8) & 255; b += src[i] & 255; }
+            }
+            down[(size_t)y * ow + x] = (r / n) << 16 | (g / n) << 8 | (b / n);
+        }
+    *w = ow;
+    *h = oh;
+    return down;
 }

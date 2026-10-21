@@ -10,6 +10,8 @@ static SDL_Texture* tex;
 static int tex_w, tex_h, tex_linear;
 int g_turbo;
 static int headless;
+static SDL_Rect last_dst;
+static int settings_requested;
 
 /* PS1 button bits (active high here) */
 enum {
@@ -178,6 +180,7 @@ void platform_present(const u32* px, int w, int h, float content_aspect) {
     int cw = (int)(lh * content_aspect + 0.5f);
     if (cw > lw) cw = lw;
     SDL_Rect dst = {(lw - cw) / 2, 0, cw, lh};
+    last_dst = dst;
     SDL_RenderCopy(ren, tex, NULL, &dst);
     SDL_RenderPresent(ren);
 
@@ -188,7 +191,7 @@ void platform_present(const u32* px, int w, int h, float content_aspect) {
     if (now - last_us >= 1000000) {
         static const char* asp[] = {"4:3", "16:9", "21:9"};
         char title[160];
-        SDL_snprintf(title, sizeof(title), "Xena: Warrior Princess  [%d fps | %dx | %s]%s",
+        SDL_snprintf(title, sizeof(title), "Xena: Warrior Princess  [%d fps | %dx | %s]  F1: settings%s",
                      (int)(frames * 1000000LL / (now - last_us)), g_cfg.render_scale, asp[g_cfg.aspect],
                      mouse_captured ? "  Alt: release mouse" : "");
         SDL_SetWindowTitle(win, title);
@@ -227,6 +230,7 @@ int platform_pump(void) {
                 SDL_SetWindowFullscreen(win, fs ? 0 : SDL_WINDOW_FULLSCREEN_DESKTOP);
                 break;
             }
+            if (e.key.keysym.sym == SDLK_F1) { settings_requested = 1; break; }
             if (e.key.keysym.sym == SDLK_F5) { g_cfg.aspect = (g_cfg.aspect + 1) % 3; apply_aspect(); gpu_hd_configure(); break; }
             if (e.key.keysym.sym == SDLK_F6) { g_cfg.render_scale = g_cfg.render_scale % 8 + 1; gpu_hd_configure(); break; }
             if (e.key.keysym.sym == SDLK_LALT || e.key.keysym.sym == SDLK_RALT) set_mouse_capture(0);
@@ -251,6 +255,15 @@ int platform_pump(void) {
             break;
         case SDL_CONTROLLERDEVICEADDED: open_pad(e.cdevice.which); break;
         case SDL_CONTROLLERDEVICEREMOVED: close_pad(e.cdevice.which); break;
+        case SDL_CONTROLLERBUTTONDOWN: {
+            /* Back+Start or the Guide button opens the settings */
+            SDL_GameController* p = SDL_GameControllerFromInstanceID(e.cbutton.which);
+            if (e.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE ||
+                (p && SDL_GameControllerGetButton(p, SDL_CONTROLLER_BUTTON_BACK) &&
+                 SDL_GameControllerGetButton(p, SDL_CONTROLLER_BUTTON_START)))
+                settings_requested = 1;
+            break;
+        }
         }
     }
     g_turbo = ff_down;
@@ -355,3 +368,5 @@ void platform_audio_push(const s16* samples, int frames) {
     if (queued > 44100 / 60 * 6) return; /* too far ahead (e.g. fast-forward): drop */
     SDL_QueueAudio(audio_dev, samples, (Uint32)frames * 4);
 }
+
+#include "menu.inc"
