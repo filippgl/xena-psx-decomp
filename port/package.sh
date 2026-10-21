@@ -10,7 +10,7 @@ cp port/README_RU.txt "$DEST/README.txt"
 if ls build/texreplace/*.png >/dev/null 2>&1; then
     mkdir -p "$DEST/textures"
     cp build/texreplace/*.png "$DEST/textures/"
-    cp build/texdump2/manifest.txt "$DEST/textures/manifest.txt"
+    if [ -f build/texdump_all/manifest.txt ]; then cp build/texdump_all/manifest.txt "$DEST/textures/manifest.txt"; else cp build/texdump2/manifest.txt "$DEST/textures/manifest.txt"; fi
     echo "texture pack: $(ls build/texreplace/*.png | wc -l) textures"
 fi
 echo "packaged into $DEST"
