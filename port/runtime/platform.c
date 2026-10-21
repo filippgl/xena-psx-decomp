@@ -130,6 +130,9 @@ static void set_mouse_capture(int on) {
 
 static int window_width(void) { return (int)(g_cfg.window_height * config_aspect_ratio() + 0.5f); }
 
+static SDL_Texture* font_tex; /* settings menu font (SDL renderer backend) */
+#include "render2d.inc"
+
 int platform_init(int scale) {
     headless = scale <= 0;
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS4_RUMBLE, "1");
@@ -141,6 +144,13 @@ int platform_init(int scale) {
         return 0;
     }
     input_setup();
+    if (headless && !g_cfg.renderer) return 1;
+    if (scale > 0 && scale != 3) g_cfg.window_height = 240 * scale;
+    if (g_cfg.renderer && gl_create(headless)) {
+        for (int i = 0; i < SDL_NumJoysticks(); i++) open_pad(i);
+        return 1;
+    }
+    g_cfg.renderer = 0;
     if (headless) return 1;
     if (scale > 0 && scale != 3) g_cfg.window_height = 240 * scale; /* --scale overrides xena.ini */
     win = SDL_CreateWindow("Xena: Warrior Princess", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
@@ -159,12 +169,55 @@ int platform_init(int scale) {
 static void apply_aspect(void) {
     if (!win) return;
     if (!(SDL_GetWindowFlags(win) & SDL_WINDOW_FULLSCREEN_DESKTOP)) SDL_SetWindowSize(win, window_width(), g_cfg.window_height);
-    SDL_RenderSetLogicalSize(ren, window_width(), g_cfg.window_height);
+    if (!gl_mode) SDL_RenderSetLogicalSize(ren, window_width(), g_cfg.window_height);
+}
+
+static void update_title(void) {
+    static int frames;
+    static s64 last_us;
+    s64 now = platform_ticks_us();
+    frames++;
+    if (now - last_us >= 1000000) {
+        static const char* asp[] = {"4:3", "16:9", "21:9"};
+        char title[160];
+        SDL_snprintf(title, sizeof(title), "Xena: Warrior Princess  [%d fps | %s %dx | %s]  F1: settings%s",
+                     (int)(frames * 1000000LL / (now - last_us)), gl_mode ? "GL" : "CPU", g_cfg.render_scale,
+                     asp[g_cfg.aspect], mouse_captured ? "  Alt: release mouse" : "");
+        SDL_SetWindowTitle(win, title);
+        frames = 0;
+        last_us = now;
+    }
+}
+
+static void content_rect(float content_aspect) {
+    int lw = window_width(), lh = g_cfg.window_height;
+    int cw = (int)(lh * content_aspect + 0.5f);
+    if (cw > lw) cw = lw;
+    last_dst.x = (lw - cw) / 2;
+    last_dst.y = 0;
+    last_dst.w = cw;
+    last_dst.h = lh;
 }
 
 /* content_aspect: aspect ratio the picture occupies inside the output (4:3 for FMVs) */
 void platform_present(const u32* px, int w, int h, float content_aspect) {
     if (headless) return;
+    content_rect(content_aspect);
+    if (gl_mode) {
+        p_glActiveTexture(GL_TEXTURE0);
+        p_glBindTexture(GL_TEXTURE_2D, r2d_frame_tex);
+        p_glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+        p_glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_BGRA, GL_UNSIGNED_BYTE, px);
+        shown_tex = r2d_frame_tex;
+        shown_w = w;
+        shown_h = h;
+        shown_ssaa = 1;
+        r2d_clear();
+        r2d_frame();
+        r2d_present();
+        update_title();
+        return;
+    }
     if (!tex || w != tex_w || h != tex_h || tex_linear != g_cfg.linear_filter) {
         if (tex) SDL_DestroyTexture(tex);
         SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, g_cfg.linear_filter ? "linear" : "nearest");
@@ -174,31 +227,27 @@ void platform_present(const u32* px, int w, int h, float content_aspect) {
         tex_linear = g_cfg.linear_filter;
     }
     SDL_UpdateTexture(tex, NULL, px, w * 4);
-    SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
-    SDL_RenderClear(ren);
-    int lw = window_width(), lh = g_cfg.window_height;
-    int cw = (int)(lh * content_aspect + 0.5f);
-    if (cw > lw) cw = lw;
-    SDL_Rect dst = {(lw - cw) / 2, 0, cw, lh};
-    last_dst = dst;
-    SDL_RenderCopy(ren, tex, NULL, &dst);
-    SDL_RenderPresent(ren);
-
-    static int frames;
-    static s64 last_us;
-    s64 now = platform_ticks_us();
-    frames++;
-    if (now - last_us >= 1000000) {
-        static const char* asp[] = {"4:3", "16:9", "21:9"};
-        char title[160];
-        SDL_snprintf(title, sizeof(title), "Xena: Warrior Princess  [%d fps | %dx | %s]  F1: settings%s",
-                     (int)(frames * 1000000LL / (now - last_us)), g_cfg.render_scale, asp[g_cfg.aspect],
-                     mouse_captured ? "  Alt: release mouse" : "");
-        SDL_SetWindowTitle(win, title);
-        frames = 0;
-        last_us = now;
-    }
+    r2d_clear();
+    r2d_frame();
+    r2d_present();
+    update_title();
 }
+
+/* hardware renderer: present a GL texture (the high-resolution surface) */
+void platform_present_gl(unsigned gltex, int w, int h, float content_aspect, int ssaa) {
+    if (headless) return;
+    content_rect(content_aspect);
+    shown_tex = gltex;
+    shown_w = w;
+    shown_h = h;
+    shown_ssaa = ssaa;
+    r2d_clear();
+    r2d_frame();
+    r2d_present();
+    update_title();
+}
+
+int platform_gl(void) { return gl_mode; }
 
 void gpu_hd_configure(void);
 

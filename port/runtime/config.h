@@ -23,6 +23,8 @@ typedef struct {
     int perspective;     /* perspective-correct textures in the HD renderer */
     int texture_filter;  /* 0 nearest, 1 bilinear (3D only) */
     int ssaa;            /* supersampling factor per axis: 1..3 */
+    int renderer;        /* 1 = OpenGL, 0 = software */
+    int texture_pack;    /* use textures/ replacements (OpenGL) */
     int mouse_enabled;
     int mouse_turn;
     float mouse_sensitivity;

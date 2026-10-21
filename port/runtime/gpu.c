@@ -240,6 +240,7 @@ static void draw_rect(int x, int y, int w, int h, u32 color, int textured, int r
 static inline int sx11(u32 v) { return ((s32)(v << 21)) >> 21; }
 
 #include "gpu_hd.inc"
+#include "texdump.inc"
 
 static int cmd_length(u32 cmd) {
     u32 op = cmd >> 24;
@@ -301,6 +302,18 @@ static void exec_polygon(void) {
         set_texstate(&ts, tp, clut);
         if (raw) for (int i = 0; i < nv; i++) v[i].r = v[i].g = v[i].b = 128;
     }
+    if (tex && dump_dir) {
+        int umin = 255, umax = 0, vmin = 255, vmax = 0, tagged = 0;
+        for (int i = 0; i < nv; i++) {
+            float fx, fy;
+            if (v[i].u < umin) umin = v[i].u;
+            if (v[i].u > umax) umax = v[i].u;
+            if (v[i].v < vmin) vmin = v[i].v;
+            if (v[i].v > vmax) vmax = v[i].v;
+            tagged += tag_lookup(xyw[i], &fx, &fy);
+        }
+        texdump_record(tp, clut, umin, vmin, umax, vmax, tagged >= 2);
+    }
     draw_triangle(v[0], v[1], v[2], gour, tex, raw, semi, semi_mode, &ts);
     if (quad) draw_triangle(v[1], v[2], v[3], gour, tex, raw, semi, semi_mode, &ts);
     hd_polygon(v, xyw, nv, gour, tex, raw, semi, semi_mode, &ts);
@@ -329,6 +342,7 @@ static void exec_rect(void) {
     }
     TexState ts;
     if (tex) set_texstate(&ts, texpage, clut);
+    if (tex && dump_dir) texdump_record(texpage, clut, u, v, u + w - 1, v + h - 1, 0);
     draw_rect(x, y, w, h, fifo[0], tex, raw, semi, (texpage >> 5) & 3, u, v, &ts);
     hd_rect(x, y, w, h, fifo[0], tex, raw, semi, (texpage >> 5) & 3, u, v, &ts, xy);
 }
@@ -377,6 +391,7 @@ static void vram_fill(void) {
     for (int j = 0; j < h; j++)
         for (int i = 0; i < w; i++) VRAM(x + i, y + j) = col;
     hd_fill(x, y, w, h, col);
+    rep_vram_written(x, y, w, h);
 }
 
 static void vram_copy(void) {
@@ -393,6 +408,7 @@ static void vram_copy(void) {
         }
     }
     hd_copy(sx, sy, dx, dy, w, h);
+    rep_vram_written(dx, dy, w, h);
 }
 
 static void exec_env(u32 w) {
@@ -427,6 +443,7 @@ static void exec_fifo(void) {
         xfer_in.h = (((fifo[2] >> 16) - 1) & 0x1FF) + 1;
         xfer_in.cx = xfer_in.cy = 0;
         xfer_in.active = 1;
+        if (dump_dir && dump_n) texdump_write();
     } else if (op >= 0xC0 && op < 0xE0) {
         xfer_out.x = fifo[1] & 0x3FF;
         xfer_out.y = (fifo[1] >> 16) & 0x1FF;
@@ -447,6 +464,7 @@ static void xfer_in_pixel(u16 px) {
         if (++xfer_in.cy >= xfer_in.h) {
             xfer_in.active = 0;
             hd_upload(xfer_in.x, xfer_in.y, xfer_in.w, xfer_in.h);
+            rep_vram_written(xfer_in.x, xfer_in.y, xfer_in.w, xfer_in.h);
         }
     }
 }

@@ -24,7 +24,8 @@
 typedef struct {
     int ox, oy, w, h;   /* native VRAM rectangle */
     int W, H;           /* surface pixels */
-    u32* px;            /* 0x00RRGGBB, bit 24 = mask bit */
+    u32* px;            /* 0x00RRGGBB, bit 24 = mask bit (software backend) */
+    unsigned gl_fbo, gl_tex; /* OpenGL backend */
 } HdSurf;
 
 static HdSurf hd_surf[HD_MAX_SURF];
@@ -38,6 +39,9 @@ static int hd_ssaa = 1;      /* supersampling factor (surfaces are this much lar
 int g_gte_ws_num = 1, g_gte_ws_den = 1;
 
 static void hd_flush(void);
+extern int g_hd_gl;
+static unsigned hd_rep_rect(int rep);
+static unsigned hd_rep_texture(int rep);
 
 /* ---------------- GTE vertex tags (3D detection + sub-pixel positions) ---------------- */
 
@@ -116,6 +120,15 @@ static inline float map_x(const HdSurf* s, float x, int wide) {
 static inline float map_y(const HdSurf* s, float y) { return (y - s->oy) * hd_scale; }
 
 static void hd_upload_surf(HdSurf* s, int x, int y, int w, int h);
+static void hdgl_create_surface(HdSurf* s);
+static void hdgl_free_surface(HdSurf* s);
+static void hdgl_upload_region(HdSurf* s, int x0, int y0, int x1, int y1, int wide);
+
+static void hd_free_surface(HdSurf* s) {
+    free(s->px);
+    s->px = NULL;
+    if (g_hd_gl) hdgl_free_surface(s);
+}
 
 static HdSurf* hd_get_surface(int ox, int oy, int w, int h, int create) {
     for (int i = 0; i < hd_nsurf; i++)
@@ -130,11 +143,12 @@ static HdSurf* hd_get_surface(int ox, int oy, int w, int h, int create) {
     }
     if (slot < 0) slot = hd_nsurf < HD_MAX_SURF ? hd_nsurf++ : 0;
     HdSurf* s = &hd_surf[slot];
-    free(s->px);
+    hd_free_surface(s);
     s->ox = ox; s->oy = oy; s->w = w; s->h = h;
     s->W = (int)(w * hd_scale * hd_wide + 0.5f);
     s->H = h * hd_scale;
-    s->px = calloc((size_t)s->W * s->H, 4);
+    if (g_hd_gl) hdgl_create_surface(s);
+    else s->px = calloc((size_t)s->W * s->H, 4);
     hd_upload_surf(s, ox, oy, w, h);
     return s;
 }
@@ -143,7 +157,7 @@ static void hd_threads_init(void);
 
 void gpu_hd_configure(void) {
     hd_flush();
-    for (int i = 0; i < hd_nsurf; i++) { free(hd_surf[i].px); hd_surf[i].px = NULL; }
+    for (int i = 0; i < hd_nsurf; i++) hd_free_surface(&hd_surf[i]);
     hd_nsurf = 0;
     hd_ssaa = g_cfg.ssaa;
     hd_scale = g_cfg.render_scale * hd_ssaa;
@@ -156,7 +170,7 @@ void gpu_hd_configure(void) {
     case ASPECT_21_9: g_gte_ws_num = 4; g_gte_ws_den = 7; break;
     default: g_gte_ws_num = 1; g_gte_ws_den = 1; break;
     }
-    if (hd_enabled) hd_threads_init();
+    if (hd_enabled && !g_hd_gl) hd_threads_init();
 }
 
 /* copy a native VRAM rectangle into the surface (4:3 mapping; stretched when it spans
@@ -166,6 +180,7 @@ static void hd_upload_surf(HdSurf* s, int x, int y, int w, int h) {
     int x1 = x + w < s->ox + s->w ? x + w : s->ox + s->w, y1 = y + h < s->oy + s->h ? y + h : s->oy + s->h;
     if (x0 >= x1 || y0 >= y1) return;
     int wide = hd_mode3d && x0 <= s->ox && x1 >= s->ox + s->w;
+    if (g_hd_gl) { hdgl_upload_region(s, x0, y0, x1, y1, wide); return; }
     float k = wide ? hd_scale * hd_wide : (float)hd_scale;
     int X0 = (int)floorf(map_x(s, (float)x0, wide)), X1 = (int)ceilf(map_x(s, (float)x1, wide));
     if (X0 < 0) X0 = 0;
@@ -203,6 +218,7 @@ typedef struct {
 typedef struct {
     u8 type, surf, gour, tex, raw, semi, mode, mset, mcheck, flipx, flipy, persp, bilinear;
     s16 umin, umax, vmin, vmax;     /* texture coordinate range of the primitive */
+    s16 rep;                        /* replacement texture index, -1 = none */
     int x0, y0, x1, y1;             /* clip (TRI) or covered area (RECT/FILL), exclusive */
     union {
         struct { HV a, b, c; } tri;
@@ -223,7 +239,12 @@ static HdCmd* hd_push(void) {
             q = realloc(q, sizeof(HdCmd) * (size_t)qcap);
         }
     }
-    return &q[qn++];
+    HdCmd* c = &q[qn++];
+    c->rep = -1;
+    c->persp = c->bilinear = 0;
+    c->umin = c->vmin = 0;
+    c->umax = c->vmax = 255;
+    return c;
 }
 
 static void hd_capture_tex(HdTex* t, const TexState* ts) {
@@ -495,8 +516,11 @@ static void hd_threads_init(void) {
     }
 }
 
+static void hdgl_execute(void);
+
 static void hd_flush(void) {
     if (!qn) return;
+    if (g_hd_gl) { hdgl_execute(); qn = 0; return; }
     if (hd_nbands <= 1) {
         hd_nbands = 1;
         run_band(0);
@@ -531,7 +555,8 @@ static inline int draw_area_touches(const HdSurf* s) {
     return !(da_x2 < s->ox || da_x1 >= s->ox + s->w || da_y2 < s->oy || da_y1 >= s->oy + s->h);
 }
 
-static int pt_persp, pt_bilinear;           /* set by hd_polygon for the next push_tri calls */
+static int pt_persp, pt_bilinear, pt_rep = -1; /* set by hd_polygon for the next push_tri calls */
+static int rep_find(const TexState* ts, int umin, int vmin, int umax, int vmax);
 static int pt_umin, pt_umax, pt_vmin, pt_vmax;
 
 static void push_tri(int si, const HdSurf* s, int wide, const HV* a, const HV* b, const HV* cc,
@@ -551,6 +576,8 @@ static void push_tri(int si, const HdSurf* s, int wide, const HV* a, const HV* b
     c->persp = (u8)(tex && pt_persp);
     c->bilinear = (u8)(tex && pt_bilinear);
     c->umin = (s16)pt_umin; c->umax = (s16)pt_umax; c->vmin = (s16)pt_vmin; c->vmax = (s16)pt_vmax;
+    c->rep = (s16)(tex ? pt_rep : -1);
+    if (c->rep >= 0) c->bilinear = 0;
     if (tex) hd_capture_tex(&c->t, ts);
 }
 
@@ -589,6 +616,7 @@ static void hd_polygon(const Vtx* v, const u32* xy, int nv, int gour, int tex, i
         if (v[i].v < pt_vmin) pt_vmin = v[i].v;
         if (v[i].v > pt_vmax) pt_vmax = v[i].v;
     }
+    pt_rep = tex ? rep_find(ts, pt_umin, pt_vmin, pt_umax, pt_vmax) : -1;
     for (int si = 0; si < hd_nsurf; si++) {
         HdSurf* s = &hd_surf[si];
         if (!draw_area_touches(s)) continue;
@@ -644,7 +672,10 @@ static void hd_rect(int x, int y, int w, int h, u32 color, int tex, int raw, int
         c->rect.u0 = u0;
         c->rect.v0 = v0;
         c->rect.color = color;
-        if (tex) hd_capture_tex(&c->t, ts);
+        if (tex) {
+            hd_capture_tex(&c->t, ts);
+            c->rep = (s16)rep_find(ts, u0, v0, u0 + w - 1, v0 + h - 1);
+        }
     }
 }
 
@@ -673,6 +704,7 @@ static void hd_line(Vtx a, Vtx b, u32 xa, u32 xb, int gour, int semi, int mode) 
             p[i].q = 1;
         }
         pt_persp = pt_bilinear = 0;
+        pt_rep = -1;
         p[0].x = x0 + nx; p[0].y = y0 + ny;
         p[1].x = x0 - nx; p[1].y = y0 - ny;
         p[2].x = x1 + nx; p[2].y = y1 + ny;
@@ -716,7 +748,8 @@ static void hd_copy(int sx, int sy, int dx, int dy, int w, int h) {
         if (dx == s->ox && dy == s->oy && w == s->w && h == s->h) dst = s;
     }
     if (src && dst && src != dst && src->W == dst->W && src->H == dst->H) {
-        memcpy(dst->px, src->px, (size_t)src->W * src->H * 4);
+        if (g_hd_gl) { void hdgl_copy_surface(const HdSurf*, const HdSurf*); hdgl_copy_surface(src, dst); }
+        else memcpy(dst->px, src->px, (size_t)src->W * src->H * 4);
         return;
     }
     hd_upload(dx, dy, w, h);
@@ -732,9 +765,47 @@ static void hd_display_changed(void) {
     hd_get_surface((int)disp_x, (int)disp_y, w, h, 1);
 }
 
+static HdSurf* hd_display_surface(void) {
+    static const int widths[4] = {256, 320, 512, 640};
+    int dw = (disp_mode & 0x40) ? 368 : widths[disp_mode & 3];
+    int dh = ((disp_mode & 0x24) == 0x24) ? 480 : 240;
+    return hd_get_surface((int)disp_x, (int)disp_y, dw, dh, 1);
+}
+
+/* hardware backend: texture of the frame to show (0 = use the native picture) */
+unsigned gpu_hd_frame_gl(int* w, int* h, int* ssaa) {
+    if (!g_hd_gl || !hd_enabled || !disp_on || (disp_mode & 0x10)) return 0;
+    HdSurf* s = hd_display_surface();
+    hd_flush();
+    *w = s->W;
+    *h = s->H;
+    *ssaa = hd_ssaa;
+    return s->gl_tex;
+}
+
+/* hardware backend: read the shown frame (downsampled when supersampling) */
+const u32* gpu_hd_snapshot(int* w, int* h) {
+    int ss;
+    if (!gpu_hd_frame_gl(w, h, &ss)) return NULL;
+    static u32* buf;
+    static size_t cap;
+    size_t n = (size_t)*w * *h;
+    if (n > cap) { cap = n; buf = realloc(buf, cap * 4); }
+    void hdgl_read(const HdSurf*, u32*);
+    hdgl_read(hd_display_surface(), buf);
+    if (ss > 1) {
+        int ow = *w / ss, oh = *h / ss;
+        for (int y = 0; y < oh; y++)
+            for (int x = 0; x < ow; x++) buf[(size_t)y * ow + x] = buf[(size_t)y * ss * *w + x * ss];
+        *w = ow;
+        *h = oh;
+    }
+    return buf;
+}
+
 /* the frame to show; returns NULL when the native picture should be used */
 const u32* gpu_hd_frame(int* w, int* h) {
-    if (!hd_enabled || !disp_on || (disp_mode & 0x10)) return NULL;
+    if (g_hd_gl || !hd_enabled || !disp_on || (disp_mode & 0x10)) return NULL;
     static const int widths[4] = {256, 320, 512, 640};
     int dw = (disp_mode & 0x40) ? 368 : widths[disp_mode & 3];
     int dh = ((disp_mode & 0x24) == 0x24) ? 480 : 240;
@@ -767,3 +838,8 @@ const u32* gpu_hd_frame(int* w, int* h) {
     *h = oh;
     return down;
 }
+
+/* ---------------- texture replacement ---------------- */
+#include "texreplace.inc"
+
+#include "gpu_gl.inc"

@@ -16,6 +16,8 @@ Config g_cfg = {
     .perspective = 1,
     .texture_filter = 1,
     .ssaa = 1,
+    .renderer = 1,
+    .texture_pack = 1,
     .mouse_enabled = 1,
     .mouse_turn = 1,
     .mouse_sensitivity = 1.0f,
@@ -28,6 +30,10 @@ static const char* default_ini =
     "; Buttons: Cross Circle Square Triangle L1 R1 L2 R2 Start Select Up Down Left Right\n"
     "\n"
     "[video]\n"
+    "; renderer: opengl (graphics card) or software (processor)\n"
+    "renderer = opengl\n"
+    "; high-resolution textures from the textures folder (OpenGL only)\n"
+    "texture_pack = 1\n"
     "; window height in pixels (width follows the aspect ratio)\n"
     "window_height = 720\n"
     "; internal resolution multiplier: 1 = original 320x240, 2..8 = sharper 3D\n"
@@ -162,6 +168,8 @@ void config_set_video(const char* key, const char* val) {
     else if (!strcmp(key, "perspective")) g_cfg.perspective = atoi(val);
     else if (!strcmp(key, "texture_filter")) g_cfg.texture_filter = atoi(val);
     else if (!strcmp(key, "ssaa")) g_cfg.ssaa = atoi(val);
+    else if (!strcmp(key, "renderer")) g_cfg.renderer = strcmp(val, "software") != 0;
+    else if (!strcmp(key, "texture_pack")) g_cfg.texture_pack = atoi(val);
 }
 
 static void parse(char* text) {
@@ -366,6 +374,8 @@ void config_save(void) {
     SETI("video", "perspective", g_cfg.perspective);
     SETI("video", "texture_filter", g_cfg.texture_filter);
     SETI("video", "ssaa", g_cfg.ssaa);
+    text = ini_set(text, "video", "renderer", g_cfg.renderer ? "opengl" : "software");
+    SETI("video", "texture_pack", g_cfg.texture_pack);
     SETI("mouse", "turn", g_cfg.mouse_turn);
     snprintf(v, sizeof(v), "%.2f", g_cfg.mouse_sensitivity);
     text = ini_set(text, "mouse", "sensitivity", v);

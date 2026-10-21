@@ -1,12 +1,10 @@
 /* In-game settings menu (F1, Guide, or Back+Start). Included from platform.c. */
 #include "font_data.h"
 
-static SDL_Texture* font_tex;
-
 int platform_settings_requested(void) { return settings_requested; }
 
 static void font_init(void) {
-    if (font_tex) return;
+    if (gl_mode || font_tex) return;
     static u32 rgba[FONT_ATLAS_W * FONT_ATLAS_H];
     for (int i = 0; i < FONT_ATLAS_W * FONT_ATLAS_H; i++) rgba[i] = ((u32)font_atlas[i] << 24) | 0xFFFFFF;
     font_tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, FONT_ATLAS_W, FONT_ATLAS_H);
@@ -36,8 +34,7 @@ static int draw_text(const char* s, int x, int y, float scale, u32 rgb, int meas
         if (!measure_only) {
             SDL_Rect src = {font_glyphs[gi].x, font_glyphs[gi].y, font_glyphs[gi].w, FONT_CELL_H};
             SDL_Rect dst = {pen, y, (int)(font_glyphs[gi].w * scale + 0.5f), (int)(FONT_CELL_H * scale + 0.5f)};
-            SDL_SetTextureColorMod(font_tex, (rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255);
-            SDL_RenderCopy(ren, font_tex, &src, &dst);
+            r2d_glyph(src, dst, rgb, font_atlas, FONT_ATLAS_W, FONT_ATLAS_H);
         }
         pen += (int)(font_glyphs[gi].adv * scale + 0.5f);
     }
@@ -45,12 +42,14 @@ static int draw_text(const char* s, int x, int y, float scale, u32 rgb, int meas
 }
 
 enum {
-    MI_SCALE, MI_ASPECT, MI_SSAA, MI_TEXFILTER, MI_PERSP, MI_SUBPIXEL, MI_UPSCALE,
+    MI_RENDERER, MI_SCALE, MI_ASPECT, MI_SSAA, MI_TEXPACK, MI_TEXFILTER, MI_PERSP, MI_SUBPIXEL, MI_UPSCALE,
     MI_FULLSCREEN, MI_VSYNC, MI_WINDOW, MI_RUMBLE, MI_MOUSETURN, MI_MOUSESENS, MI_BACK, MI_COUNT
 };
 
 static const char* menu_label(int i) {
     switch (i) {
+    case MI_RENDERER: return "Рендер";
+    case MI_TEXPACK: return "Перерисованные текстуры";
     case MI_SCALE: return "Разрешение рендера";
     case MI_ASPECT: return "Соотношение сторон";
     case MI_SSAA: return "Сглаживание (SSAA)";
@@ -70,7 +69,9 @@ static const char* menu_label(int i) {
 
 static const char* menu_hint(int i) {
     switch (i) {
-    case MI_SCALE: return "Чем выше, тем чётче 3D. Нагружает процессор.";
+    case MI_RENDERER: return "Видеокарта (OpenGL) или процессор. Применяется после перезапуска.";
+    case MI_TEXPACK: return "Текстуры в высоком разрешении из папки textures (только видеокарта).";
+    case MI_SCALE: return "Чем выше, тем чётче 3D.";
     case MI_ASPECT: return "Широкий экран расширяет обзор; меню и ролики остаются 4:3.";
     case MI_SSAA: return "Убирает лесенки на краях. Тяжело при высоком разрешении.";
     case MI_TEXFILTER: return "Сглаживает текстуры 3D-мира. Интерфейс остаётся чётким.";
@@ -96,6 +97,8 @@ static void menu_value(int i, char* buf, size_t n) {
         break;
     }
     case MI_ASPECT: SDL_snprintf(buf, n, "%s", asp[g_cfg.aspect]); break;
+    case MI_RENDERER: SDL_snprintf(buf, n, "%s%s", g_cfg.renderer ? "Видеокарта" : "Процессор", g_cfg.renderer != gl_mode ? " (после перезапуска)" : ""); break;
+    case MI_TEXPACK: SDL_snprintf(buf, n, "%s", g_cfg.texture_pack ? "Вкл" : "Выкл"); break;
     case MI_SSAA: SDL_snprintf(buf, n, "%s", g_cfg.ssaa == 1 ? "Выкл" : g_cfg.ssaa == 2 ? "4x" : "9x"); break;
     case MI_TEXFILTER: SDL_snprintf(buf, n, "%s", g_cfg.texture_filter ? "Билинейная" : "Выкл (как на PS1)"); break;
     case MI_PERSP: SDL_snprintf(buf, n, "%s", g_cfg.perspective ? "Вкл" : "Выкл"); break;
@@ -119,6 +122,8 @@ static int menu_change(int i, int dir) {
     case MI_ASPECT: g_cfg.aspect = (g_cfg.aspect + dir + 3) % 3; apply_aspect(); gpu_hd_configure(); break;
     case MI_SSAA: g_cfg.ssaa = (g_cfg.ssaa - 1 + dir + 3) % 3 + 1; gpu_hd_configure(); break;
     case MI_TEXFILTER: g_cfg.texture_filter ^= 1; gpu_hd_configure(); break;
+    case MI_RENDERER: g_cfg.renderer ^= 1; break;
+    case MI_TEXPACK: g_cfg.texture_pack ^= 1; break;
     case MI_PERSP: g_cfg.perspective ^= 1; gpu_hd_configure(); break;
     case MI_SUBPIXEL: g_cfg.subpixel ^= 1; break;
     case MI_UPSCALE: g_cfg.linear_filter ^= 1; break;
@@ -128,7 +133,7 @@ static int menu_change(int i, int dir) {
         g_cfg.fullscreen = !fs;
         break;
     }
-    case MI_VSYNC: g_cfg.vsync ^= 1; SDL_RenderSetVSync(ren, g_cfg.vsync); break;
+    case MI_VSYNC: g_cfg.vsync ^= 1; r2d_set_vsync(g_cfg.vsync); break;
     case MI_WINDOW: {
         int k = 0;
         for (int j = 0; j < 6; j++)
@@ -153,13 +158,10 @@ static int menu_change(int i, int dir) {
 
 static void menu_draw(int sel, SDL_Rect* rows) {
     int lw = window_width(), lh = g_cfg.window_height;
-    SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
-    SDL_RenderClear(ren);
-    if (tex) SDL_RenderCopy(ren, tex, NULL, &last_dst);
-    SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(ren, 0, 0, 0, 170);
+    r2d_clear();
+    r2d_frame();
     SDL_Rect all = {0, 0, lw, lh};
-    SDL_RenderFillRect(ren, &all);
+    r2d_fill(all, 0x000000, 170);
 
     float sc = lh / 1080.0f * 1.25f;
     if (sc < 0.55f) sc = 0.55f;
@@ -167,11 +169,9 @@ static void menu_draw(int sel, SDL_Rect* rows) {
     int pw = (int)(1150 * sc), ph = row_h * (MI_COUNT + 4);
     if (pw > lw - 20) pw = lw - 20;
     int px = (lw - pw) / 2, py = (lh - ph) / 2;
-    SDL_SetRenderDrawColor(ren, 18, 22, 30, 230);
     SDL_Rect panel = {px, py, pw, ph};
-    SDL_RenderFillRect(ren, &panel);
-    SDL_SetRenderDrawColor(ren, 190, 150, 70, 255);
-    SDL_RenderDrawRect(ren, &panel);
+    r2d_fill(panel, 0x12161E, 230);
+    r2d_outline(panel, 0xBE9646);
 
     draw_text("Настройки", px + row_h, py + row_h / 3, sc * 1.25f, 0xF0D080, 0);
     int y = py + row_h * 2;
@@ -179,10 +179,7 @@ static void menu_draw(int sel, SDL_Rect* rows) {
         if (i == MI_RUMBLE || i == MI_BACK) y += row_h / 2;
         SDL_Rect r = {px + row_h / 2, y - row_h / 8, pw - row_h, row_h};
         rows[i] = r;
-        if (i == sel) {
-            SDL_SetRenderDrawColor(ren, 190, 150, 70, 70);
-            SDL_RenderFillRect(ren, &r);
-        }
+        if (i == sel) r2d_fill(r, 0xBE9646, 70);
         draw_text(menu_label(i), px + row_h, y, sc, i == sel ? 0xFFFFFF : 0xC8C8C8, 0);
         char val[64];
         menu_value(i, val, sizeof(val));
@@ -195,7 +192,7 @@ static void menu_draw(int sel, SDL_Rect* rows) {
         y += row_h;
     }
     draw_text(menu_hint(sel), px + row_h, py + ph - row_h, sc * 0.8f, 0x9AA0A8, 0);
-    SDL_RenderPresent(ren);
+    r2d_present();
 }
 
 const char* g_menu_shot; /* test hook: draw the menu once, save it, close */
@@ -228,7 +225,7 @@ void platform_settings_menu(void) {
                 break;
             case SDL_MOUSEMOTION: {
                 float fx, fy;
-                SDL_RenderWindowToLogical(ren, e.motion.x, e.motion.y, &fx, &fy);
+                r2d_window_to_logical(e.motion.x, e.motion.y, &fx, &fy);
                 for (int i = 0; i < MI_COUNT; i++)
                     if (fx >= rows[i].x && fx < rows[i].x + rows[i].w && fy >= rows[i].y && fy < rows[i].y + rows[i].h) sel = i;
                 break;
@@ -265,13 +262,8 @@ void platform_settings_menu(void) {
         if (edge & 32) open = 0;
         menu_draw(sel, rows);
         if (g_menu_shot) {
-            int w, h;
-            SDL_GetRendererOutputSize(ren, &w, &h);
-            SDL_Surface* shot = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_ARGB8888);
             menu_draw(sel, rows);
-            SDL_RenderReadPixels(ren, NULL, SDL_PIXELFORMAT_ARGB8888, shot->pixels, shot->pitch);
-            SDL_SaveBMP(shot, g_menu_shot);
-            SDL_FreeSurface(shot);
+            r2d_screenshot(g_menu_shot);
             g_menu_shot = NULL;
             open = 0;
         }

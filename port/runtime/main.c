@@ -12,6 +12,7 @@ static int opt_scale = 3;
 static int opt_render_scale, opt_aspect = -1, opt_vsync;
 static const char* opts[16];
 static long menu_shot_frame = -1;
+static const char* opt_textures;
 static const char* menu_shot_file;
 static int nopts;
 static long opt_frames = -1;      /* exit after N frames (testing) */
@@ -186,8 +187,17 @@ void host_frame(void) {
         log_msg("frame %ld: SR=%08X istat=%03X imask=%03X etc_init=%04X etc_mask=%04X vbcb=%08X", frame_no, cop0_read(12), g_istat, g_imask, mem_r16(0x800D34F0), mem_r16(0x800D3520), mem_r32(0x800D34F4));
     int w, h;
     extern const u32* gpu_hd_frame(int* w, int* h);
-    const u32* shown = gpu_hd_frame(&w, &h);
-    if (shown) {
+    extern unsigned gpu_hd_frame_gl(int* w, int* h, int* ssaa);
+    extern const u32* gpu_hd_snapshot(int* w, int* h);
+    extern void platform_present_gl(unsigned tex, int w, int h, float aspect, int ssaa);
+    const u32* shown = NULL;
+    int ss = 1;
+    unsigned gltex = gpu_hd_frame_gl(&w, &h, &ss);
+    int want_shot = opt_shot_every && frame_no % opt_shot_every == 0;
+    if (gltex) {
+        platform_present_gl(gltex, w, h, config_aspect_ratio(), ss);
+        if (want_shot) shown = gpu_hd_snapshot(&w, &h);
+    } else if ((shown = gpu_hd_frame(&w, &h))) {
         platform_present(shown, w, h, config_aspect_ratio());
     } else {
         gpu_get_display(frame_px, &w, &h, 640, 480);
@@ -203,6 +213,7 @@ void host_frame(void) {
         if (platform_settings_requested()) platform_settings_menu();
     }
     pace_frame();
+    if (frame_no % 120 == 0) { extern void texdump_write(void); texdump_write(); }
 
     g_script_buttons = 0;
     for (int i = 0; i < nscript; i++)
@@ -212,7 +223,7 @@ void host_frame(void) {
     if (opt_shot_every && frame_no % opt_shot_every == 0) {
         char path[300];
         SDL_snprintf(path, sizeof(path), "%s/frame_%06ld.bmp", opt_shot_dir, frame_no);
-        write_bmp(path, shown, w, h);
+        if (shown) write_bmp(path, shown, w, h);
         if (g_verbose) { /* full VRAM for debugging */
             static u32 vram_px[1024 * 512];
             for (int i = 0; i < 1024 * 512; i++) {
@@ -225,6 +236,7 @@ void host_frame(void) {
     }
     if (opt_frames >= 0 && frame_no >= opt_frames) {
         log_msg("reached frame %ld, exiting", frame_no);
+        { extern void texdump_write(void); texdump_write(); }
         dump_call_counts();
         exit(0);
     }
@@ -344,6 +356,8 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--headless")) opt_scale = 0;
         else if (!strcmp(argv[i], "--vsync")) opt_vsync = 1;
         else if (!strcmp(argv[i], "--menu-shot") && i + 2 < argc) { menu_shot_frame = atol(argv[++i]); menu_shot_file = argv[++i]; }
+        else if (!strcmp(argv[i], "--dump-textures") && i + 1 < argc) { extern void texdump_enable(const char*); texdump_enable(argv[++i]); }
+        else if (!strcmp(argv[i], "--textures") && i + 1 < argc) opt_textures = argv[++i];
         else if (!strcmp(argv[i], "--opt") && i + 1 < argc && nopts < 16) opts[nopts++] = argv[++i];
         else if (!strcmp(argv[i], "--render-scale") && i + 1 < argc) opt_render_scale = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--aspect") && i + 1 < argc) {
@@ -388,6 +402,13 @@ int main(int argc, char** argv) {
     if (!platform_init(opt_scale)) return 1;
     extern void gpu_hd_configure(void);
     gpu_hd_configure();
+    {
+        extern void texreplace_load(const char* dir);
+        char* base = SDL_GetBasePath();
+        char dir[1024];
+        SDL_snprintf(dir, sizeof(dir), "%stextures", base ? base : "");
+        texreplace_load(opt_textures ? opt_textures : dir);
+    }
     {
         extern void bios_set_card_dir(const char* dir);
         char* base = SDL_GetBasePath();

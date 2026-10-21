@@ -16,7 +16,7 @@ python3 port/recomp/recomp.py xena.exe $OUT/syms.txt port/recomp/hle.txt $OUT/ge
 
 compile() {
     local src=$1 obj=$OUT/obj/$(basename "${1%.c}").o
-    if [ ! -f "$obj" ] || [ "$src" -nt "$obj" ] || [ port/runtime/recomp.h -nt "$obj" ] || [ port/runtime/hw.h -nt "$obj" ] || [ port/runtime/gpu_hd.inc -nt "$obj" ] || [ port/runtime/menu.inc -nt "$obj" ] || [ port/runtime/config.h -nt "$obj" ]; then
+    if [ ! -f "$obj" ] || [ "$src" -nt "$obj" ] || [ port/runtime/recomp.h -nt "$obj" ] || [ port/runtime/hw.h -nt "$obj" ] || [ port/runtime/gpu_hd.inc -nt "$obj" ] || [ port/runtime/menu.inc -nt "$obj" ] || [ port/runtime/texdump.inc -nt "$obj" ] || [ port/runtime/gpu_gl.inc -nt "$obj" ] || [ port/runtime/glfuncs.h -nt "$obj" ] || [ port/runtime/render2d.inc -nt "$obj" ] || [ port/runtime/texreplace.inc -nt "$obj" ] || [ port/runtime/config.h -nt "$obj" ]; then
         $CC $CFLAGS -c "$src" -o "$obj"
     fi
 }
