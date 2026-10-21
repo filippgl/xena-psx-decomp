@@ -123,8 +123,46 @@ static void write_bmp(const char* path, const u32* px, int w, int h) {
     fclose(f);
 }
 
+static FILE* wav_file;
+static u32 wav_frames;
+
+static void wav_finish(void) {
+    if (!wav_file) return;
+    u32 data = wav_frames * 4, riff = 36 + data;
+    fseek(wav_file, 4, SEEK_SET); fwrite(&riff, 4, 1, wav_file);
+    fseek(wav_file, 40, SEEK_SET); fwrite(&data, 4, 1, wav_file);
+    fclose(wav_file);
+    wav_file = NULL;
+}
+
+static void wav_open(const char* path) {
+    wav_file = fopen(path, "wb");
+    if (!wav_file) return;
+    u8 h[44] = {'R','I','F','F',0,0,0,0,'W','A','V','E','f','m','t',' ',16,0,0,0,1,0,2,0,
+                0x44,0xAC,0,0,0x10,0xB1,2,0,4,0,16,0,'d','a','t','a',0,0,0,0};
+    fwrite(h, 1, 44, wav_file);
+    atexit(wav_finish);
+}
+
+static void audio_frame(void) {
+    static s64 last_cycles;
+    static s64 frac;
+    s64 elapsed = g_cycles - last_cycles;
+    last_cycles = g_cycles;
+    s64 num = elapsed * 44100 + frac;
+    int n = (int)(num / CPU_HZ);
+    frac = num % CPU_HZ;
+    if (n <= 0) return;
+    if (n > 4096) n = 4096;
+    static s16 buf[4096 * 2];
+    spu_render(buf, n);
+    platform_audio_push(buf, n);
+    if (wav_file) { fwrite(buf, 4, n, wav_file); wav_frames += n; }
+}
+
 void host_frame(void) {
     frame_no++;
+    audio_frame();
     if (nwatch && frame_no % 30 == 0) {
         char line[512];
         int n = SDL_snprintf(line, sizeof(line), "watch f%ld:", frame_no);
@@ -224,15 +262,31 @@ static int load_game_exe(u32* pc, u32* gp) {
     return 1;
 }
 
+/* the disc image: next to the program, one folder up, or any .bin there */
 static const char* find_disc(void) {
-    static const char* candidates[] = {
-        "Xena Warrior Princess.bin", "../Xena Warrior Princess.bin", "../../Xena Warrior Princess.bin",
-        "xena.bin", "disc.bin"};
-    for (size_t i = 0; i < sizeof(candidates) / sizeof(candidates[0]); i++) {
-        FILE* f = fopen(candidates[i], "rb");
-        if (f) { fclose(f); return candidates[i]; }
+    static char found[1024];
+    static const char* dirs[] = {"", "../", "../../"};
+    char* base = SDL_GetBasePath();
+    for (int pass = 0; pass < 2; pass++) {
+        const char* root = pass == 0 ? "" : (base ? base : "");
+        for (size_t d = 0; d < 3; d++) {
+            SDL_snprintf(found, sizeof(found), "%s%sXena Warrior Princess.bin", root, dirs[d]);
+            FILE* f = fopen(found, "rb");
+            if (f) { fclose(f); return found; }
+        }
     }
     return NULL;
+}
+
+/* accept a .cue sheet: use the .bin with the same name */
+static const char* resolve_disc_path(const char* p) {
+    static char bin[1024];
+    size_t n = strlen(p);
+    if (n > 4 && !SDL_strcasecmp(p + n - 4, ".cue")) {
+        SDL_snprintf(bin, sizeof(bin), "%.*s.bin", (int)(n - 4), p);
+        return bin;
+    }
+    return p;
 }
 
 static void usage(void) {
@@ -256,6 +310,7 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--script") && i + 1 < argc) parse_script(argv[++i]);
         else if (!strcmp(argv[i], "--verbose")) g_verbose = 1;
         else if (!strcmp(argv[i], "--trace")) g_trace = 1;
+        else if (!strcmp(argv[i], "--wav") && i + 1 < argc) wav_open(argv[++i]);
         else if (!strcmp(argv[i], "--watch") && i + 1 < argc) {
             char* p = argv[++i];
             while (*p && nwatch < 16) { watch_addr[nwatch++] = (u32)strtoul(p, &p, 16); if (*p == ',') p++; }
@@ -263,13 +318,21 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--help")) { usage(); return 0; }
         else disc_path = argv[i];
     }
-    if (!disc_path) disc_path = find_disc();
+    if (disc_path) disc_path = resolve_disc_path(disc_path);
+    else disc_path = find_disc();
     if (!disc_path || !cd_open_image(disc_path)) {
         log_msg("cannot open disc image (pass the path to your Xena .bin file)");
         usage();
         return 1;
     }
     if (!platform_init(opt_scale)) return 1;
+    {
+        extern void bios_set_card_dir(const char* dir);
+        char* base = SDL_GetBasePath();
+        char dir[1024];
+        SDL_snprintf(dir, sizeof(dir), "%smemcard", base ? base : "");
+        bios_set_card_dir(dir);
+    }
 
     gpu_init();
     spu_init();

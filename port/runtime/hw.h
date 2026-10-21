@@ -108,4 +108,5 @@ int platform_pump(void); /* returns 0 when the window was closed */
 void platform_wait_until(s64 cycles);
 s64 platform_ticks_us(void);
 void platform_audio_init(void);
+void platform_audio_push(const s16* samples, int frames);
 extern int g_turbo;

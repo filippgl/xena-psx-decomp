@@ -40,6 +40,7 @@ int platform_init(int scale) {
     ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     if (!ren) ren = SDL_CreateRenderer(win, -1, 0);
     SDL_RenderSetLogicalSize(ren, 320 * scale, 240 * scale);
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
     for (int i = 0; i < SDL_NumJoysticks(); i++)
         if (SDL_IsGameController(i)) { pad = SDL_GameControllerOpen(i); break; }
     return 1;
@@ -86,6 +87,12 @@ int platform_pump(void) {
         case SDL_QUIT: return 0;
         case SDL_KEYDOWN:
             if (e.key.keysym.sym == SDLK_ESCAPE) return 0;
+            if (e.key.keysym.sym == SDLK_F11 ||
+                (e.key.keysym.sym == SDLK_RETURN && (e.key.keysym.mod & KMOD_ALT))) {
+                int fs = SDL_GetWindowFlags(win) & SDL_WINDOW_FULLSCREEN_DESKTOP;
+                SDL_SetWindowFullscreen(win, fs ? 0 : SDL_WINDOW_FULLSCREEN_DESKTOP);
+                break;
+            }
             if (e.key.keysym.sym == SDLK_TAB) g_turbo = 1;
             keys_state |= key_bit(e.key.keysym.sym);
             break;
@@ -132,10 +139,7 @@ void pad_poll_host(void) {}
 
 /* ---------------- audio ---------------- */
 
-static void audio_cb(void* ud, Uint8* stream, int len) {
-    (void)ud;
-    spu_render((s16*)stream, len / 4);
-}
+static SDL_AudioDeviceID audio_dev;
 
 void platform_audio_init(void) {
     if (headless) return;
@@ -143,8 +147,15 @@ void platform_audio_init(void) {
     want.freq = 44100;
     want.format = AUDIO_S16SYS;
     want.channels = 2;
-    want.samples = 1024;
-    want.callback = audio_cb;
-    SDL_AudioDeviceID dev = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);
-    if (dev) SDL_PauseAudioDevice(dev, 0);
+    want.samples = 512;
+    audio_dev = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);
+    if (audio_dev) SDL_PauseAudioDevice(audio_dev, 0);
+}
+
+/* queue generated samples; keeps latency bounded (~3 frames) */
+void platform_audio_push(const s16* samples, int frames) {
+    if (!audio_dev) return;
+    u32 queued = SDL_GetQueuedAudioSize(audio_dev) / 4;
+    if (queued > 44100 / 60 * 6) return; /* too far ahead (e.g. fast-forward): drop */
+    SDL_QueueAudio(audio_dev, samples, (Uint32)frames * 4);
 }

@@ -92,7 +92,7 @@ static void pad_update(void) {
 
 /* ---------------- memory card (bu00:/bu10: on host files) ---------------- */
 
-static const char* card_dir = "memcard";
+static char card_dir[1024] = "memcard";
 typedef struct {
     FILE* f;
     char path[260];
@@ -483,6 +483,8 @@ void bios_call(u32 table, u32 fn) {
     case 0xC0: bios_c0(fn & 0xFF); break;
     }
 }
+
+void bios_set_card_dir(const char* dir) { snprintf(card_dir, sizeof(card_dir), "%s", dir); }
 
 void bios_init(void) {
     SR = 0x40000401;
