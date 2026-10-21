@@ -43,7 +43,7 @@ static int draw_text(const char* s, int x, int y, float scale, u32 rgb, int meas
 
 enum {
     MI_RENDERER, MI_SCALE, MI_ASPECT, MI_SSAA, MI_TEXPACK, MI_TEXFILTER, MI_PERSP, MI_SUBPIXEL, MI_UPSCALE,
-    MI_FULLSCREEN, MI_VSYNC, MI_WINDOW, MI_RUMBLE, MI_MOUSETURN, MI_MOUSESENS, MI_DUMP, MI_BACK, MI_COUNT
+    MI_FULLSCREEN, MI_VSYNC, MI_WINDOW, MI_RUMBLE, MI_MOUSETURN, MI_MOUSESENS, MI_FASTCD, MI_DUMP, MI_BACK, MI_COUNT
 };
 
 static const char* menu_label(int i) {
@@ -63,6 +63,7 @@ static const char* menu_label(int i) {
     case MI_RUMBLE: return "Вибрация геймпада";
     case MI_MOUSETURN: return "Поворот мышью";
     case MI_MOUSESENS: return "Чувствительность мыши";
+    case MI_FASTCD: return "Быстрая загрузка";
     case MI_DUMP: return "Сбор текстур";
     default: return "Вернуться в игру";
     }
@@ -85,6 +86,7 @@ static const char* menu_hint(int i) {
     case MI_RUMBLE: return "Вибрация DualShock на современных геймпадах.";
     case MI_MOUSETURN: return "Движение мыши влево-вправо поворачивает героиню.";
     case MI_MOUSESENS: return "Скорость поворота мышью.";
+    case MI_FASTCD: return "Уровни грузятся в несколько раз быстрее; музыка и ролики не ускоряются.";
     case MI_DUMP: return "Сохранять текстуры уровней в texture_dump для перерисовки.";
     default: return "Esc / F1 / B: закрыть. Настройки сохраняются в xena.ini.";
     }
@@ -113,6 +115,7 @@ static void menu_value(int i, char* buf, size_t n) {
     case MI_MOUSETURN: SDL_snprintf(buf, n, "%s", g_cfg.mouse_turn ? "Вкл" : "Выкл"); break;
     case MI_MOUSESENS: SDL_snprintf(buf, n, "%.2f", g_cfg.mouse_sensitivity); break;
     case MI_DUMP: SDL_snprintf(buf, n, "%s", g_cfg.dump_textures ? "Вкл" : "Выкл"); break;
+    case MI_FASTCD: SDL_snprintf(buf, n, "%s", g_cfg.fast_cd ? "Вкл" : "Выкл"); break;
     default: buf[0] = 0; break;
     }
 }
@@ -148,6 +151,7 @@ static int menu_change(int i, int dir) {
     }
     case MI_RUMBLE: g_cfg.rumble ^= 1; if (g_cfg.rumble) platform_rumble(1, 160); break;
     case MI_MOUSETURN: g_cfg.mouse_turn ^= 1; break;
+    case MI_FASTCD: g_cfg.fast_cd ^= 1; break;
     case MI_DUMP: { extern void texdump_set(int on); g_cfg.dump_textures ^= 1; texdump_set(g_cfg.dump_textures); break; }
     case MI_MOUSESENS: {
         float s = g_cfg.mouse_sensitivity + dir * 0.25f;
@@ -181,7 +185,7 @@ static void menu_draw(int sel, SDL_Rect* rows) {
     draw_text("Настройки", px + row_h, py + row_h / 3, sc * 1.25f, 0xF0D080, 0);
     int y = py + row_h * 2;
     for (int i = 0; i < MI_COUNT; i++) {
-        if (i == MI_RUMBLE || i == MI_DUMP || i == MI_BACK) y += row_h / 2;
+        if (i == MI_RUMBLE || i == MI_FASTCD || i == MI_BACK) y += row_h / 2;
         SDL_Rect r = {px + row_h / 2, y - row_h / 8, pw - row_h, row_h};
         rows[i] = r;
         if (i == sel) r2d_fill(r, 0xBE9646, 70);

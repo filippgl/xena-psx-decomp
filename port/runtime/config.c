@@ -18,6 +18,7 @@ Config g_cfg = {
     .ssaa = 1,
     .renderer = 1,
     .texture_pack = 1,
+    .fast_cd = 1,
     .mouse_enabled = 1,
     .mouse_turn = 1,
     .mouse_sensitivity = 1.0f,
@@ -36,6 +37,8 @@ static const char* default_ini =
     "texture_pack = 1\n"
     "; collect the textures you see into texture_dump (for redrawing)\n"
     "dump_textures = 0\n"
+    "; faster loading (music and videos keep their speed)\n"
+    "fast_cd = 1\n"
     "; window height in pixels (width follows the aspect ratio)\n"
     "window_height = 720\n"
     "; internal resolution multiplier: 1 = original 320x240, 2..8 = sharper 3D\n"
@@ -173,6 +176,7 @@ void config_set_video(const char* key, const char* val) {
     else if (!strcmp(key, "renderer")) g_cfg.renderer = strcmp(val, "software") != 0;
     else if (!strcmp(key, "texture_pack")) g_cfg.texture_pack = atoi(val);
     else if (!strcmp(key, "dump_textures")) g_cfg.dump_textures = atoi(val);
+    else if (!strcmp(key, "fast_cd")) g_cfg.fast_cd = atoi(val);
 }
 
 static void parse(char* text) {
@@ -380,6 +384,7 @@ void config_save(void) {
     text = ini_set(text, "video", "renderer", g_cfg.renderer ? "opengl" : "software");
     SETI("video", "texture_pack", g_cfg.texture_pack);
     SETI("video", "dump_textures", g_cfg.dump_textures);
+    SETI("video", "fast_cd", g_cfg.fast_cd);
     SETI("mouse", "turn", g_cfg.mouse_turn);
     snprintf(v, sizeof(v), "%.2f", g_cfg.mouse_sensitivity);
     text = ini_set(text, "mouse", "sensitivity", v);

@@ -1,5 +1,6 @@
 /* CD-ROM controller emulation backed by a raw MODE2/2352 disc image. */
 #include "hw.h"
+#include "config.h"
 #include <stdlib.h>
 #include <ctype.h>
 
@@ -168,6 +169,10 @@ static void resp_stat(u8 type) {
 
 static s64 sector_period(void) { return (mode & 0x80) ? CPU_HZ / 150 : CPU_HZ / 75; }
 
+/* virtual time of the last data (non XA-streaming) sector: the runtime skips real-time
+ * pacing while the game is loading */
+s64 g_cd_data_read_time = -1000000000;
+
 static void read_event(void);
 
 u32 g_stat_sectors;
@@ -193,6 +198,7 @@ static void deliver_sector(void) {
     }
     memcpy(sector_buf, raw, 2352);
     sector_ready = 1;
+    if ((submode & 0x08) && !(submode & 0x40)) g_cd_data_read_time = hw_now(); /* plain data, not real-time streams */
     u8 s = stat;
     push_resp(1, &s, 1);
 }
@@ -229,7 +235,7 @@ static void ack_event(void) {
     case 0x02:                                              /* Setloc */
         seek_lba = (bcd2(params[0]) * 60 + bcd2(params[1])) * 75 + bcd2(params[2]);
         seek_lba = seek_lba >= 150 ? seek_lba - 150 : 0;
-        LOG("cd: Setloc %u", seek_lba);
+        LOG("cd: Setloc %u frame %lld", seek_lba, (long long)(hw_now() / CYCLES_PER_FRAME));
         resp_stat(3);
         break;
     case 0x03: resp_stat(3); stat |= STAT_PLAYING; break;   /* Play (no audio tracks) */

@@ -252,7 +252,12 @@ static s64 pace_base_us = -1, pace_base_cycles;
 
 static void pace_frame(void) {
     s64 now = platform_ticks_us();
-    if (pace_base_us < 0 || g_turbo || opt_scale <= 0) {
+    extern s64 g_cd_data_read_time;
+    /* fast loading: no waiting while data is being read from the disc */
+    int loading = g_cfg.fast_cd && g_cycles - g_cd_data_read_time < CYCLES_PER_FRAME * 30;
+    static long loading_frames;
+    if (loading && ++loading_frames % 60 == 0) LOG("fast load: %ld frames so far (frame %ld)", loading_frames, frame_no);
+    if (pace_base_us < 0 || g_turbo || loading || opt_scale <= 0) {
         pace_base_us = now;
         pace_base_cycles = g_cycles;
         return;

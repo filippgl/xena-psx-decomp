@@ -26,6 +26,7 @@ typedef struct {
     int renderer;        /* 1 = OpenGL, 0 = software */
     int texture_pack;    /* use textures/ replacements (OpenGL) */
     int dump_textures;   /* collect textures into texture_dump/ */
+    int fast_cd;         /* faster loading */
     int mouse_enabled;
     int mouse_turn;
     float mouse_sensitivity;
