@@ -52,6 +52,8 @@ don't build on it as if it were.
 
 - MDEC output matches ffmpeg's decoder: UNILOGO 160/160 non-black frames at ~50 dB PSNR
   (15-bit output vs ffmpeg's 24-bit). *tools/fmv_check.py.*
-- **Open:** the port shows EA_LOGO up to frame 123 of 128 and then starts UNILOGO; the last
-  five (fading) frames never appear. Whether the game stops there on a PlayStation too is
-  not known (needs a reference capture).
+- Videos stop by the movie table at `0x800C28C4` ({name, flag, count}, EXE): the player
+  (`func_800AF29C`) ends when it fetches frame number >= count; it decodes one frame ahead
+  and its clean-up replaces the last decoded frame before the next vblank, so frames
+  1..count-2 are visible (EA_LOGO: 70 of the 75 in the file, UNILOGO: 205 of 210). The
+  port stops at exactly that frame. *Code read; end condition logged with a probe.*

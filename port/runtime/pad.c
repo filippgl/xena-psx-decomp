@@ -88,6 +88,7 @@ static void finish_command(void) {
         if (config_mode) {
             analog_mode = params_rx[0] == 1;
             analog_locked = params_rx[1] == 3;
+            LOG("pad: %s mode%s", analog_mode ? "analog" : "digital", analog_locked ? " (locked)" : "");
         }
         break;
     }

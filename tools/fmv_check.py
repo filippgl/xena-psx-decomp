@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 """Check the port's video playback (MDEC) against ffmpeg's decoder.
 
-Extracts the opening logo videos from the disc, decodes them with ffmpeg (in WSL), runs
-the port through the opening and matches every non-black ffmpeg frame to the closest
-picture the port showed. A frame counts as shown when the match is >= 45 dB PSNR (the
-port's 15-bit output against ffmpeg's 24-bit frames gives about 50 dB).
+Extracts the opening logo videos from the disc, decodes every frame with ffmpeg (in WSL),
+runs the port through the opening and matches each non-black frame to the closest picture
+the port showed. A frame counts as shown when the match is >= 45 dB PSNR (the port's 15-bit
+output against ffmpeg's 24-bit frames gives about 50 dB).
 
-usage: fmv_check.py [--exe build/port/xena-console.exe] [--disc ../Xena.bin]
+Which frames the game shows, from its code (func_800AF29C and helpers): the movie table in
+the EXE has {name, flag, count}; the player stops when it fetches frame number >= count
+(STR frames are numbered from 1), decoding one frame ahead, so the last frame it decodes
+(count-1) is put on screen and replaced by the clean-up before the next vblank. Visible:
+frames 1 .. count-2.
 
-Pass: every UNILOGO frame is shown; at least 95% of EA_LOGO frames are (the port stops
-it 5 frames before the end of the file, see docs/game_notes.md).
+usage: fmv_check.py [--exe build/port/xena-console.exe] [--disc ../Xena.bin] [--game-exe xena.exe]
+
+Pass: every non-black visible frame is shown.
 """
 import argparse
 import glob
@@ -24,7 +29,19 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import iso_ls  # noqa: E402
 
-VIDEOS = {"UNILOGO": 1.0, "EA_LOGO": 0.95}  # name: share of frames that must be shown
+VIDEOS = ("UNILOGO", "EA_LOGO")
+BASE = 0x80010000 - 0x800
+
+
+def table_count(game_exe, name):
+    """frames the game plays: movie table entry {char* name, u16 flag, u16 count}"""
+    import struct
+    d = open(game_exe, "rb").read()
+    at = d.find(name.encode() + b"\x00")
+    for off in range(0x800, len(d) - 8, 4):
+        if struct.unpack_from("<I", d, off)[0] == at + BASE:
+            return struct.unpack_from("<H", d, off + 6)[0]
+    sys.exit(f"{name} not in the movie table")
 
 
 def extract(disc, name, out):
@@ -53,6 +70,7 @@ def main():
     ap.add_argument("--exe", default="build/port/xena-console.exe")
     ap.add_argument("--disc", default="../Xena Warrior Princess.bin")
     ap.add_argument("--out", default="build/fmv_check")
+    ap.add_argument("--game-exe", default="xena.exe")
     args = ap.parse_args()
     shutil.rmtree(args.out, ignore_errors=True)
     os.makedirs(os.path.join(args.out, "port"))
@@ -61,7 +79,7 @@ def main():
         extract(args.disc, v, raw)
         os.makedirs(os.path.join(args.out, v))
         subprocess.run(["wsl", "ffmpeg", "-loglevel", "quiet", "-f", "psxstr", "-i", wsl_path(raw), "-an",
-                        wsl_path(os.path.join(args.out, v)) + "/%04d.png"], check=True)
+                        "-fps_mode", "passthrough", wsl_path(os.path.join(args.out, v)) + "/%04d.png"], check=True)
     subprocess.run([os.path.abspath(args.exe), "--headless", "--frames", "1100", "--opt", "renderer=software",
                     "--render-scale", "1", "--aspect", "4:3", "--shots", "2", os.path.join(args.out, "port"),
                     os.path.abspath(args.disc)], capture_output=True, check=True)
@@ -72,10 +90,12 @@ def main():
             port.append(np.asarray(im).astype(np.float32))
     port = np.stack(port)
     ok = True
-    for v, need in VIDEOS.items():
+    for v in VIDEOS:
+        count = table_count(args.game_exe, v)
+        frames = sorted(glob.glob(os.path.join(args.out, v, "*.png")))
         shown = total = 0
         missing = []
-        for i, p in enumerate(sorted(glob.glob(os.path.join(args.out, v, "*.png")))):
+        for i, p in enumerate(frames[:count - 2]):
             f = np.asarray(Image.open(p).convert("RGB")).astype(np.float32)
             if f.std() < 3:
                 continue  # black frames match anything
@@ -85,9 +105,10 @@ def main():
                 shown += 1
             else:
                 missing.append(i)
-        good = shown >= need * total
+        good = shown == total
         ok &= good
-        print(f"{'PASS' if good else 'FAIL'}  {v}: {shown}/{total} frames shown" + (f", not shown: {missing}" if missing else ""))
+        print(f"{'PASS' if good else 'FAIL'}  {v}: {shown}/{total} frames shown (visible: 1..{count - 2} of "
+              f"{len(frames)})" + (f", not shown: {missing}" if missing else ""))
     sys.exit(0 if ok else 1)
 
 
