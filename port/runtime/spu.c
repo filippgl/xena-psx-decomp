@@ -1,6 +1,7 @@
 /* SPU: 24 ADPCM voices with ADSR, noise, sound RAM transfers, and CD-XA audio input.
  * Samples are generated on the main thread in step with the virtual clock (44.1 kHz). */
 #include "hw.h"
+#include <stdlib.h>
 
 static u16 regs[0x200];  /* 0x1F801C00..0x1F801FFF as halfwords */
 static u8 spu_ram[0x80000];
@@ -223,6 +224,79 @@ static void xa_next(s32* l, s32* r) {
     xa_frac &= 0xFFFF;
 }
 
+/* ---------------- reverb (psx-spx algorithm, runs at 22.05 kHz) ---------------- */
+
+static u32 rev_addr; /* current buffer address in bytes */
+
+static inline s16 rev_reg(u32 a) { return (s16)REG(a); }
+static inline u32 rev_off(u32 a) { return (u32)REG(a) * 8; }
+
+static inline u32 rev_wrap(u32 off) {
+    u32 base = (u32)REG(0x1F801DA2) * 8;
+    u32 size = 0x80000 - base;
+    if (!size) return 0;
+    u32 a = rev_addr + off;
+    if (a >= 0x80000) a = base + (a - 0x80000) % size;
+    return a & 0x7FFFE;
+}
+
+static inline s32 rev_read(u32 off) {
+    u32 a = rev_wrap(off);
+    return (s16)(spu_ram[a] | (spu_ram[a + 1] << 8));
+}
+
+static inline void rev_write(u32 off, s32 v) {
+    if (!(spucnt & 0x80)) return; /* reverb master enable gates buffer writes */
+    if (v > 32767) v = 32767;
+    if (v < -32768) v = -32768;
+    u32 a = rev_wrap(off);
+    spu_ram[a] = (u8)v;
+    spu_ram[a + 1] = (u8)(v >> 8);
+}
+
+#define MUL(a, b) (((s32)(a) * (s32)(b)) >> 15)
+
+static void reverb_step(s32 in_l, s32 in_r, s32* out_l, s32* out_r) {
+    s32 vIIR = rev_reg(0x1F801DC4), vWALL = rev_reg(0x1F801DCE);
+    s32 vAPF1 = rev_reg(0x1F801DD0), vAPF2 = rev_reg(0x1F801DD2);
+    u32 dAPF1 = rev_off(0x1F801DC0), dAPF2 = rev_off(0x1F801DC2);
+    u32 mLSAME = rev_off(0x1F801DD4), mRSAME = rev_off(0x1F801DD6);
+    u32 mLCOMB1 = rev_off(0x1F801DD8), mRCOMB1 = rev_off(0x1F801DDA);
+    u32 mLCOMB2 = rev_off(0x1F801DDC), mRCOMB2 = rev_off(0x1F801DDE);
+    u32 dLSAME = rev_off(0x1F801DE0), dRSAME = rev_off(0x1F801DE2);
+    u32 mLDIFF = rev_off(0x1F801DE4), mRDIFF = rev_off(0x1F801DE6);
+    u32 mLCOMB3 = rev_off(0x1F801DE8), mRCOMB3 = rev_off(0x1F801DEA);
+    u32 mLCOMB4 = rev_off(0x1F801DEC), mRCOMB4 = rev_off(0x1F801DEE);
+    u32 dLDIFF = rev_off(0x1F801DF0), dRDIFF = rev_off(0x1F801DF2);
+    u32 mLAPF1 = rev_off(0x1F801DF4), mRAPF1 = rev_off(0x1F801DF6);
+    u32 mLAPF2 = rev_off(0x1F801DF8), mRAPF2 = rev_off(0x1F801DFA);
+    s32 Lin = MUL(rev_reg(0x1F801DFC), in_l), Rin = MUL(rev_reg(0x1F801DFE), in_r);
+
+    /* same side and different side reflections */
+    rev_write(mLSAME, MUL(Lin + MUL(rev_read(dLSAME), vWALL) - rev_read(mLSAME - 2), vIIR) + rev_read(mLSAME - 2));
+    rev_write(mRSAME, MUL(Rin + MUL(rev_read(dRSAME), vWALL) - rev_read(mRSAME - 2), vIIR) + rev_read(mRSAME - 2));
+    rev_write(mLDIFF, MUL(Lin + MUL(rev_read(dRDIFF), vWALL) - rev_read(mLDIFF - 2), vIIR) + rev_read(mLDIFF - 2));
+    rev_write(mRDIFF, MUL(Rin + MUL(rev_read(dLDIFF), vWALL) - rev_read(mRDIFF - 2), vIIR) + rev_read(mRDIFF - 2));
+
+    /* early echo */
+    s32 c1 = rev_reg(0x1F801DC6), c2 = rev_reg(0x1F801DC8), c3 = rev_reg(0x1F801DCA), c4 = rev_reg(0x1F801DCC);
+    s32 L = MUL(c1, rev_read(mLCOMB1)) + MUL(c2, rev_read(mLCOMB2)) + MUL(c3, rev_read(mLCOMB3)) + MUL(c4, rev_read(mLCOMB4));
+    s32 R = MUL(c1, rev_read(mRCOMB1)) + MUL(c2, rev_read(mRCOMB2)) + MUL(c3, rev_read(mRCOMB3)) + MUL(c4, rev_read(mRCOMB4));
+
+    /* late reverb all-pass filters */
+    L = L - MUL(vAPF1, rev_read(mLAPF1 - dAPF1)); rev_write(mLAPF1, L); L = MUL(L, vAPF1) + rev_read(mLAPF1 - dAPF1);
+    R = R - MUL(vAPF1, rev_read(mRAPF1 - dAPF1)); rev_write(mRAPF1, R); R = MUL(R, vAPF1) + rev_read(mRAPF1 - dAPF1);
+    L = L - MUL(vAPF2, rev_read(mLAPF2 - dAPF2)); rev_write(mLAPF2, L); L = MUL(L, vAPF2) + rev_read(mLAPF2 - dAPF2);
+    R = R - MUL(vAPF2, rev_read(mRAPF2 - dAPF2)); rev_write(mRAPF2, R); R = MUL(R, vAPF2) + rev_read(mRAPF2 - dAPF2);
+
+    *out_l = MUL(L, rev_reg(0x1F801D84));
+    *out_r = MUL(R, rev_reg(0x1F801D86));
+
+    u32 base = (u32)REG(0x1F801DA2) * 8;
+    rev_addr = (rev_addr + 2) & 0x7FFFE;
+    if (rev_addr < base) rev_addr = base;
+}
+
 /* ---------------- mixing ---------------- */
 
 static void noise_tick(void) {
@@ -239,17 +313,33 @@ void spu_render(s16* out, int frames) {
     s32 mvl = vol_reg(REG(0x1F801D80)), mvr = vol_reg(REG(0x1F801D82));
     s32 cdl = (s16)REG(0x1F801DB0), cdr = (s16)REG(0x1F801DB2);
     int enabled = spucnt & 0x8000;
+    u32 eon = REG(0x1F801D98) | ((u32)REG(0x1F801D9A) << 16);
+    static s32 rev_in_l, rev_in_r, rev_out_l, rev_out_r;
+    static int rev_phase;
+    static int no_reverb = -1;
+    if (no_reverb < 0) no_reverb = getenv("XENA_NOREVERB") != NULL;
     for (int n = 0; n < frames; n++) {
-        s32 L = 0, R = 0, prev = 0;
+        s32 L = 0, R = 0, prev = 0, RL = 0, RR = 0;
         noise_tick();
         if (enabled) {
             for (int i = 0; i < 24; i++) {
                 s32 s = voice_sample(i, &prev);
                 if (!s) continue;
-                L += s * vol_reg(regs[i * 8 + 0]) >> 15;
-                R += s * vol_reg(regs[i * 8 + 1]) >> 15;
+                s32 l = s * vol_reg(regs[i * 8 + 0]) >> 15, r = s * vol_reg(regs[i * 8 + 1]) >> 15;
+                L += l;
+                R += r;
+                if (eon >> i & 1) { RL += l; RR += r; }
             }
         }
+        /* reverb runs at half rate on the averaged input; its output is held */
+        rev_in_l += RL;
+        rev_in_r += RR;
+        if (++rev_phase == 2) {
+            rev_phase = 0;
+            reverb_step(rev_in_l / 2, rev_in_r / 2, &rev_out_l, &rev_out_r);
+            rev_in_l = rev_in_r = 0;
+        }
+        if (!no_reverb) { L += rev_out_l; R += rev_out_r; }
         L = L * mvl >> 15;
         R = R * mvr >> 15;
         s32 xl, xr;
