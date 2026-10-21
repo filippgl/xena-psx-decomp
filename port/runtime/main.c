@@ -408,6 +408,8 @@ int main(int argc, char** argv) {
         char dir[1024];
         SDL_snprintf(dir, sizeof(dir), "%stextures", base ? base : "");
         texreplace_load(opt_textures ? opt_textures : dir);
+        extern void texdump_set(int on);
+        if (g_cfg.dump_textures) texdump_set(1);
     }
     {
         extern void bios_set_card_dir(const char* dir);

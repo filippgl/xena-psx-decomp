@@ -34,6 +34,8 @@ static const char* default_ini =
     "renderer = opengl\n"
     "; high-resolution textures from the textures folder (OpenGL only)\n"
     "texture_pack = 1\n"
+    "; collect the textures you see into texture_dump (for redrawing)\n"
+    "dump_textures = 0\n"
     "; window height in pixels (width follows the aspect ratio)\n"
     "window_height = 720\n"
     "; internal resolution multiplier: 1 = original 320x240, 2..8 = sharper 3D\n"
@@ -170,6 +172,7 @@ void config_set_video(const char* key, const char* val) {
     else if (!strcmp(key, "ssaa")) g_cfg.ssaa = atoi(val);
     else if (!strcmp(key, "renderer")) g_cfg.renderer = strcmp(val, "software") != 0;
     else if (!strcmp(key, "texture_pack")) g_cfg.texture_pack = atoi(val);
+    else if (!strcmp(key, "dump_textures")) g_cfg.dump_textures = atoi(val);
 }
 
 static void parse(char* text) {
@@ -376,6 +379,7 @@ void config_save(void) {
     SETI("video", "ssaa", g_cfg.ssaa);
     text = ini_set(text, "video", "renderer", g_cfg.renderer ? "opengl" : "software");
     SETI("video", "texture_pack", g_cfg.texture_pack);
+    SETI("video", "dump_textures", g_cfg.dump_textures);
     SETI("mouse", "turn", g_cfg.mouse_turn);
     snprintf(v, sizeof(v), "%.2f", g_cfg.mouse_sensitivity);
     text = ini_set(text, "mouse", "sensitivity", v);

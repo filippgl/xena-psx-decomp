@@ -25,6 +25,7 @@ typedef struct {
     int ssaa;            /* supersampling factor per axis: 1..3 */
     int renderer;        /* 1 = OpenGL, 0 = software */
     int texture_pack;    /* use textures/ replacements (OpenGL) */
+    int dump_textures;   /* collect textures into texture_dump/ */
     int mouse_enabled;
     int mouse_turn;
     float mouse_sensitivity;

@@ -7,6 +7,12 @@
  * texel) plus a manifest line; tools/texdump2png.py turns them into PNGs.
  *
  * Included from gpu.c. */
+#include <SDL.h>
+#ifdef _WIN32
+#include <direct.h>
+#else
+#include <sys/stat.h>
+#endif
 
 typedef struct {
     u16 page;          /* texpage bits: x/64, y/256, depth */
@@ -20,6 +26,22 @@ static int dump_n, dump_cap;
 static const char* dump_dir;
 
 void texdump_enable(const char* dir) { dump_dir = dir; }
+
+/* settings menu: collect into texture_dump/ next to the program */
+void texdump_set(int on) {
+    static char dir[1024];
+    if (!on) { texdump_write(); dump_dir = NULL; return; }
+    char* base = SDL_GetBasePath();
+    snprintf(dir, sizeof(dir), "%stexture_dump", base ? base : "");
+#ifdef _WIN32
+    _mkdir(dir);
+#else
+    mkdir(dir, 0755);
+#endif
+    dump_dir = dir;
+}
+
+void texdump_write(void);
 
 static void texdump_record(u32 tp, u32 clut, int u0, int v0, int u1, int v1, int is3d) {
     if (!dump_dir) return;
