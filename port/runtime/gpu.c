@@ -386,7 +386,10 @@ static void polyline_word(u32 w) {
     pl_expect_color = 1;
 }
 
+/* The HD renderer draws later (queued) and reads textures from VRAM then: draw what is
+ * queued before VRAM changes under it, e.g. one texture slot reused several times a frame. */
 static void vram_fill(void) {
+    hd_flush();
     u32 c = fifo[0];
     u16 col = rgb24to15(c & 255, (c >> 8) & 255, (c >> 16) & 255, 0, 0, 0);
     int x = fifo[1] & 0x3F0, y = (fifo[1] >> 16) & 0x1FF;
@@ -398,6 +401,7 @@ static void vram_fill(void) {
 }
 
 static void vram_copy(void) {
+    hd_flush();
     int sx = fifo[1] & 0x3FF, sy = (fifo[1] >> 16) & 0x1FF;
     int dx = fifo[2] & 0x3FF, dy = (fifo[2] >> 16) & 0x1FF;
     int w = ((fifo[3] - 1) & 0x3FF) + 1, h = (((fifo[3] >> 16) - 1) & 0x1FF) + 1;
@@ -440,6 +444,7 @@ static void exec_fifo(void) {
     else if (op >= 0x60 && op < 0x80) exec_rect();
     else if (op >= 0x80 && op < 0xA0) vram_copy();
     else if (op >= 0xA0 && op < 0xC0) {
+        hd_flush();
         xfer_in.x = fifo[1] & 0x3FF;
         xfer_in.y = (fifo[1] >> 16) & 0x1FF;
         xfer_in.w = ((fifo[2] - 1) & 0x3FF) + 1;
