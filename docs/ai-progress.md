@@ -5,6 +5,23 @@ One issue per task. Nothing here is a claim without the command/measurement that
 
 ## Current task — Unity repair and first level audit (2026-10-23)
 
+- LATEST STEERING RESEARCH COMPLETE: docs/unity-agent-tooling.md compares official
+  Unity-Technologies/unity-agent-plugin+skills, Unity CLI/Pipeline and third-party
+  CoplayDev/unity-mcp using primary docs. Existing LOCALAPPDATA/Unity/bin/unity.exe
+  28111840bytes,version1.0.0-beta.13 found (not PATH). Read-only status returns
+  STATUS_NO_INSTANCES; no open Editor/Pipeline installed, NOT license regression.
+  uv exists. No new plugins/packages/global config installed. Official Pipeline
+  claims6.0+;6000.3 fits declared range but integration not yet exercised. CLI is
+  experimental; own CLI MCP supported, old ai.assistant MCP deprecated. No Unity
+  in current curated OpenAI skills/app plugin search. Official Unity plugin exists
+  outside that app catalog. Candidate skills CLI/physics/UI/URP/audio/navigation.
+- Combat runtime checkpoint f1fd75c committed after46actual player checks and
+  original81clip import regression. Previous owned checkpoints923ff3d and41623d3.
+  User native source edits/staged rename preserved. No push requested/performed.
+- NEXT: test official Pipeline in private verification project before adoption;
+  preserve existing independent Windows smoke gates. Original hit volumes/mixed
+  combos/enemyAI remain gameplay work, unaddressed by generic skills.
+
 - LATEST: PRACTICE COMBAT COMPLETE in movement build. User now explicitly requests
   larger autonomous batches and commits at milestones. Baseline/import/movement
   checkpoint923ff3d and native combat audit41623d3 committed with --only exact
