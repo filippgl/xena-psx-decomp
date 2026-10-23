@@ -10,6 +10,7 @@ namespace Xena.Assets
         [SerializeField] private bool invertY;
         private Vector3 smoothFocus, focusVelocity;
         private bool initialized;
+        private PrototypeCombat combat;
         public float Yaw => yaw;
         public float DistanceToTarget { get; private set; }
         public void Configure(Transform follow, PrototypeInput controls) { target = follow; input = controls; }
@@ -32,15 +33,22 @@ namespace Xena.Assets
         }
         private void OnGUI()
         {
-            GUILayout.BeginArea(new Rect(16, 16, 380, input.Paused ? 220 : 80), GUI.skin.box);
-            GUILayout.Label("Xena — movement prototype");
+            if (combat == null) combat = target.GetComponent<PrototypeCombat>();
+            GUILayout.BeginArea(new Rect(16, 16, 430, input.Paused ? 310 : 150), GUI.skin.box);
+            GUILayout.Label("Xena — movement & combat prototype");
             GUILayout.Label("WASD move · Shift run · Space jump · R reset · Esc pause");
             GUILayout.Label("Gamepad: sticks · L3 run · A jump · Start pause");
+            GUILayout.Label("LMB sword · F kick · hold RMB block");
+            GUILayout.Label("Gamepad: X sword · Y kick · LB block");
+            if (combat != null) GUILayout.Label("Health: " + combat.Health + " | R resets you and the dummy");
             if (input.Paused)
             {
                 GUILayout.Label("Mouse sensitivity: " + sensitivity.ToString("0.00"));
                 sensitivity = GUILayout.HorizontalSlider(sensitivity, 0.03f, 0.3f);
                 invertY = GUILayout.Toggle(invertY, "Invert camera Y");
+                if (combat != null && combat.Target != null)
+                    combat.Target.Retaliates = GUILayout.Toggle(combat.Target.Retaliates, "Practice dummy attacks nearby (temporary rules)");
+                GUILayout.Label("Practice reach/damage only; original hitboxes pending");
                 GUILayout.Label("Press Esc to resume");
             }
             GUILayout.EndArea();

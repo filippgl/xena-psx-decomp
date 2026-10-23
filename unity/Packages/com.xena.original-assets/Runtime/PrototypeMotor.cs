@@ -12,6 +12,7 @@ namespace Xena.Assets
         [SerializeField] private float walkSpeed = 2.5f, runSpeed = 5.5f, jumpSpeed = 6f, gravity = 20f;
         private CharacterController controller;
         private PrototypeInput input;
+        private PrototypeCombat combat;
         private XenaTerrainQuery terrain;
         private float vertical, groundTime, landingTime = -1;
         private int groundSlot;
@@ -30,6 +31,7 @@ namespace Xena.Assets
             controller = GetComponent<CharacterController>(); input = GetComponent<PrototypeInput>();
             terrain = new XenaTerrainQuery(JsonUtility.FromJson<XenaTerrainData>(terrainSource.text));
             visual.SetUpscale(true); visual.enabled = false;
+            combat = GetComponent<PrototypeCombat>(); if (combat == null) combat = gameObject.AddComponent<PrototypeCombat>();
         }
         private void Start() { ResetToSpawn(); }
         public void ResetToSpawn()
@@ -37,21 +39,25 @@ namespace Xena.Assets
             controller.enabled = false; transform.position = spawn; controller.enabled = true;
             vertical = 0; Grounded = true; groundSlot = 0; groundTime = 0;
             landingTime = -1; visual.SampleSlotFrame(0, 0);
+            if (combat != null) combat.ResetState();
         }
         private float Floor(Vector3 position)
         {
             int height = terrain.GetHeight(Mathf.RoundToInt(position.x * 400), Mathf.RoundToInt(-position.y * 400), Mathf.RoundToInt(position.z * 400));
             return height == XenaTerrainQuery.NoHeight ? float.NegativeInfinity : -height / 400f;
         }
+        public float GroundHeight(Vector3 position) => Floor(position);
         private void FixedUpdate()
         {
             if (input.Paused) return;
             float dt = Time.fixedDeltaTime;
             bool wasGrounded = Grounded;
+            combat.Tick(dt, Grounded);
             Vector2 controls = input.Move;
             Vector3 motion = Quaternion.Euler(0, orbit.Yaw, 0) * new Vector3(controls.x, 0, controls.y);
+            if (combat.Busy) motion = Vector3.zero;
             if (motion.sqrMagnitude > 0.0001f) transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(motion), 720 * dt);
-            if (input.ConsumeJump() && Grounded) { vertical = jumpSpeed; Grounded = false; landingTime = -1; }
+            if (input.ConsumeJump() && Grounded && !combat.Busy) { vertical = jumpSpeed; Grounded = false; landingTime = -1; }
             vertical -= gravity * dt;
             CollisionFlags collision = controller.Move((motion * (input.Sprint ? runSpeed : walkSpeed) + Vector3.up * vertical) * dt);
             if ((collision & CollisionFlags.Above) != 0 && vertical > 0) vertical = 0;
@@ -63,7 +69,8 @@ namespace Xena.Assets
             else if ((collision & CollisionFlags.Below) != 0 && vertical <= 0) { Grounded = true; vertical = -1; }
             else Grounded = false;
             if (Grounded && !wasGrounded) landingTime = 0;
-            SampleLocomotion(motion.sqrMagnitude > 0.01f, dt);
+            if (!combat.PresentPose()) SampleLocomotion(motion.sqrMagnitude > 0.01f, dt);
+            else { groundSlot = 0; groundTime = 0; landingTime = -1; }
             // These are externally driven sampled clips, not animation root motion.
             if (transform.position.y < spawn.y - 30) ResetToSpawn();
             Ticks++;

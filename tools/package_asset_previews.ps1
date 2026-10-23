@@ -61,6 +61,12 @@ if ($Package -in @('All', 'Unity')) {
     Add-FileEntry $entries 'docs/movement-prototype.md' 'Documentation/movement-prototype.md'
     Add-FileEntry $entries 'docs/xena-jump-audit.md' 'Documentation/xena-jump-audit.md'
     Add-FileEntry $entries 'docs/xena-locomotion-audit.md' 'Documentation/xena-locomotion-audit.md'
+    Add-FileEntry $entries 'docs/xena-combat-audit.md' 'Documentation/xena-combat-audit.md'
+    Add-FileEntry $entries 'build/combat-reference/verification.json' 'Verification/combat-native-verification.json'
+    Add-FileEntry $entries 'build/unity-import/combat-player-verification.json' 'Verification/combat-player-verification.json'
+    foreach ($name in @('combat-sword', 'combat-kick', 'combat-block')) {
+        Add-FileEntry $entries "build/unity-import/$name.png" "Verification/$name.png"
+    }
     Add-FileEntry $entries 'build/animation-audit/locomotion-verification.json' 'Verification/locomotion-verification.json'
     Add-FileEntry $entries 'build/unity-import/movement-run-cycle.png' 'Verification/movement-run-cycle.png'
     Add-FileEntry $entries 'build/animation-audit/jump-verification.json' 'Verification/jump-verification.json'
@@ -90,6 +96,9 @@ if ($Package -in @('All', 'Movement')) {
     Add-FileEntry $entries 'docs/movement-prototype.md' 'README.md'
     Add-FileEntry $entries 'docs/xena-jump-audit.md' 'Verification/xena-jump-audit.md'
     Add-FileEntry $entries 'docs/xena-locomotion-audit.md' 'Verification/xena-locomotion-audit.md'
+    Add-FileEntry $entries 'docs/xena-combat-audit.md' 'Verification/xena-combat-audit.md'
+    Add-FileEntry $entries 'build/combat-reference/verification.json' 'Verification/combat-native-verification.json'
+    Add-FileEntry $entries 'build/unity-import/combat-player-verification.json' 'Verification/combat-player-verification.json'
     Add-FileEntry $entries 'build/animation-audit/locomotion-verification.json' 'Verification/locomotion-verification.json'
     Add-FileEntry $entries 'build/animation-audit/jump-verification.json' 'Verification/jump-verification.json'
     Add-FileEntry $entries 'build/unity-import/movement-build-verification.json' 'Verification/movement-build-verification.json'

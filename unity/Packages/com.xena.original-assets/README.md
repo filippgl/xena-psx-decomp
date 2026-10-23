@@ -13,3 +13,8 @@ the shared schema and converted data; it does not compile or run Unity APIs.
 
 Full workflow, documented assumptions and current verification results:
 `decomp/docs/unity-import.md` in the source workspace.
+
+The separate movement scene also supports practice sword/kick chains, held guard,
+an opt-in retaliating dummy and virtual-device Windows smoke checks. These use
+original animation clips with provisional contact/damage rules; see
+`decomp/docs/movement-prototype.md` and `decomp/docs/xena-combat-audit.md`.

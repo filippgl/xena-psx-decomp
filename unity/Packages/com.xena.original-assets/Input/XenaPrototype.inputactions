@@ -67,6 +67,33 @@
           "processors": "",
           "interactions": "",
           "initialStateCheck": true
+        },
+        {
+          "name": "Sword",
+          "id": "78f16d0f-8be9-a42b-9f03-92f2a2f99dd3",
+          "type": "Button",
+          "expectedControlType": "Button",
+          "processors": "",
+          "interactions": "",
+          "initialStateCheck": true
+        },
+        {
+          "name": "Kick",
+          "id": "9392848e-acba-a161-414e-90dc47ae99b6",
+          "type": "Button",
+          "expectedControlType": "Button",
+          "processors": "",
+          "interactions": "",
+          "initialStateCheck": true
+        },
+        {
+          "name": "Block",
+          "id": "7f686ff4-0734-0d58-7dea-1cbe531cd9e5",
+          "type": "Button",
+          "expectedControlType": "Button",
+          "processors": "",
+          "interactions": "",
+          "initialStateCheck": true
         }
       ],
       "bindings": [
@@ -243,6 +270,72 @@
           "processors": "",
           "groups": "Gamepad",
           "action": "Reset",
+          "isComposite": false,
+          "isPartOfComposite": false
+        },
+        {
+          "name": "",
+          "id": "33647e19-9d33-6553-97ba-a040ece96ae4",
+          "path": "<Mouse>/leftButton",
+          "interactions": "",
+          "processors": "",
+          "groups": "KeyboardMouse",
+          "action": "Sword",
+          "isComposite": false,
+          "isPartOfComposite": false
+        },
+        {
+          "name": "",
+          "id": "e63cb365-3964-1513-da5a-ed391f4746b8",
+          "path": "<Keyboard>/f",
+          "interactions": "",
+          "processors": "",
+          "groups": "KeyboardMouse",
+          "action": "Kick",
+          "isComposite": false,
+          "isPartOfComposite": false
+        },
+        {
+          "name": "",
+          "id": "8b87e6ff-879a-3718-1ccc-2f4ca9df6cf0",
+          "path": "<Mouse>/rightButton",
+          "interactions": "",
+          "processors": "",
+          "groups": "KeyboardMouse",
+          "action": "Block",
+          "isComposite": false,
+          "isPartOfComposite": false
+        },
+        {
+          "name": "",
+          "id": "05bc8c74-4db6-8959-4861-b879155c5d0b",
+          "path": "<Gamepad>/buttonWest",
+          "interactions": "",
+          "processors": "",
+          "groups": "Gamepad",
+          "action": "Sword",
+          "isComposite": false,
+          "isPartOfComposite": false
+        },
+        {
+          "name": "",
+          "id": "48b1a8e3-c8c8-2132-2ba5-f43036cc84d5",
+          "path": "<Gamepad>/buttonNorth",
+          "interactions": "",
+          "processors": "",
+          "groups": "Gamepad",
+          "action": "Kick",
+          "isComposite": false,
+          "isPartOfComposite": false
+        },
+        {
+          "name": "",
+          "id": "c3543112-497d-bfde-a234-75774b06b320",
+          "path": "<Gamepad>/leftShoulder",
+          "interactions": "",
+          "processors": "",
+          "groups": "Gamepad",
+          "action": "Block",
           "isComposite": false,
           "isPartOfComposite": false
         }

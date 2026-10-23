@@ -5,6 +5,44 @@ One issue per task. Nothing here is a claim without the command/measurement that
 
 ## Current task — Unity repair and first level audit (2026-10-23)
 
+- LATEST: PRACTICE COMBAT COMPLETE in movement build. User now explicitly requests
+  larger autonomous batches and commits at milestones. Baseline/import/movement
+  checkpoint923ff3d and native combat audit41623d3 committed with --only exact
+  owned paths. User native edits and staged dis.py->disasm.py remain untouched.
+- Native controlled capture tools/capture_combat_reference.mjs:251RAM samples,
+  original console4515087bytes/2026-10-22T18:11:35.259Z. inspect_xena_combat.mjs
+  PASS48192local components. Sword51->52->3A, kick61->62->5A; block80. Mixed bridge57
+  and resumed62 observed, not ported. Full hit volumes/class+3C remain unaudited.
+- New PrototypeCombat/Input10actions: LMBsword/Fkick/holdRMBguard, gamepadWest/North/
+  leftShoulder. Two-request bufferTTL.65s game time, observed chain frames10/10/9/22,
+  NOT proven earliest native windows. Attacks/guard lock movement, no auto-repeat,
+  buffer cleared by reset/airborne/guard; pause freezes clock. Original clips sampled.
+- PracticeTarget placed3mright at terrain floor, trigger primitive, HP100, single hit
+  per swing, red flash, wall/direction/range rejection. Practice ONLY reach1.65/1.25,
+  contactframes51=5..7/61=6..8/othersmidpoint+2,damage20/15. No original hitbox parity.
+  Optional pause toggle retaliates every2s at60Hz,near1.8,damage10; front guard protects,
+  rear bypasses. R resets health+disables retaliation. No enemyAI/death/reactions/audio.
+- Final actual player46checks PASS (22movement+24combat), same codeSHA256
+  e594a04bac423941c269a143a7dfe7fb94764e27be67bfce50c274c2bfb5f3a9.
+  XenaMovementPrototype.exe launcher timestamp remains18:13:23Z; NEW managed
+  Xena.Assets.dll mtime2026-10-23T19:18:57.626Z, final build127596563bytes/0errors.
+  Both wrappers now record testedBuild path/mtime/hash and reject code changing
+  during run. Logs combat-player-smoke.log/combat-movement-regression.log.
+  Combat sword/kick/block PNGs viewed; all original poses visible, UI legible.
+- Main Editor import regression PASS81clips/1674frames/115506transforms,74levelmeshes,
+  35955LGT components. Shared .NET PASS combat-dotnet-regression.log. No shader changes.
+  Archives read-verified:movement175files/40240450bytes,Unity212files/13547023bytes.
+  Docs movement-prototype.md/xena-combat-audit.md explain controls+provisional rules.
+- CURRENT STEERING: user asks research Unity-specific skills/MCP to ease development
+  and testing, while preserving completed combat work. Read skill-installer and
+  plugin-management skills. Curated OpenAI list has no Unity skill. Available plugin
+  directory search did not return Unity. Found official Unity-Technologies/skills
+  (README links official plugin+Unity CLI) and third-party CoplayDev/unity-mcp.
+  Research primary docs/compatibility before selecting. Nothing installed/configured yet.
+- NEXT THREE: finish skill/MCP research; audit original hit volumes/mixed combo rules;
+  connect original enemy assets and reactions only after format/AI audit. User scene
+  modifications preserved. Source disc/native files unchanged. No live user Editor.
+
 - LATEST: FULL GROUND LOCOMOTION CYCLE FIXED. Previous prototype looped5frame14
   (start only). tools/inspect_xena_locomotion.mjs checks archived btnprobe2/chakram2/
   chakram3:66 locomotion poses,12672 non-root components EXACT;188total samples
