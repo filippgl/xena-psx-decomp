@@ -1,0 +1,6 @@
+{
+  "name": "Xena.Assets.Editor",
+  "rootNamespace": "Xena.Assets.Editor",
+  "references": ["Xena.Assets", "Unity.InputSystem", "Unity.RenderPipelines.Universal.Runtime", "Unity.RenderPipelines.Core.Runtime"],
+  "includePlatforms": ["Editor"]
+}

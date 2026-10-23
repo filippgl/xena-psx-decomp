@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Xena — оригинальная модель и анимации</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#101820;color:#edf2f7;font:15px system-ui}main{display:grid;grid-template-columns:minmax(420px,1fr) 340px;max-width:1280px;margin:auto;min-height:100vh}canvas{width:100%;height:calc(100vh - 40px);object-fit:contain;touch-action:none;cursor:grab}aside{padding:32px 24px;background:#18232c}h1{font-size:26px;line-height:1.2;margin:10px 0 20px}p{color:#aebdc9;line-height:1.6}label{display:block;margin:22px 0 8px}select,button{width:100%;padding:11px;background:#253542;color:inherit;border:1px solid #405462;border-radius:6px;font:inherit}button{margin-top:12px;cursor:pointer;background:#286c68}input[type=range]{width:100%}.tag{color:#6fe0cc;letter-spacing:.12em;font-size:11px}output{display:block;font-variant-numeric:tabular-nums;color:#b3c5d0;margin:12px 0}.small{font-size:12px}label.check{display:flex;gap:8px}@media(max-width:760px){main{display:block}canvas{height:65vh}aside{padding:20px}}a{color:#6fe0cc}
+</style><main><canvas id="view" width="640" height="720" aria-label="Предпросмотр оригинальной модели Зены"></canvas><aside>
+<span class="tag">XENA · ИССЛЕДОВАНИЕ РЕСУРСОВ</span><h1>Оригинальная Зена</h1><p>Модель и текстуры PS1. Поворот — перетаскиванием, масштаб — колесом мыши.</p>
+<label for="clip">Анимация</label><select id="clip"></select><button id="play">Воспроизвести</button>
+<label for="textures">Текстуры</label><select id="textures"><option value="original">Оригинал PS1</option><option value="hd">Апскейл 4×</option></select>
+<label for="frame">Кадр</label><input id="frame" type="range" min="0" value="0"><output id="status"></output>
+<label for="rate">Скорость предпросмотра</label><select id="rate"><option value="15">15 шагов/с</option><option value="30" selected>30 шагов/с</option><option value="60">60 шагов/с</option></select>
+<label class="check"><input id="skeleton" type="checkbox">Показать иерархию частей</label>
+<p class="small">33 части · 426 треугольников · 81 клип<br>Показанная скорость выбирается для просмотра: исходная частота ещё не установлена.</p>
+<p class="small">Это диагностический просмотрщик. Свет, полупрозрачность PS1, игровые переходы и движение по уровню здесь не воспроизводятся.</p>
+</aside></main><script src="xena-data.js"></script><script src="xena-hd-data.js"></script><script src="xena-renderer.js"></script><script src="xena-viewer.js"></script></html>

@@ -1,0 +1,13 @@
+{
+  "name": "com.xena.original-assets",
+  "version": "0.1.0",
+  "displayName": "Xena Original Asset Import",
+  "description": "Import verified, locally extracted Xena meshes, textures and sampled clips.",
+  "unity": "6000.3",
+  "dependencies": {
+    "com.unity.render-pipelines.universal": "17.3.0",
+    "com.unity.modules.screencapture": "1.0.0",
+    "com.unity.inputsystem": "1.20.1",
+    "com.unity.modules.physics": "1.0.0"
+  }
+}

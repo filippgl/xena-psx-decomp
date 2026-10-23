@@ -1,0 +1,5 @@
+{
+  "name": "Xena.Assets",
+  "rootNamespace": "Xena.Assets",
+  "references": ["Unity.InputSystem"]
+}

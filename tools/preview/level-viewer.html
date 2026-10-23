@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Xena — ресурсы первой локации</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#10171e;color:#dce5ed;font:15px system-ui,sans-serif}main{max-width:1180px;margin:26px auto;padding:0 20px}h1{font-size:25px;margin:0 0 8px}p{color:#a5b7c6;line-height:1.5}nav{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:18px 0}select,button{background:#21303e;border:1px solid #40566b;color:#eef5fa;border-radius:6px;padding:9px}button{cursor:pointer}canvas{display:block;width:100%;max-height:72vh;object-fit:contain;background:#10171e;border:1px solid #2c3a47;border-radius:8px;touch-action:none}.stats{margin:12px 0;color:#8ce0c8}.note{font-size:13px;max-width:950px}a{color:#8ce0c8}
+</style>
+<main><h1>Xena · первая локация</h1><p>Оригинальная геометрия и текстуры PS1. Перетаскивание — поворот, колесо — масштаб.</p>
+<nav><label><input id="assembled" type="checkbox" checked> Вся локация</label><label>Объект <select id="object"></select></label><button id="overview">Обзор</button><button id="top">Сверху</button><label><input id="transparent" type="checkbox" checked> Показывать полупрозрачные полигоны</label></nav>
+<nav><label><input id="lighting" type="checkbox"> Освещение LGT</label><label>Прибавка яркости <input id="brightness" type="range" min="-64" max="64" value="0"> <output id="brightness-value">0</output></label></nav>
+<nav><label><input id="grounded" type="checkbox"> Привязка к земле по правилам игры</label><label><input id="water" type="checkbox"> Исходная волна воды</label><label>Фаза воды <input id="water-phase" type="range" min="0" max="65535" value="0"> <output id="water-value">0</output></label></nav>
+<nav><label><input id="spawns" type="checkbox"> Точки объектов и генераторов</label><select id="spawn-record"><option value="all">Все точки</option></select><span id="spawn-info"></span></nav>
+<canvas id="view" width="1100" height="760"></canvas><div class="stats" id="stats"></div>
+<p class="note">Метки показывают исходные точки PLRS, без моделей и поведения: бирюзовая — Зена, оранжевые — генераторы, белые — остальные объекты. Метки видны поверх геометрии.</p>
+<p class="note">Положение объектов сверено с памятью игры. Для ручья воспроизводится исходная формула высоты; ползунок выбирает фазу, не задавая частоту игровой логики. Поворот объектов к камере пока не восстановлен.</p>
+<p class="note">LGT хранит исходные цвета вершин. Нейтральная модуляция PS1 — 128; прибавка яркости задаётся отдельно (в сохранённом запуске игры +35). Здесь показано приближение модуляции RGB: точная растеризация PS1, дизеринг и смешивание STP ещё не воспроизведены.</p>
+<p class="note">Объекты размещены по исходным записям LEVEL.BIN; переключатель привязки к земле включает проверенные правила размещения. Выбор номера показывает один объект в локальных координатах. Основной меш — объект 1. Освещение LGT доступно отдельно. Поворот объектов к камере и события ещё не воспроизводятся. Полупрозрачные полигоны здесь непрозрачны; флаг PS1 сохранён. Это просмотр ресурсов, без игровой логики.</p>
+<p class="note"><a href="level-assembled.gltf">Локация glTF</a> · <a href="level.gltf">Отдельные объекты glTF</a> · <a href="summary.json">Отчёт ресурсов</a> · <a href="verification.json">Проверка геометрии</a> · <a href="collision-verification.json">Проверка CLS</a></p></main>
+<script src="xena-renderer.js"></script><script src="xena-water.js"></script><script src="level-data.js"></script><script>
+'use strict';
+const data=globalThis.LevelPreviewData, canvas=document.querySelector('#view'), ctx=canvas.getContext('2d');
+const select=document.querySelector('#object');
+for(const texture of data.textures){const raw=atob(texture.rgbaBase64);texture.rgba=Uint8Array.from(raw,c=>c.charCodeAt(0));delete texture.rgbaBase64;}
+for(const object of data.objects){const option=document.createElement('option');option.value=object.index;option.textContent=`${object.index} · ${object.faces.length} треугольников${object.index===data.primaryObject?' · основной меш':''}`;select.appendChild(option);}
+select.value=data.primaryObject;
+document.querySelector('#assembled').checked=!!data.placements;
+document.querySelector('#assembled').disabled=!data.placements;
+document.querySelector('#grounded').disabled=!data.flags;
+document.querySelector('#water').disabled=!data.water;
+if(data.water){document.querySelector('#water-phase').value=data.water.capturedPhase;document.querySelector('#water-value').textContent=data.water.capturedPhase;}
+document.querySelector('#spawns').disabled=!data.spawns;
+document.querySelector('#spawn-record').disabled=!data.spawns;
+for(const record of data.spawns||[]){const option=document.createElement('option');option.value=record.index;option.textContent=`${record.index} · ${record.name}${record.kind==='generator'?' · генератор':''}`;document.querySelector('#spawn-record').appendChild(option);}
+let yaw=Math.PI+.35,pitch=.8,zoom=1,drag=null,scheduled=false;
+const matrices=data.objects.map(()=>[4096,0,0,0,4096,0,0,0,4096,0,0,0]);
+function draw(){scheduled=false;const object=data.objects[Number(select.value)],assembled=document.querySelector('#assembled').checked&&data.placements,bounds=assembled?data.worldBounds:data.bounds[object.index];
+ const span=Math.max(...bounds.map(([min,max])=>max-min),1),center=bounds.map(([min,max])=>(min+max)/2);
+ const show=document.querySelector('#transparent').checked;
+ const phase=Number(document.querySelector('#water-phase').value),wave=document.querySelector('#water').checked&&data.water;
+ const displayed=(assembled?data.objects:[object]).map(o=>{
+   let result=show?o:{...o,faces:o.faces.filter(f=>!f.semiTransparent)};
+   if(wave&&wave.objects.includes(o.index))result={...result,vertices:o.vertices.map(v=>[v[0],XenaWater.height(wave.table,v[0],wave.base,phase),v[2]])};
+   return result;
+ });
+ const grounded=document.querySelector('#grounded').checked&&data.flags;
+ const pose=assembled?data.placements.map((p,i)=>grounded?[...p.matrix.slice(0,9),...data.flags[i].effectivePosition]:p.matrix):matrices;
+ const spawnIndex=document.querySelector('#spawn-record').value;
+ const visibleSpawns=assembled&&document.querySelector('#spawns').checked?(data.spawns||[]).filter(s=>spawnIndex==='all'||s.index===Number(spawnIndex)):[];
+ const markers=visibleSpawns.map(s=>({index:s.index,position:s.position,color:s.name==='xena'?[78,230,215]:s.kind==='generator'?[255,180,75]:[235,239,247]}));
+ const image=XenaPreviewRenderer.render({objects:displayed,center,textures:data.textures},pose,null,{width:canvas.width,height:canvas.height,yaw,pitch,zoom:1000/span*zoom,
+   vertexLighting:document.querySelector('#lighting').checked,lightBias:Number(document.querySelector('#brightness').value),markers});
+ ctx.putImageData(new ImageData(image.rgba,image.width,image.height),0,0);
+ document.querySelector('#stats').textContent=`${assembled?'Вся локация':`Объект ${object.index}`} · ${displayed.reduce((n,o)=>n+o.faces.length,0)} треугольников · 74 объекта в архиве · масштаб ${(zoom*100).toFixed(0)}%`;
+ globalThis.LevelPreviewLastRender={object:assembled?'all':object.index,triangles:image.triangles,fragments:image.fragments,waterPhase:wave?phase:null,grounded:!!grounded,spawnMarkers:image.markers};
+}
+function requestDraw(){if(!scheduled){scheduled=true;requestAnimationFrame(draw);}}
+select.addEventListener('change',()=>{document.querySelector('#assembled').checked=false;zoom=1;requestDraw();});
+document.querySelector('#assembled').addEventListener('change',()=>{zoom=1;requestDraw();});
+document.querySelector('#transparent').addEventListener('change',requestDraw);
+document.querySelector('#lighting').addEventListener('change',requestDraw);
+document.querySelector('#brightness').addEventListener('input',()=>{document.querySelector('#brightness-value').textContent=document.querySelector('#brightness').value;requestDraw();});
+document.querySelector('#grounded').addEventListener('change',requestDraw);
+document.querySelector('#water').addEventListener('change',requestDraw);
+document.querySelector('#water-phase').addEventListener('input',()=>{document.querySelector('#water-value').textContent=document.querySelector('#water-phase').value;requestDraw();});
+document.querySelector('#spawns').addEventListener('change',()=>{if(document.querySelector('#spawns').checked)document.querySelector('#assembled').checked=true;requestDraw();});
+document.querySelector('#spawn-record').addEventListener('change',()=>{
+ document.querySelector('#assembled').checked=true;document.querySelector('#spawns').checked=true;
+ const record=(data.spawns||[]).find(s=>s.index===Number(document.querySelector('#spawn-record').value));
+ document.querySelector('#spawn-info').textContent=document.querySelector('#spawn-record').value==='all'?'':`${record.name}: ${record.position.join(', ')}`;requestDraw();
+});
+document.querySelector('#overview').onclick=()=>{yaw=Math.PI+.35;pitch=.8;zoom=1;requestDraw();};
+document.querySelector('#top').onclick=()=>{yaw=0;pitch=Math.PI/2;zoom=1;requestDraw();};
+canvas.addEventListener('pointerdown',e=>{drag=[e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId);});
+canvas.addEventListener('pointermove',e=>{if(!drag)return;yaw+=(e.clientX-drag[0])*.008;pitch=Math.max(-Math.PI/2,Math.min(Math.PI/2,pitch+(e.clientY-drag[1])*.008));drag=[e.clientX,e.clientY];requestDraw();});
+canvas.addEventListener('pointerup',()=>drag=null);canvas.addEventListener('pointercancel',()=>drag=null);
+canvas.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.15,Math.min(15,zoom*Math.exp(-e.deltaY*.001)));requestDraw();},{passive:false});
+draw();
+</script></html>

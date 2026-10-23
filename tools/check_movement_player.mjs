@@ -1,0 +1,10 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import {spawn} from 'node:child_process';
+const out=path.resolve('build/unity-import'),report=path.join(out,'movement-player-verification.json');
+if(fs.existsSync(report))fs.unlinkSync(report);
+const child=spawn(path.resolve('build/unity-movement/XenaMovementPrototype.exe'),['-screen-fullscreen','0','-screen-width','1280','-screen-height','720','-logFile',path.join(out,'movement-player.log'),'--movement-smoke',out],{windowsHide:false,stdio:'ignore'});
+const code=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>{child.kill();reject(Error('Movement player smoke timed out; inspect movement-player.log'));},60000);child.once('error',e=>{clearTimeout(timer);reject(e);});child.once('exit',c=>{clearTimeout(timer);resolve(c);});});
+const result=fs.existsSync(report)?JSON.parse(fs.readFileSync(report)):null;
+console.log(JSON.stringify(result,null,2));assert.equal(code,0,'Movement player failed; inspect movement-player.log');assert.equal(result?.result,'PASS');

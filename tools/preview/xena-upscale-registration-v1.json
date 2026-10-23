@@ -1,0 +1,9 @@
+{
+  "sourceWidth": 1254,
+  "sourceHeight": 1254,
+  "xAnchors": [[0,0],[64,157],[96,236],[128,314],[160,393],[176,434],[192,473]],
+  "yAnchors": [[32,73],[96,236],[160,392],[176,433],[208,512],[224,549],[256,630]],
+  "rightStrip": {"x":1103,"y":1022,"width":47,"height":162},
+  "rightKnee": {"x":1103,"y":1184,"width":47,"height":41},
+  "note": "Measured registration of imagegen v1 to the original 18 rectangular islands. Re-evaluate for any new generated image. Original alpha is restored after alignment."
+}

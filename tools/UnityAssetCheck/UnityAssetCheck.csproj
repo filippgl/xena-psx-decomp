@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <BaseOutputPath>../../build/unity-check/bin/</BaseOutputPath>
+    <NuGetAudit>false</NuGetAudit>
+    <EnableNETAnalyzers>false</EnableNETAnalyzers>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../unity/Packages/com.xena.original-assets/Runtime/XenaDocument.cs" Link="XenaDocument.cs" />
+    <Compile Include="../../unity/Packages/com.xena.original-assets/Runtime/XenaDocumentValidator.cs" Link="XenaDocumentValidator.cs" />
+    <Compile Include="../../unity/Packages/com.xena.original-assets/Runtime/XenaTerrainQuery.cs" Link="XenaTerrainQuery.cs" />
+    <Reference Include="Microsoft.CodeAnalysis"><HintPath>$(MSBuildSDKsPath)/../Roslyn/bincore/Microsoft.CodeAnalysis.dll</HintPath></Reference>
+    <Reference Include="Microsoft.CodeAnalysis.CSharp"><HintPath>$(MSBuildSDKsPath)/../Roslyn/bincore/Microsoft.CodeAnalysis.CSharp.dll</HintPath></Reference>
+  </ItemGroup>
+</Project>

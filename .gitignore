@@ -27,3 +27,20 @@ tools/psyq_sigs/
 port/third_party/
 memcard/
 shots*/
+
+# Unity generated state and locally extracted game assets
+unity/XenaLightingVerification/
+unity/XenaUnity/Assets/Imported/
+unity/XenaUnity/Assets/Generated/
+unity/XenaUnity/Assets/Scenes/
+unity/XenaUnity/Assets/Imported.meta
+unity/XenaUnity/Assets/Generated.meta
+unity/XenaUnity/Assets/Scenes.meta
+unity/XenaUnity/Library/
+unity/XenaUnity/Temp/
+unity/XenaUnity/Logs/
+unity/XenaUnity/obj/
+unity/XenaUnity/UserSettings/
+unity/XenaUnity/Packages/packages-lock.json
+unity/XenaUnity/ProjectSettings/*.asset
+tools/UnityAssetCheck/obj/
