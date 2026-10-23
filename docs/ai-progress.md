@@ -6,8 +6,11 @@ One issue per task. Nothing here is a claim without the command/measurement that
 ## Current task — Unity repair and first level audit (2026-10-23)
 
 - LATEST: THREE-MILESTONE BATCH COMPLETE. fc134d4 official plugin+Pipeline+MCP;
-  71db8b4 persistent keyboard/mouse rebinding+camera settings; next commit camera
+  71db8b4 persistent keyboard/mouse rebinding+camera settings; 9f80144 camera
   C/R3 centering + mouse wheel zoom. Original user native edits/staged rename remain.
+  Generated Pipeline project config reviewed: autoStart=true,port0(auto),browser
+  clients=false,storeEvalSource=false,background command override=false. Store it
+  for reproducible Editor startup; it contains no auth credentials or local paths.
 - New input profile12actions,11rebind rows. C/R3 centers behind actual character;
   wheel radius2..7 with existing sphere obstruction; cameraDistance persists in
   version1 preferences, missing field defaults4. HUD shows current assignments.
