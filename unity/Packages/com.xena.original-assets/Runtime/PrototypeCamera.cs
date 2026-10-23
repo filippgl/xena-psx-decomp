@@ -6,20 +6,23 @@ namespace Xena.Assets
     {
         [SerializeField] private Transform target;
         [SerializeField] private PrototypeInput input;
-        [SerializeField] private float yaw, pitch = 18, distance = 4, sensitivity = 0.12f;
-        [SerializeField] private bool invertY;
+        [SerializeField] private float yaw, pitch = 18, distance = 4;
+        private Vector2 settingsScroll;
+        public float Sensitivity => input.Preferences.Data.mouseSensitivity;
+        public bool InvertY => input.Preferences.Data.invertY;
         private Vector3 smoothFocus, focusVelocity;
         private bool initialized;
         private PrototypeCombat combat;
         public float Yaw => yaw;
+        public float Pitch => pitch;
         public float DistanceToTarget { get; private set; }
         public void Configure(Transform follow, PrototypeInput controls) { target = follow; input = controls; }
         private void LateUpdate()
         {
             if (!input.Paused)
             {
-                Vector2 look = input.MouseLook * sensitivity + input.StickLook * (120 * Time.deltaTime);
-                yaw += look.x; pitch = Mathf.Clamp(pitch + look.y * (invertY ? 1 : -1), -30, 70);
+                Vector2 look = input.MouseLook * Sensitivity + input.StickLook * (120 * Time.deltaTime);
+                yaw += look.x; pitch = Mathf.Clamp(pitch + look.y * (InvertY ? 1 : -1), -30, 70);
             }
             Vector3 desiredFocus = target.position + Vector3.up * 1.1f;
             if (!initialized || Vector3.Distance(smoothFocus, desiredFocus) > 8)
@@ -34,22 +37,40 @@ namespace Xena.Assets
         private void OnGUI()
         {
             if (combat == null) combat = target.GetComponent<PrototypeCombat>();
-            GUILayout.BeginArea(new Rect(16, 16, 430, input.Paused ? 310 : 150), GUI.skin.box);
+            GUILayout.BeginArea(new Rect(16, 16, input.Paused ? 520 : 470, input.Paused ? Mathf.Min(Screen.height - 32, 690) : 150), GUI.skin.box);
             GUILayout.Label("Xena — movement & combat prototype");
-            GUILayout.Label("WASD move · Shift run · Space jump · R reset · Esc pause");
+            GUILayout.Label(input.BindingLabel("Forward") + "/" + input.BindingLabel("Left") + "/" + input.BindingLabel("Back") + "/" + input.BindingLabel("Right") + " move · " + input.BindingLabel("Sprint") + " run · " + input.BindingLabel("Jump") + " jump · Esc pause");
             GUILayout.Label("Gamepad: sticks · L3 run · A jump · Start pause");
-            GUILayout.Label("LMB sword · F kick · hold RMB block");
+            GUILayout.Label(input.BindingLabel("Sword") + " sword · " + input.BindingLabel("Kick") + " kick · hold " + input.BindingLabel("Block") + " block");
             GUILayout.Label("Gamepad: X sword · Y kick · LB block");
-            if (combat != null) GUILayout.Label("Health: " + combat.Health + " | R resets you and the dummy");
+            if (combat != null) GUILayout.Label("Health: " + combat.Health + " | " + input.BindingLabel("Reset") + " resets you and the dummy");
             if (input.Paused)
             {
-                GUILayout.Label("Mouse sensitivity: " + sensitivity.ToString("0.00"));
-                sensitivity = GUILayout.HorizontalSlider(sensitivity, 0.03f, 0.3f);
-                invertY = GUILayout.Toggle(invertY, "Invert camera Y");
+                settingsScroll = GUILayout.BeginScrollView(settingsScroll);
+                GUILayout.Label("Mouse sensitivity: " + Sensitivity.ToString("0.00"));
+                input.Preferences.Data.mouseSensitivity = GUILayout.HorizontalSlider(Sensitivity, 0.03f, 0.3f);
+                input.Preferences.Data.invertY = GUILayout.Toggle(InvertY, "Invert camera Y");
+                foreach (string key in PrototypeInput.BindingKeys)
+                {
+                    GUILayout.BeginHorizontal(); GUILayout.Label(key, GUILayout.Width(140));
+                    bool enabled = GUI.enabled; GUI.enabled = enabled && !input.IsRebinding;
+                    if (GUILayout.Button(input.BindingLabel(key), GUILayout.Width(260))) input.BeginRebind(key);
+                    GUI.enabled = enabled; GUILayout.EndHorizontal();
+                }
+                if (input.IsRebinding) { if (GUILayout.Button("Cancel binding")) input.CancelRebind(); }
+                else
+                {
+                    GUILayout.BeginHorizontal();
+                    if (GUILayout.Button("Save settings")) input.SaveSettings();
+                    if (GUILayout.Button("Restore defaults")) input.ResetPreferences();
+                    GUILayout.EndHorizontal();
+                }
+                GUILayout.Label(input.BindingStatus); GUILayout.Label(input.Preferences.Status);
                 if (combat != null && combat.Target != null)
                     combat.Target.Retaliates = GUILayout.Toggle(combat.Target.Retaliates, "Practice dummy attacks nearby (temporary rules)");
                 GUILayout.Label("Practice reach/damage only; original hitboxes pending");
                 GUILayout.Label("Press Esc to resume");
+                GUILayout.EndScrollView();
             }
             GUILayout.EndArea();
         }

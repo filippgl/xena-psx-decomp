@@ -8,7 +8,7 @@ const codeHash=()=>crypto.createHash('sha256').update(fs.readFileSync(gameCode))
 const testedBuild={executable:path.resolve('build/unity-movement/XenaMovementPrototype.exe'),gameCode,modified:fs.statSync(gameCode).mtime.toISOString(),sha256:codeHash()};
 const out=path.resolve('build/unity-import'),report=path.join(out,'combat-player-verification.json');
 if(fs.existsSync(report))fs.unlinkSync(report);
-const child=spawn(path.resolve('build/unity-movement/XenaMovementPrototype.exe'),['-screen-fullscreen','0','-screen-width','1280','-screen-height','720','-logFile',path.join(out,'combat-player.log'),'--combat-smoke',out],{windowsHide:false,stdio:'ignore'});
+const child=spawn(path.resolve('build/unity-movement/XenaMovementPrototype.exe'),['-screen-fullscreen','0','-screen-width','1280','-screen-height','720','-logFile',path.join(out,'combat-player.log'),'--no-settings','--combat-smoke',out],{windowsHide:false,stdio:'ignore'});
 const code=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>{child.kill();reject(Error('Combat player smoke timed out; inspect combat-player.log'));},60000);child.once('error',e=>{clearTimeout(timer);reject(e);});child.once('exit',c=>{clearTimeout(timer);resolve(c);});});
 const result=fs.existsSync(report)?JSON.parse(fs.readFileSync(report)):null;
 if(code!==0||result?.result!=='PASS')console.log(JSON.stringify(result,null,2));

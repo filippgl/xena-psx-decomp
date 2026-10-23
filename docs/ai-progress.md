@@ -5,6 +5,28 @@ One issue per task. Nothing here is a claim without the command/measurement that
 
 ## Current task — Unity repair and first level audit (2026-10-23)
 
+- LATEST: PERSISTENT SETTINGS + KEYBOARD/MOUSE REBINDING done. fc134d4 is plugin/
+  livePipeline/MCP checkpoint. PrototypePreferences loads version1 JSON at
+  Application.persistentDataPath/XenaPrototype.settings.json, atomic temp+replace,
+  malformed file preserved/defaults active. --settings-file and --no-settings
+  isolate tests from user preferences. PrototypeInput has10rebind rows, duplicate
+  rejection, Escapecancel stays paused, defaultrestore, dynamic HUD labels.
+  Existing debug OnGUI maintained per installed ui-imgui skill; not a final UI.
+- Actual final Windows59checks PASS:22movement/24combat/13settings in3separate
+  write/read/malformed processes. Includes actual mouse rebind, old buttons inactive,
+  persisted inversion affecting camera, defaults and corrupt-file preservation.
+  Same gameCodeSHA6c0ec97f021d462ee8b9120ed0948f7f672584cc070bef33155fec2ad001af59,
+  Managed/Xena.Assets.dll2026-10-23T19:45:46.212Z, build128317450bytes/0errors.
+  EXE launcher copied mtime remains18:13:23Z. settings-menu.png inspected720p.
+- Final81clip Editor regression PASS1674frames/115506transforms/74levelmeshes after
+  Pipeline installed. Live verification+MCP C#eval repeated PASS after domain reload.
+  Initial recompile request timed out120s while files changed; later compile0errors/
+  0warnings and cold build/import succeeded; timeout reported, not called PASS.
+  Main own EditorPID43668 and privatePID43244 gracefully CLOSED; user Hub kept.
+- Next: checkpoint settings, then original-plan C/R3 camera centering and mouse-wheel
+  distance control. Retain59checks, extend camera checks and repackage final build.
+  Native console unchanged4515087bytes/2026-10-22T18:11:35.259Z; user edits preserved.
+
 - LATEST: OFFICIAL PLUGIN CONNECTED. User explicitly authorized installing plugin,
   autonomous multi-step work and milestone commits. unity@unity-agent-plugin0.1.8-beta
   installed/enabled via codex CLI; read installed unity-cli skill+live verification
