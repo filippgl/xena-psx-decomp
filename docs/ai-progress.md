@@ -5,6 +5,28 @@ One issue per task. Nothing here is a claim without the command/measurement that
 
 ## Current task — Unity repair and first level audit (2026-10-23)
 
+- LATEST: OFFICIAL PLUGIN CONNECTED. User explicitly authorized installing plugin,
+  autonomous multi-step work and milestone commits. unity@unity-agent-plugin0.1.8-beta
+  installed/enabled via codex CLI; read installed unity-cli skill+live verification
+  recipe. Pipeline0.9.1-exp.1 first private then MAIN manifest. ExistingCLIbeta13;
+  beta14 notification surfaced, not updated. No license/auth changes needed.
+- Live private+main Editor six-check verifier PASS: explicit routing, C#version,
+  Play frames actually advance, original81clips+dummy100,1280x720camera PNG viewed,
+  zero console errors. Helpers tools/unity_cli.mjs and verify_unity_pipeline.mjs.
+  Fixed helper UTF16 PowerShell redirection and global flags after -- separator;
+  capture.savedPath is authoritative (Pipeline prefixes Assets). No test weakened.
+- Registered global Codex MCP unity-xena pinned MAIN project. MCP protocol initialize,
+  list166tools and C#eval version PASS via check_unity_mcp.mjs. CLIbeta13 does NOT
+  accept documented newer --tools flag: initial MCP exited, removed unsupported
+  filter, successful retest. No other MCP entries overwritten.
+- Own private EditorPID43244 gracefully closed via CLI. Own MAIN Editor running
+  hidden batch PID saved pipeline-main-editor.pid; user previously had Hub only.
+  Both restored stopped/backgroundoverridefalse/autotickfalse after live tests.
+  New Pipeline dependency not yet tested in rebuilt Windows Player (runtime was
+  unchanged at this checkpoint). Next development: persistent camera preferences
+  and interactive keyboard/mouse rebinding, tested independently of user settings,
+  then rebuilt movement/combat regressions. Native source edits/staged rename preserved.
+
 - LATEST STEERING RESEARCH COMPLETE: docs/unity-agent-tooling.md compares official
   Unity-Technologies/unity-agent-plugin+skills, Unity CLI/Pipeline and third-party
   CoplayDev/unity-mcp using primary docs. Existing LOCALAPPDATA/Unity/bin/unity.exe
