@@ -9,7 +9,7 @@ namespace Xena.Assets
     {
         [SerializeField] private InputActionAsset source;
         private InputActionAsset actions;
-        private InputAction move, mouse, stick, sprint, jump, pause, reset, sword, kick, block;
+        private InputAction move, mouse, stick, sprint, jump, pause, reset, sword, kick, block, centerCamera, zoom;
         private bool jumpPending, swordPending, kickPending;
         private InputActionRebindingExtensions.RebindingOperation rebinding;
         private HashSet<InputDevice> allowedDevices;
@@ -17,7 +17,9 @@ namespace Xena.Assets
         public PrototypePreferences Preferences { get; private set; }
         public bool IsRebinding => rebinding != null;
         public string BindingStatus { get; private set; } = "";
-        public static readonly string[] BindingKeys = { "Forward", "Back", "Left", "Right", "Sprint", "Jump", "Sword", "Kick", "Block", "Reset" };
+        public static readonly string[] BindingKeys = { "Forward", "Back", "Left", "Right", "Sprint", "Jump", "Sword", "Kick", "Block", "Reset", "CenterCamera" };
+        public bool CenterCameraPressed => !Paused && centerCamera.WasPressedThisFrame();
+        public float Zoom => Paused ? 0 : zoom.ReadValue<float>();
         public bool Block => !Paused && block.IsPressed();
         public bool Paused { get; private set; }
         public bool Automated { get; set; }
@@ -33,6 +35,7 @@ namespace Xena.Assets
             stick = actions.FindAction("Player/LookStick", true); sprint = actions.FindAction("Player/Sprint", true);
             jump = actions.FindAction("Player/Jump", true); pause = actions.FindAction("Player/Pause", true); reset = actions.FindAction("Player/Reset", true);
             sword = actions.FindAction("Player/Sword", true); kick = actions.FindAction("Player/Kick", true); block = actions.FindAction("Player/Block", true);
+            centerCamera = actions.FindAction("Player/CenterCamera", true); zoom = actions.FindAction("Player/Zoom", true);
             Preferences = new PrototypePreferences(); Preferences.Load(actions);
         }
         private void OnEnable() { actions.Enable(); }

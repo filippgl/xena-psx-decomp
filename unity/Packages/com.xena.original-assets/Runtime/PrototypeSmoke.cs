@@ -116,6 +116,17 @@ namespace Xena.Assets
             yield return null; yield return null;
             report.yawChange = orbit.Yaw - beforeYaw;
             Require(report.yawChange > 10, "Mouse did not rotate camera"); report.checks.Add("mouse camera look");
+            float zoomBefore = orbit.DesiredDistance;
+            InputSystem.QueueStateEvent(mouse, new MouseState { scroll = new Vector2(0, 120) }); yield return null; yield return null;
+            Require(orbit.DesiredDistance < zoomBefore - 0.5f, "Mouse wheel did not zoom camera"); report.checks.Add("mouse wheel camera zoom");
+            InputSystem.QueueStateEvent(mouse, new MouseState { scroll = new Vector2(0, 100000) }); yield return null; yield return null;
+            Require(Mathf.Abs(orbit.DesiredDistance - 2) < 0.001f, "Camera zoom crossed minimum");
+            InputSystem.QueueStateEvent(mouse, new MouseState { scroll = new Vector2(0, -100000) }); yield return null; yield return null;
+            Require(Mathf.Abs(orbit.DesiredDistance - 7) < 0.001f, "Camera zoom crossed maximum"); report.checks.Add("camera zoom clamps to allowed range");
+            input.Preferences.Data.cameraDistance = 4;
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.C)); yield return null; yield return null;
+            Require(Mathf.Abs(Mathf.DeltaAngle(orbit.Yaw, motor.transform.eulerAngles.y)) < 0.1f, "C did not center camera behind player"); report.checks.Add("keyboard camera centering");
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState());
 
             motor.ResetToSpawn(); float startY = motor.transform.position.y, peak = startY;
             Transform[] joints = visual.GetComponentsInChildren<Transform>();
@@ -178,6 +189,8 @@ namespace Xena.Assets
             InputSystem.QueueStateEvent(gamepad, new GamepadState { rightStick = Vector2.right });
             yield return new WaitForSecondsRealtime(0.2f);
             Require(orbit.Yaw > beforeYaw + 10, "Gamepad right stick did not rotate camera"); report.checks.Add("gamepad right-stick camera");
+            InputSystem.QueueStateEvent(gamepad, new GamepadState { buttons = 1u << (int)GamepadButton.RightStick }); yield return null; yield return null;
+            Require(Mathf.Abs(Mathf.DeltaAngle(orbit.Yaw, motor.transform.eulerAngles.y)) < 0.1f, "R3 did not center camera"); report.checks.Add("gamepad camera centering");
             InputSystem.QueueStateEvent(gamepad, new GamepadState());
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.R)); yield return null; yield return null;
             Require(FlatDistance(motor.transform.position, start) < 0.3f, "R reset failed"); report.checks.Add("R reset to original spawn");

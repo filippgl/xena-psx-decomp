@@ -5,6 +5,32 @@ One issue per task. Nothing here is a claim without the command/measurement that
 
 ## Current task — Unity repair and first level audit (2026-10-23)
 
+- LATEST: THREE-MILESTONE BATCH COMPLETE. fc134d4 official plugin+Pipeline+MCP;
+  71db8b4 persistent keyboard/mouse rebinding+camera settings; next commit camera
+  C/R3 centering + mouse wheel zoom. Original user native edits/staged rename remain.
+- New input profile12actions,11rebind rows. C/R3 centers behind actual character;
+  wheel radius2..7 with existing sphere obstruction; cameraDistance persists in
+  version1 preferences, missing field defaults4. HUD shows current assignments.
+  Esc fixed; gamepad action rebinding not yet implemented. Scroll menu inspected720p,
+  all settings readable, scrollbar available. Existing source scenes preserved.
+- FINAL Windows64checks PASS:movement26/combat24/settings14. Settings exercised in
+  three fresh processes, isolated file, old controls inactive/new controls functional,
+  mouse and keyboard rebinding, duplicate rejection, Esc cancellation, actual loaded
+  inversion, persisted distance, defaults and malformed-file preservation.
+  SAME codeSHA8e4e53c046355a493ff7eb1d3383b2e71179bbe4d077dd41cd57d25645a94b69,
+  Xena.Assets.dll2026-10-23T19:53:04.625Z. Launcher EXE retains copied18:13:23Z mtime.
+  Final build128320494bytes/0errors. Reports *-player-verification.json include hash.
+  Logs camera-{movement,combat,settings,import}-regression.log.
+- Final original Editor regression81clips/1674frames/115506transforms PASS;74level
+  meshes+35955LGT retained. No shader/asset geometry changes. No running Editor,
+  user's Hub only. Native console unchanged4515087bytes/2026-10-22T18:11:35.259Z.
+  Archives read-verified:movement178files/40510842bytes,Unity225files/15102187bytes.
+- Next gameplay work: native combat volumes/mixed combo transition audit; original
+  enemy models/AI/reactions; chakram/events/saves. Current practice damage/reach are
+  explicitly provisional. Plugin installed/enabled globally, MCP unity-xena pinned
+  main project; open its Editor for live operations. CLIbeta13 used successfully;
+  beta14 available (reported), unsupported --tools removed from MCP config.
+
 - LATEST: PERSISTENT SETTINGS + KEYBOARD/MOUSE REBINDING done. fc134d4 is plugin/
   livePipeline/MCP checkpoint. PrototypePreferences loads version1 JSON at
   Application.persistentDataPath/XenaPrototype.settings.json, atomic temp+replace,

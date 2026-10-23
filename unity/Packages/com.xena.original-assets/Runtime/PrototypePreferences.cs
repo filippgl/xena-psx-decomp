@@ -9,6 +9,7 @@ namespace Xena.Assets
     {
         public int version = 1;
         public float mouseSensitivity = 0.12f;
+        public float cameraDistance = 4;
         public bool invertY;
         public string bindingOverrides = "";
     }
@@ -31,7 +32,8 @@ namespace Xena.Assets
             try
             {
                 var data = new PrototypePreferenceData(); JsonUtility.FromJsonOverwrite(File.ReadAllText(FilePath), data);
-                if (data.version != 1 || float.IsNaN(data.mouseSensitivity) || float.IsInfinity(data.mouseSensitivity) || data.mouseSensitivity < 0.03f || data.mouseSensitivity > 0.3f)
+                if (data.version != 1 || float.IsNaN(data.mouseSensitivity) || float.IsInfinity(data.mouseSensitivity) || data.mouseSensitivity < 0.03f || data.mouseSensitivity > 0.3f
+                    || float.IsNaN(data.cameraDistance) || float.IsInfinity(data.cameraDistance) || data.cameraDistance < 2 || data.cameraDistance > 7)
                     throw new InvalidDataException("Unsupported settings values");
                 if (!string.IsNullOrEmpty(data.bindingOverrides)) actions.LoadBindingOverridesFromJson(data.bindingOverrides);
                 Data = data; Status = "Settings loaded";

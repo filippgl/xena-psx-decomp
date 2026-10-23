@@ -94,6 +94,24 @@
           "processors": "",
           "interactions": "",
           "initialStateCheck": true
+        },
+        {
+          "name": "CenterCamera",
+          "id": "6e86ffd0-a4bd-da3e-50a5-05a82861ac86",
+          "type": "Button",
+          "expectedControlType": "Button",
+          "processors": "",
+          "interactions": "",
+          "initialStateCheck": true
+        },
+        {
+          "name": "Zoom",
+          "id": "95e4ac3d-5616-a78d-3ef5-9e666ccee029",
+          "type": "Value",
+          "expectedControlType": "Axis",
+          "processors": "",
+          "interactions": "",
+          "initialStateCheck": true
         }
       ],
       "bindings": [
@@ -336,6 +354,39 @@
           "processors": "",
           "groups": "Gamepad",
           "action": "Block",
+          "isComposite": false,
+          "isPartOfComposite": false
+        },
+        {
+          "name": "",
+          "id": "d082a60f-1b05-57cd-f285-e9af7bcf2dff",
+          "path": "<Keyboard>/c",
+          "interactions": "",
+          "processors": "",
+          "groups": "KeyboardMouse",
+          "action": "CenterCamera",
+          "isComposite": false,
+          "isPartOfComposite": false
+        },
+        {
+          "name": "",
+          "id": "30944de6-9541-0bf4-4b41-c0449007f853",
+          "path": "<Gamepad>/rightStickPress",
+          "interactions": "",
+          "processors": "",
+          "groups": "Gamepad",
+          "action": "CenterCamera",
+          "isComposite": false,
+          "isPartOfComposite": false
+        },
+        {
+          "name": "",
+          "id": "88b56189-5fef-603c-72bc-62292e246cce",
+          "path": "<Mouse>/scroll/y",
+          "interactions": "",
+          "processors": "",
+          "groups": "KeyboardMouse",
+          "action": "Zoom",
           "isComposite": false,
           "isPartOfComposite": false
         }

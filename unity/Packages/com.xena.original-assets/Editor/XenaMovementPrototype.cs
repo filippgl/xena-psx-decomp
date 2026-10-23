@@ -98,7 +98,7 @@ namespace Xena.Assets.Editor
                 report.terrainTriangles = GameObject.Find("OriginalLevel01").GetComponentsInChildren<MeshCollider>().Single().sharedMesh.triangles.Length / 3;
                 report.originalCollisionTriangles = GameObject.Find("OriginalCLSWalls").GetComponent<MeshCollider>().sharedMesh.triangles.Length / 6;
                 report.inputActions = AssetDatabase.LoadAssetAtPath<InputActionAsset>("Packages/com.xena.original-assets/Input/XenaPrototype.inputactions").actionMaps[0].actions.Count;
-                if (report.terrainTriangles != 2290 || report.originalCollisionTriangles != 119 || report.inputActions != 10) throw new InvalidDataException("Prototype scene totals differ");
+                if (report.terrainTriangles != 2290 || report.originalCollisionTriangles != 119 || report.inputActions != 12) throw new InvalidDataException("Prototype scene totals differ");
                 if (Environment.GetCommandLineArgs().Contains("--build-movement"))
                 {
                     report.executable = Path.GetFullPath(Path.Combine(Output, "../unity-movement/XenaMovementPrototype.exe"));
