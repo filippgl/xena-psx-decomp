@@ -101,19 +101,34 @@ namespace Xena.Assets
             landingTime = -1;
             if (moving)
             {
-                if (groundSlot != 0x14 && groundSlot != 0x15) SetGroundSlot(0x14);
-                if (groundSlot == 0x14 && groundTime >= 5f / 30) SetGroundSlot(0x15);
+                if (input.Sprint)
+                {
+                    if (groundSlot != 0x1a)
+                    {
+                        float phase = groundSlot == 0x15 ? (groundTime * 30 % 25) / 25 : 0;
+                        SetGroundSlot(0x1a); groundTime = phase * 20 / 30;
+                    }
+                }
+                else
+                {
+                    if (groundSlot == 0x1a)
+                    { float phase = (groundTime * 30 % 20) / 20; SetGroundSlot(0x15); groundTime = phase * 25 / 30; }
+                    if (groundSlot != 0x14 && groundSlot != 0x15) SetGroundSlot(0x14);
+                    if (groundSlot == 0x14 && groundTime >= 5f / 30) SetGroundSlot(0x15);
+                }
             }
             else
             {
+                if (groundSlot == 0x1a) SetGroundSlot(0x1f);
                 if (groundSlot == 0x14 || groundSlot == 0x15) SetGroundSlot(0x17);
                 if (groundSlot == 0x17 && groundTime >= 7f / 30) SetGroundSlot(0);
+                if (groundSlot == 0x1f && groundTime >= 5f / 30) SetGroundSlot(0);
             }
-            // Native start/stop are one-shot clips. Only the 25-frame run loops.
-            if (groundSlot == 0x14 || groundSlot == 0x17)
+            // Walk15 and run1A are distinct native cycles, not a speed multiplier.
+            if (groundSlot == 0x14 || groundSlot == 0x17 || groundSlot == 0x1f)
                 visual.SampleSlotFrame(groundSlot, Mathf.FloorToInt(groundTime * 30));
             else visual.SampleSlot(groundSlot, groundTime);
-            groundTime += dt * (moving && !input.Sprint ? 0.6f : 1);
+            groundTime += dt;
         }
         private void SetGroundSlot(int slot) { groundSlot = slot; groundTime = 0; }
     }

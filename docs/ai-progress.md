@@ -5,6 +5,17 @@ One issue per task. Nothing here is a claim without the command/measurement that
 
 ## Current task — Unity combat and original collision audit (2026-10-24)
 
+- USER PRIORITY Oct24: sprint is walking, chakram absent, block+cartwheel absent.
+  Root cause CONFIRMED:15isWALK, notrun! ControlledUP+L1 uses1A20frames,stop1F5.
+  New capture_action_reference/verify_action_reference movement141snapshots27072
+  posecomponents PASS; defense153/29376 confirms28left24frames,29right25,2Aback38;
+  chakram171/32832 confirms64throw21frames,65catch19. Native unchanged.
+  Sprint FIXED distinct1A loop and1Fstop,phasepreserved betweenwalk/run;walk0.6
+  rate removed. Real Windows movement26checksPASS inclall20sprintframes andwrap,
+  DLL2026-10-24T03:20:07.861Z SHA3ce4463b7dc7f56648b3ad019f96e42b37f6d9633940e63fc95b85e78c896156.
+  Next implement block+direction acrobatics, then Qaim/LMBchakram controlled flight,
+  verify and commit each checkpoint; do not revert to general collider audit now.
+
 - LATEST: mixed combat now PLAYABLE. Native-confirmed SKS51-57-62(resume5)-4F,
   KKS61-62-55 and KSS61-56-52(resume2)-53. Bridges cause no practice contact.
   Recognized follow-up reserved beyond generic0.65s expiry; unrecognized input

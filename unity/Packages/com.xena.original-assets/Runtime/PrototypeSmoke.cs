@@ -25,6 +25,7 @@ namespace Xena.Assets
             public List<string> checks = new List<string>();
             public List<int> jumpFrames = new List<int>();
             public List<int> locomotionFrames = new List<int>();
+            public List<int> sprintFrames = new List<int>();
             public float walkDistance, runDistance, diagonalDistance, gamepadDistance, jumpHeight, yawChange, cameraObstructedDistance, wallDistance, lowFpsDistance, highFpsDistance, fixedStep;
         }
         private Report report;
@@ -95,12 +96,24 @@ namespace Xena.Assets
                 }
             }
             Require(started && looping && wrapped && report.locomotionFrames.Count == 25, "Incomplete start/run cycle");
-            report.checks.Add("native start once then complete 25-frame run loop");
+            report.checks.Add("native walk start once then complete 25-frame walk loop");
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.W, Key.LeftShift)); yield return null; yield return null; yield return new WaitForFixedUpdate();
-            Require(visual.CurrentSlot == 0x15, "Sprint restarted the locomotion clip"); report.checks.Add("sprint preserves run cycle");
+            Require(visual.CurrentSlot == 0x1a, "Shift still uses walking animation15 instead of run1A");
+            previousRunFrame = -1; wrapped = false;
+            for (int i = 0; i < 62; i++)
+            {
+                InputSystem.QueueStateEvent(keyboard, new KeyboardState(square[(i / 16) % 4], Key.LeftShift));
+                yield return new WaitForFixedUpdate();
+                Require(visual.CurrentSlot == 0x1a, "Sprint left original run1A");
+                int frame = visual.CurrentFrame; if (frame < previousRunFrame) wrapped = true;
+                previousRunFrame = frame; if (!report.sprintFrames.Contains(frame)) report.sprintFrames.Add(frame);
+                if (frame == 10) { yield return new WaitForEndOfFrame(); Capture("movement-run-cycle.png"); }
+            }
+            Require(wrapped && report.sprintFrames.Count == 20, "Incomplete distinct 20-frame sprint cycle");
+            report.checks.Add("Shift uses distinct complete20-frame native run1A loop");
             InputSystem.QueueStateEvent(keyboard, new KeyboardState()); yield return null; yield return null;
             bool stopping = false;
-            for (int i = 0; i < 20; i++) { yield return new WaitForFixedUpdate(); stopping |= visual.CurrentSlot == 0x17; }
+            for (int i = 0; i < 20; i++) { yield return new WaitForFixedUpdate(); stopping |= visual.CurrentSlot == 0x1f; }
             Require(stopping && visual.CurrentSlot == 0, "Stop clip did not play once then recover to idle"); report.checks.Add("native stop once then idle");
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.W)); yield return null; yield return null; yield return new WaitForFixedUpdate();
             Require(visual.CurrentSlot == 0x14, "Movement did not restart with initial pose");
