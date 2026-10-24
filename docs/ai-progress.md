@@ -5,6 +5,15 @@ One issue per task. Nothing here is a claim without the command/measurement that
 
 ## Current task — Unity repair and first level audit (2026-10-23)
 
+- IN PROGRESS: mixed combat audit checkpoint. Baseline Windows combat24 PASS,
+  codeSHA8e4e53c0.../DLL2026-10-23T19:53:04.625Z. New native --mixed scenario
+  234RAM snapshots/44928pose components PASS. Confirmed SKS51-57-62(resume5)-4F,
+  KKS61-62-55, KSS61-56-52(resume2)-53 and SKpair without finisher. Source
+  table800C1384 corroborates routes. Reports build/combat-mixed-reference/.
+  First probe exceeded native256dump limit (missing9512); fixed intervals234,
+  successful rerun. Native EXE untouched. Next implement these three routes,
+  bridge poses/resumed frames, verify real Windows input and existing regressions.
+
 - LATEST: THREE-MILESTONE BATCH COMPLETE. fc134d4 official plugin+Pipeline+MCP;
   71db8b4 persistent keyboard/mouse rebinding+camera settings; 9f80144 camera
   C/R3 centering + mouse wheel zoom. Original user native edits/staged rename remain.
