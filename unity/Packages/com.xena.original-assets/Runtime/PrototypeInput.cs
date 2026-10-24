@@ -56,7 +56,12 @@ namespace Xena.Assets
             if (!Paused && reset.WasPressedThisFrame()) GetComponent<PrototypeMotor>().ResetToSpawn();
         }
         public bool ConsumeJump() { bool value = jumpPending; jumpPending = false; return value; }
-        public int ConsumeAttack() { int value = swordPending ? 1 : kickPending ? 2 : 0; swordPending = kickPending = false; return value; }
+        public int ConsumeAttack()
+        {
+            bool chord = swordPending && kickPending || (swordPending || kickPending) && sword.IsPressed() && kick.IsPressed();
+            int value = chord ? 3 : swordPending ? 1 : kickPending ? 2 : 0;
+            swordPending = kickPending = false; return value;
+        }
         public void ClearPending() { jumpPending = swordPending = kickPending = false; }
         private int Binding(string key, out InputAction action)
         {

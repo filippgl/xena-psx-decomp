@@ -29,8 +29,8 @@ node tools/verify_action_reference.mjs guardattacks
 Это привязка исходных поз к современному мотору, а не совпадение траектории PS1.
 
 Дополнительно зафиксирована серия Cross+Square `4C → 4D → 4E`; `4D` повторяется
-перед выходом. Этот сценарий пока служит материалом аудита: приём ещё не подключён,
-поскольку условия продолжения и завершения повтора требуют отдельной проверки.
+перед выходом. Последующий аудит повторов и подключение описаны в
+[xena-advanced-moves.md](xena-advanced-moves.md).
 
 Артефакты: `build/action-reference-running/verification.json` и
 `build/action-reference-guardattacks/verification.json`.

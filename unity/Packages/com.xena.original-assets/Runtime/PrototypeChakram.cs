@@ -56,7 +56,7 @@ namespace Xena.Assets
             {
                 if (!input.Chakram) { SetMode(Mode.Ready); return; }
                 transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.Euler(0, yaw, 0), 720 * dt);
-                if (attack == 1) { released = false; SetMode(Mode.Throwing); }
+                if (attack == 1 || attack == 3) { released = false; SetMode(Mode.Throwing); }
             }
             else if (State == Mode.Throwing)
             {

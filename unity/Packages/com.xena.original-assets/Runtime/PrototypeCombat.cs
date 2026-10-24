@@ -17,6 +17,9 @@ namespace Xena.Assets
         private int firstAction, secondAction, reservedSlot = -1, reservedFrame;
         private int heldEvade;
         private Vector3 evadeVelocity;
+        private int spinLap, spinBudget;
+        private bool spinExtend;
+        public bool IsSpinning => slot >= 0x4c && slot <= 0x4e;
         public bool IsEvading => slot == 0x28 || slot == 0x29 || slot == 0x2a || slot == 0x3c;
         public bool DrivesMotion => IsEvading || slot == 0x3e;
         public Vector3 ActionVelocity => DrivesMotion ? evadeVelocity : Vector3.zero;
@@ -46,7 +49,8 @@ namespace Xena.Assets
                 case 0x57: return 6; case 0x56: return 3; case 0x4f: return 40;
                 case 0x55: return 23; case 0x53: return 25;
                 case 0x28: return 24; case 0x29: return 25; case 0x2a: return 38;
-                case 0x3c: return 41; case 0x3e: return 40; case 0x5c: return 39; case 0x46: return 28; default: return 0; }
+                case 0x3c: return 41; case 0x3e: return 40; case 0x5c: return 39; case 0x46: return 28;
+                case 0x4c: return 18; case 0x4d: return 7; case 0x4e: return 31; default: return 0; }
         }
         private int Follow(int action)
         {
@@ -77,6 +81,7 @@ namespace Xena.Assets
             slot = -1; time = 0; clock = 0; buffer.Clear(); struck.Clear(); input.ClearPending();
             ClearChain();
             heldEvade = 0; evadeVelocity = Vector3.zero;
+            spinLap = spinBudget = 0; spinExtend = false;
             Health = 100; BlockedHits = 0; if (Target != null) Target.ResetTarget();
         }
         public void Tick(float dt, bool grounded, float cameraYaw)
@@ -91,6 +96,35 @@ namespace Xena.Assets
             while (buffer.Count > 0 && buffer.Peek().expires < clock) buffer.Dequeue();
             if (!grounded) { slot = -1; buffer.Clear(); ClearChain(); return; }
             bool canStart = slot < 0 || IsBlocking;
+            bool running = input.Sprint && requested.sqrMagnitude >= 0.25f;
+            // A short stagger between the two chord buttons may replace the first
+            // two pre-contact frames of a single attack. No individual hit escapes.
+            bool earlySingle = (slot == 0x51 || slot == 0x61) && secondAction == 0 && Frame <= 2;
+            if (action == 3 && !input.Block && !running && (canStart || earlySingle))
+            { buffer.Clear(); ClearChain(); Begin(0x4c); spinLap = 0; spinBudget = 6; spinExtend = false; action = 0; }
+            if (IsSpinning)
+            {
+                buffer.Clear();
+                // Native4D runs in pairs. One fresh kick edge per pair may extend
+                // another pair; holding buttons does not extend. Native budget=6.
+                if (input.Block) spinExtend = false;
+                else if (slot == 0x4d && (action == 2 || action == 3) && spinBudget > 0 && !spinExtend)
+                { spinExtend = true; spinBudget--; }
+                if (Frame >= Frames(slot))
+                {
+                    if (slot == 0x4c) Begin(0x4d);
+                    else if (slot == 0x4d)
+                    {
+                        spinLap++;
+                        if (spinLap < 2) Begin(0x4d);
+                        else if (spinExtend) { spinLap = 0; spinExtend = false; Begin(0x4d); }
+                        else Begin(0x4e);
+                    }
+                    else { slot = -1; time = 0; if (input.Block) Begin(0x80); }
+                }
+                if (Busy) time += dt;
+                return;
+            }
             if (canStart && input.Block && action != 0)
             {
                 buffer.Clear(); ClearChain(); Begin(action == 2 ? 0x5c : 0x46);
@@ -125,7 +159,7 @@ namespace Xena.Assets
             else
             {
                 if (IsBlocking) { slot = -1; time = 0; }
-                if (action != 0 && buffer.Count < 2) buffer.Enqueue(new Intent { action = action, expires = clock + 0.65f });
+                if ((action == 1 || action == 2) && buffer.Count < 2) buffer.Enqueue(new Intent { action = action, expires = clock + 0.65f });
             }
             if (!IsBlocking && slot >= 0)
             {
@@ -155,7 +189,14 @@ namespace Xena.Assets
             {
                 if (input.Block) Begin(0x80);
                 else if (buffer.Count > 0)
-                { ClearChain(); firstAction = buffer.Dequeue().action; Begin(firstAction == 1 ? 0x51 : 0x61); }
+                {
+                    ClearChain(); firstAction = buffer.Dequeue().action;
+                    // A backward attack follows the requested world direction before
+                    // locking movement; it uses the existing original sword/kick clip.
+                    if (requested.sqrMagnitude >= 0.25f && Vector3.Dot(transform.forward, requested.normalized) < -0.5f)
+                        transform.rotation = Quaternion.LookRotation(requested);
+                    Begin(firstAction == 1 ? 0x51 : 0x61);
+                }
             }
             if (Busy) time += dt;
         }
@@ -168,7 +209,7 @@ namespace Xena.Assets
                 visual.SampleSlotFrame(slot, Mathf.Min(Frame, Frames(slot) - 1));
                 // These contact frames/radii affect only the practice target.
                 int contact = slot == 0x51 ? 5 : slot == 0x61 ? 6 : Frames(slot) / 2;
-                if (!IsEvading && slot != 0x56 && slot != 0x57 && Frame >= contact && Frame <= contact + 2) StrikePracticeTargets();
+                if (!IsEvading && slot != 0x56 && slot != 0x57 && slot != 0x4c && slot != 0x4e && Frame >= contact && Frame <= contact + 2) StrikePracticeTargets();
             }
             return true;
         }
@@ -182,7 +223,7 @@ namespace Xena.Assets
                 var target = collider.GetComponentInParent<PrototypePracticeTarget>();
                 if (target == null || struck.Contains(target) || target.Health <= 0) continue;
                 Vector3 offset = target.transform.position - origin; offset.y = 0;
-                if (slot != 0x5c && Vector3.Dot(transform.forward, offset.normalized) < 0.5f) continue;
+                if (slot != 0x5c && slot != 0x4d && Vector3.Dot(transform.forward, offset.normalized) < 0.5f) continue;
                 if (Physics.Linecast(origin, target.transform.position, out RaycastHit hit, ~(1 << 2), QueryTriggerInteraction.Ignore)
                     && hit.collider.GetComponentInParent<PrototypePracticeTarget>() != target) continue;
                 struck.Add(target); target.ReceiveHit(kick ? 15 : 20);

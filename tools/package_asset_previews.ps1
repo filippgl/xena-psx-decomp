@@ -66,12 +66,14 @@ if ($Package -in @('All', 'Unity')) {
     Add-FileEntry $entries 'docs/xena-defense-audit.md' 'Documentation/xena-defense-audit.md'
     Add-FileEntry $entries 'docs/xena-chakram-prototype.md' 'Documentation/xena-chakram-prototype.md'
     Add-FileEntry $entries 'docs/xena-special-moves.md' 'Documentation/xena-special-moves.md'
+    Add-FileEntry $entries 'docs/xena-advanced-moves.md' 'Documentation/xena-advanced-moves.md'
+    Add-FileEntry $entries 'build/unity-import/advanced-moves-player-verification.json' 'Verification/advanced-moves-player-verification.json'
     Add-FileEntry $entries 'build/unity-import/special-moves-player-verification.json' 'Verification/special-moves-player-verification.json'
     Add-FileEntry $entries 'build/unity-import/chakram-player-verification.json' 'Verification/chakram-player-verification.json'
     Add-FileEntry $entries 'build/unity-import/chakram-export.json' 'Verification/chakram-export.json'
     Add-FileEntry $entries 'build/unity-import/actions-final-verification.json' 'Verification/actions-final-verification.json'
     Add-FileEntry $entries 'build/unity-import/chakram-flight.png' 'Verification/chakram-flight.png'
-    foreach ($action in @('movement', 'defense', 'chakram', 'running', 'guardattacks')) {
+    foreach ($action in @('movement', 'defense', 'chakram', 'running', 'guardattacks', 'spin', 'directional-classic')) {
         Add-FileEntry $entries "build/action-reference-$action/verification.json" "Verification/native-$action-actions.json"
     }
     Add-FileEntry $entries 'build/combat-mixed-reference/verification.json' 'Verification/combat-mixed-native-verification.json'
@@ -83,7 +85,7 @@ if ($Package -in @('All', 'Unity')) {
     Add-FileEntry $entries 'build/unity-import/mcp-verification.json' 'Verification/mcp-verification.json'
     Add-FileEntry $entries 'build/combat-reference/verification.json' 'Verification/combat-native-verification.json'
     Add-FileEntry $entries 'build/unity-import/combat-player-verification.json' 'Verification/combat-player-verification.json'
-    foreach ($name in @('combat-sword', 'combat-kick', 'combat-block', 'combat-mixed', 'combat-cartwheel', 'special-running-roll', 'special-frontflip', 'special-guard-strike')) {
+    foreach ($name in @('combat-sword', 'combat-kick', 'combat-block', 'combat-mixed', 'combat-cartwheel', 'special-running-roll', 'special-frontflip', 'special-guard-strike', 'advanced-sword-spin', 'advanced-backflip')) {
         Add-FileEntry $entries "build/unity-import/$name.png" "Verification/$name.png"
     }
     Add-FileEntry $entries 'build/animation-audit/locomotion-verification.json' 'Verification/locomotion-verification.json'
@@ -120,11 +122,13 @@ if ($Package -in @('All', 'Movement')) {
     Add-FileEntry $entries 'docs/xena-defense-audit.md' 'Verification/xena-defense-audit.md'
     Add-FileEntry $entries 'docs/xena-chakram-prototype.md' 'Verification/xena-chakram-prototype.md'
     Add-FileEntry $entries 'docs/xena-special-moves.md' 'Verification/xena-special-moves.md'
+    Add-FileEntry $entries 'docs/xena-advanced-moves.md' 'Verification/xena-advanced-moves.md'
+    Add-FileEntry $entries 'build/unity-import/advanced-moves-player-verification.json' 'Verification/advanced-moves-player-verification.json'
     Add-FileEntry $entries 'build/unity-import/special-moves-player-verification.json' 'Verification/special-moves-player-verification.json'
     Add-FileEntry $entries 'build/unity-import/chakram-player-verification.json' 'Verification/chakram-player-verification.json'
     Add-FileEntry $entries 'build/unity-import/chakram-export.json' 'Verification/chakram-export.json'
     Add-FileEntry $entries 'build/unity-import/actions-final-verification.json' 'Verification/actions-final-verification.json'
-    foreach ($action in @('movement', 'defense', 'chakram', 'running', 'guardattacks')) {
+    foreach ($action in @('movement', 'defense', 'chakram', 'running', 'guardattacks', 'spin', 'directional-classic')) {
         Add-FileEntry $entries "build/action-reference-$action/verification.json" "Verification/native-$action-actions.json"
     }
     Add-FileEntry $entries 'build/combat-mixed-reference/verification.json' 'Verification/combat-mixed-native-verification.json'

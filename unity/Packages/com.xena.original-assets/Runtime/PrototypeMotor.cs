@@ -17,6 +17,8 @@ namespace Xena.Assets
         private XenaTerrainQuery terrain;
         private float vertical, groundTime, landingTime = -1;
         private int groundSlot;
+        private bool backwardsJump;
+        private Vector3 backwardsVelocity;
         // Zero-based SMA frames measured against native RAM by inspect_xena_jump.mjs.
         private const int JumpSlot = 0x2f, TakeoffFrame = 6, ApexFrame = 17, TouchdownFrame = 29, LastJumpFrame = 43;
         private int airSlot = JumpSlot, airTakeoff = TakeoffFrame, airApex = ApexFrame, airTouchdown = TouchdownFrame, airLast = LastJumpFrame;
@@ -42,6 +44,7 @@ namespace Xena.Assets
             controller.enabled = false; transform.position = spawn; controller.enabled = true;
             vertical = 0; Grounded = true; groundSlot = 0; groundTime = 0;
             landingTime = -1; visual.SampleSlotFrame(0, 0);
+            backwardsJump = false; backwardsVelocity = Vector3.zero;
             ConfigureJump(false);
             if (combat != null) combat.ResetState();
             if (chakram != null) chakram.ResetState();
@@ -62,14 +65,18 @@ namespace Xena.Assets
             Vector2 controls = input.Move;
             Vector3 motion = Quaternion.Euler(0, orbit.Yaw, 0) * new Vector3(controls.x, 0, controls.y);
             if (combat.Busy || chakram.Active) motion = Vector3.zero;
-            if (motion.sqrMagnitude > 0.0001f) transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(motion), 720 * dt);
-            if (input.ConsumeJump() && Grounded && !combat.Busy)
+            bool jump = input.ConsumeJump() && Grounded && !combat.Busy;
+            bool backflip = jump && !input.Sprint && motion.sqrMagnitude >= 0.25f && Vector3.Dot(transform.forward, motion.normalized) < -0.5f;
+            if (jump)
             {
-                ConfigureJump(input.Sprint && motion.sqrMagnitude > 0.01f);
+                ConfigureJump(input.Sprint && motion.sqrMagnitude > 0.01f, backflip);
+                backwardsJump = backflip; backwardsVelocity = -transform.forward * walkSpeed;
                 vertical = jumpSpeed; Grounded = false; landingTime = -1;
             }
+            if (!backwardsJump && motion.sqrMagnitude > 0.0001f) transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(motion), 720 * dt);
             vertical -= gravity * dt;
             Vector3 horizontal = combat.DrivesMotion ? combat.ActionVelocity : motion * (input.Sprint ? runSpeed : walkSpeed);
+            if (backwardsJump) horizontal = backwardsVelocity;
             CollisionFlags collision = controller.Move((horizontal + Vector3.up * vertical) * dt);
             if ((collision & CollisionFlags.Above) != 0 && vertical > 0) vertical = 0;
             float floor = Floor(transform.position);
@@ -79,8 +86,8 @@ namespace Xena.Assets
             }
             else if ((collision & CollisionFlags.Below) != 0 && vertical <= 0) { Grounded = true; vertical = -1; }
             else Grounded = false;
-            if (wasGrounded && !Grounded && vertical <= 0) ConfigureJump(false);
-            if (Grounded && !wasGrounded) landingTime = 0;
+            if (wasGrounded && !Grounded && vertical <= 0) { ConfigureJump(false); backwardsJump = false; }
+            if (Grounded && !wasGrounded) { landingTime = 0; backwardsJump = false; }
             if (!chakram.PresentPose() && !combat.PresentPose()) SampleLocomotion(motion.sqrMagnitude > 0.01f, dt);
             else { groundSlot = 0; groundTime = 0; landingTime = -1; }
             // These are externally driven sampled clips, not animation root motion.
@@ -143,11 +150,11 @@ namespace Xena.Assets
             groundTime += dt;
         }
         private void SetGroundSlot(int slot) { groundSlot = slot; groundTime = 0; }
-        private void ConfigureJump(bool running)
+        private void ConfigureJump(bool running, bool backwards = false)
         {
-            airSlot = running ? 0x31 : JumpSlot; airTakeoff = TakeoffFrame;
-            airApex = running ? 19 : ApexFrame; airTouchdown = running ? 33 : TouchdownFrame;
-            airLast = running ? 46 : LastJumpFrame;
+            airSlot = backwards ? 0x35 : running ? 0x31 : JumpSlot; airTakeoff = backwards ? 4 : TakeoffFrame;
+            airApex = backwards ? 12 : running ? 19 : ApexFrame; airTouchdown = backwards ? 21 : running ? 33 : TouchdownFrame;
+            airLast = backwards ? 31 : running ? 46 : LastJumpFrame;
         }
     }
 }

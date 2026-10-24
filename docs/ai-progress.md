@@ -5,6 +5,39 @@ One issue per task. Nothing here is a claim without the command/measurement that
 
 ## Current task — Unity combat and original collision audit (2026-10-24)
 
+- LATEST ADVANCED BATCH COMPLETE: spinning sword4C18->4D7paired->4E31, chord
+  LMB+F, freshkick extendsonepair perpair up to6additionalpairs; holdingdoesnot.
+  Grace2precontactframes permitsstagger, noextra singlehit. Guard/chakrampriority
+  retained, heldguard resumesSAMETICK atspinexit (extraassertionaddedbeforefinal).
+  BackwardJump35 native32frameposes with4/12/21/31phases, facingpreserved and
+  provisionalbackwardsvelocity. Backwardbaseattacks rotate toworldrequestbefore
+  original51/61; modernintentbehavior, notclaimingexacttankturnmath.
+- Audit0e66921: spin253samples48576components,classicdirection228/43776PASS.
+  Native tap/hold/repeats produce2/2/4spin cycles; sourceE4latch+gp4AB0budget6.
+  WithmodernnativecontrolsDownjumpgave2F; isolatedclassicoptionreveals35. Native
+  EXE unchanged4515087bytes/2026-10-22T18:11:35.259Z, allusernativeeditsstagedrename
+  preserved. No guestRAM fixture ororiginalresource forcedintoGit.
+- FINAL Windows123checks PASS:26movement/38combat/14settings/15chakram/13special/
+  17advanced. Allfreshafterguardexitfixbuild; aggregate8logsnoexceptions. Runtime
+  build/unity-movement/XenaMovementPrototype.exe128737619bytes, DLL2026-10-24T17:07:20.378Z
+  SHA78cd820b84c5a8239ae80abfa5314024b9e39cf922012d08132800ffd78dbf21;
+  resources.assets2026-10-24T17:07:19.996Z SHA5a745ba987acef51ed0da9187b6d6e68523cf3ff542fdb9a19239eb1e3697297.
+  actions-final-verification.json containscode+assetstamps; stalegreensrejected.
+  Advanced testsobserve2/2/4/14cycles,HPonceperloop,chordpriority/grace,pause/reset,
+  gamepad,backflipwall/landing/bodyrelativeanddirectionalattacks. Testplatformnot
+  savedscene. FinalHUD/settings andspin/backflipimages inspected1280x720.
+- MainlivePipeline7checksPASS:81clips,109motorTicks,chakramReady2meshes46tris,
+  Playadvances,0errors/warnings. OwnfinalEditor45340 gracefullyCLOSED (earlierown
+  12956closedbeforeguardfixrebuild). UserHub/CLIkept. Packages readverified:
+  Windows197files40649800bytes,Unity266files18017561bytes. Allnew controls documented.
+- NEXT three tasks:1) bicycle kick eligibility/input on REALoriginalenemy;2) native
+  hitactivation/volumes/reactions;3) originalenemy model+AI inUnity. BicycleNOTPORTED:
+  empty/stagger/relocatedNPCguest--poke fixtures didnotprove5F (2F/42/61instead).
+  SourceA794gateclass10/range1000/angle700 andinputtable5Fknown, exactconditionnot.
+  Oracle32748angleattemptstoppedunsupportedDIVU1B at800ADC3C; interpreterNOTchanged.
+  docs/xena-advanced-moves.md records limits. Chakramflight stillprovisional,
+  NPC/AI/events/saves/fullgamecombatparity pending; do notreportbicycle asworking.
+
 - IN PROGRESS advancedbatch. Baselinespecial13PASS on fc75... build. Native spin
   253/48576components andclassicdirectional228/43776PASS:4C18->4D7(pair)->4E31,
   tap/hold/repeats=2/2/4cycles; nativebudget6 fromgp4AB0 andE4pairlatch4/5.

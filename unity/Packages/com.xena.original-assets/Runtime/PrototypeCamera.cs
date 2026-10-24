@@ -48,12 +48,12 @@ namespace Xena.Assets
             GUILayout.BeginArea(new Rect(16, 16, 560, input.Paused ? Mathf.Min(Screen.height - 32, 690) : 270), GUI.skin.box);
             GUILayout.Label("Xena — movement & combat prototype");
             GUILayout.Label(input.BindingLabel("Forward") + "/" + input.BindingLabel("Left") + "/" + input.BindingLabel("Back") + "/" + input.BindingLabel("Right") + " move · " + input.BindingLabel("Sprint") + " run · " + input.BindingLabel("Jump") + " jump · Esc pause");
-            GUILayout.Label("Gamepad: sticks · L3 run · A jump · Start pause");
+            GUILayout.Label("Gamepad: sticks · L3 run · A jump · X sword · Y kick · LB block · Start pause");
             GUILayout.Label(input.BindingLabel("Sword") + " sword · " + input.BindingLabel("Kick") + " kick · hold " + input.BindingLabel("Block") + " block");
-            GUILayout.Label("Gamepad: X sword · Y kick · LB block");
             GUILayout.Label("Hold block + direction: cartwheel / backward handspring");
             GUILayout.Label("Run + kick: roll · run + sword: slash · run + jump: frontflip");
             GUILayout.Label("Block + kick: spin kick · block + sword: strike");
+            GUILayout.Label("Sword + kick: spin (tap kick to extend) · backward + jump: backflip");
             GUILayout.Label("Hold " + input.BindingLabel("Chakram") + " / RB aim · sword button throws · release aim recalls");
             GUILayout.Label("Wheel zoom · " + input.BindingLabel("CenterCamera") + " / R3 center camera");
             if (combat != null) GUILayout.Label("Health: " + combat.Health + " | " + input.BindingLabel("Reset") + " resets you and the dummy");
