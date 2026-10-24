@@ -5,6 +5,15 @@ One issue per task. Nothing here is a claim without the command/measurement that
 
 ## Current task — Unity combat and original collision audit (2026-10-24)
 
+- IN PROGRESS new batch: baseline combat38 PASS, priorfinal93 buildunchanged at
+  start. Controlled running243/46656posecomponents andguardattacks233/44736 PASS.
+  Native1A->3Croll41,1A->3Erunningslash40,1A->31frontflip47;80->5Cspinkick39,
+  80->46guardstrike28. Source31phasetable800C1474=[6,20,34,85]. Audit4C/4D/4E
+  simultaneoussword+kick alsoobserved, notporteduntilrepeatconditionsunderstood.
+  PrototypeCombat/Motor edits IN PROGRESS (not yetbuilt/tested); do notclaimPASS.
+  Next addtargeted specialmovessmoke, build, regress thencommit. Native/useredits
+  andstagedrename preserved. Relevantdoc docs/xena-special-moves.md.
+
 - FINAL USER FIX BATCH COMPLETE: fd68557 distinct native run1A20frames +stop1F5
   replaces acceleratedwalk15; 06b7ad5 block+direction originalcartwheel28/29 and
   backwardhandspring2A. Q/RBaim +LMB/gamepadWest throw, mouse/rightsticksteering,

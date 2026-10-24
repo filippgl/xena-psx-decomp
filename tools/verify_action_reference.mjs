@@ -1,8 +1,10 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-const routes={movement:[[0x14,0x15],[0x15,0x17],[0x1a,0x1f]],defense:[[0x80,0x28],[0x80,0x29],[0x80,0x2a]],chakram:[[0,0x64],[0x64,0],[0,0x65],[0x65,0]]};
-const name=process.argv[2];if(!routes[name])throw Error('Choose movement, defense or chakram');
+const routes={movement:[[0x14,0x15],[0x15,0x17],[0x1a,0x1f]],defense:[[0x80,0x28],[0x80,0x29],[0x80,0x2a]],chakram:[[0,0x64],[0x64,0],[0,0x65],[0x65,0]],
+  running:[[0x1a,0x3c],[0x3c,0],[0x1a,0x3e],[0x3e,0],[0x1a,0x31],[0x31,0]],
+  guardattacks:[[0x80,0x5c],[0x5c,0],[0x80,0x46],[0x46,0],[0x4c,0x4d],[0x4d,0x4e],[0x4e,0]]};
+const name=process.argv[2];if(!routes[name])throw Error('Choose '+Object.keys(routes).join(', '));
 const base=`build/action-reference-${name}`,capture=JSON.parse(fs.readFileSync(`${base}/capture.json`)),clips=new Map();
 let components=0;const transitions=[],samples=[];
 for(const tick of capture.frames){
@@ -25,8 +27,14 @@ if(name==='movement'){
   assert.equal(new Set(run.map(s=>s.frame)).size,20);
   assert(run.some((s,i)=>i>0&&run[i-1].frame===19&&s.frame===0),'No run wrap');
 }
+let jumpTable;
+if(name==='running'){
+  const ram=fs.readFileSync(`${base}/ram_${String(capture.frames[0]).padStart(6,'0')}.bin`);
+  jumpTable=[0,2,4,6].map(n=>ram.readUInt16LE(0xc1474+n));
+  assert.deepEqual(jumpTable,[6,20,34,85],'Unexpected original31 jump phase table');
+}
 const report={result:'PASS',name,sourceExecutable:capture.executable,modified:capture.modified,snapshots:samples.length,components,
-  clips:[...clips.values()].map(c=>({slot:c.slot,frames:c.frameCount})),transitions,
+  clips:[...clips.values()].map(c=>({slot:c.slot,frames:c.frameCount})),transitions,jumpTable,
   scope:'Native port pose comparison, excluding world root. Movement displacement/timing is reference data, not complete PS1 behavior parity.',samples};
 fs.writeFileSync(`${base}/verification.json`,JSON.stringify(report,null,2)+'\n');
 console.log(JSON.stringify({...report,samples:undefined},null,2));

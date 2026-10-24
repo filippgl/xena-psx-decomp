@@ -4,9 +4,11 @@ import {spawnSync} from 'node:child_process';
 const scenarios={
   movement:{end:9380,intervals:[[9000,9098],[9160,9340]],script:'9000:UP:60,9160:UP+L1:120'},
   defense:{end:9490,intervals:[[9000,9100],[9160,9260],[9320,9420]],script:'9000:CIRCLE+LEFT:12,9160:CIRCLE+RIGHT:12,9320:CIRCLE+DOWN:12'},
+  running:{end:9640,intervals:[[9000,9140],[9200,9320],[9400,9620]],script:'9000:UP+L1:40,9020:UP+L1+SQUARE:8,9200:UP+L1:40,9220:UP+L1+CROSS:8,9400:UP+L1:40,9420:UP+L1+TRIANGLE:8'},
+  guardattacks:{end:9580,intervals:[[9000,9160],[9200,9360],[9400,9540]],script:'9000:CIRCLE:40,9010:CIRCLE+SQUARE:8,9200:CIRCLE:40,9210:CIRCLE+CROSS:8,9400:CROSS+SQUARE:8'},
   chakram:{end:9380,intervals:[[9000,9340]],script:'9000:R1:260,9020:R1+CROSS:8,9070:R1+RIGHT:40'}
 };
-const name=process.argv[2];if(!scenarios[name])throw Error('Choose movement, defense or chakram');
+const name=process.argv[2];if(!scenarios[name])throw Error('Choose '+Object.keys(scenarios).join(', '));
 const scenario=scenarios[name],directory=path.resolve(`build/action-reference-${name}`);
 fs.mkdirSync(directory,{recursive:true});
 const frames=scenario.intervals.flatMap(([first,last])=>Array.from({length:(last-first)/2+1},(_,i)=>first+i*2));
