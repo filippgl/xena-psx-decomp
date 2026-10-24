@@ -62,6 +62,9 @@ if ($Package -in @('All', 'Unity')) {
     Add-FileEntry $entries 'docs/xena-jump-audit.md' 'Documentation/xena-jump-audit.md'
     Add-FileEntry $entries 'docs/xena-locomotion-audit.md' 'Documentation/xena-locomotion-audit.md'
     Add-FileEntry $entries 'docs/xena-combat-audit.md' 'Documentation/xena-combat-audit.md'
+    Add-FileEntry $entries 'docs/xena-combat-anchors.md' 'Documentation/xena-combat-anchors.md'
+    Add-FileEntry $entries 'build/combat-mixed-reference/verification.json' 'Verification/combat-mixed-native-verification.json'
+    Add-FileEntry $entries 'build/combat-geometry/anchors-verification.json' 'Verification/combat-anchors-verification.json'
     Add-FileEntry $entries 'docs/unity-agent-tooling.md' 'Documentation/unity-agent-tooling.md'
     Add-FileEntry $entries 'build/unity-import/settings-player-verification.json' 'Verification/settings-player-verification.json'
     Add-FileEntry $entries 'build/unity-import/settings-menu.png' 'Verification/settings-menu.png'
@@ -69,7 +72,7 @@ if ($Package -in @('All', 'Unity')) {
     Add-FileEntry $entries 'build/unity-import/mcp-verification.json' 'Verification/mcp-verification.json'
     Add-FileEntry $entries 'build/combat-reference/verification.json' 'Verification/combat-native-verification.json'
     Add-FileEntry $entries 'build/unity-import/combat-player-verification.json' 'Verification/combat-player-verification.json'
-    foreach ($name in @('combat-sword', 'combat-kick', 'combat-block')) {
+    foreach ($name in @('combat-sword', 'combat-kick', 'combat-block', 'combat-mixed')) {
         Add-FileEntry $entries "build/unity-import/$name.png" "Verification/$name.png"
     }
     Add-FileEntry $entries 'build/animation-audit/locomotion-verification.json' 'Verification/locomotion-verification.json'
@@ -102,6 +105,9 @@ if ($Package -in @('All', 'Movement')) {
     Add-FileEntry $entries 'docs/xena-jump-audit.md' 'Verification/xena-jump-audit.md'
     Add-FileEntry $entries 'docs/xena-locomotion-audit.md' 'Verification/xena-locomotion-audit.md'
     Add-FileEntry $entries 'docs/xena-combat-audit.md' 'Verification/xena-combat-audit.md'
+    Add-FileEntry $entries 'docs/xena-combat-anchors.md' 'Verification/xena-combat-anchors.md'
+    Add-FileEntry $entries 'build/combat-mixed-reference/verification.json' 'Verification/combat-mixed-native-verification.json'
+    Add-FileEntry $entries 'build/combat-geometry/anchors-verification.json' 'Verification/combat-anchors-verification.json'
     Add-FileEntry $entries 'build/unity-import/settings-player-verification.json' 'Verification/settings-player-verification.json'
     Add-FileEntry $entries 'build/combat-reference/verification.json' 'Verification/combat-native-verification.json'
     Add-FileEntry $entries 'build/unity-import/combat-player-verification.json' 'Verification/combat-player-verification.json'
