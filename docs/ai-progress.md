@@ -32,7 +32,9 @@ One issue per task. Nothing here is a claim without the command/measurement that
   Possible inputUpdate/fixed-tick test timing sensitivity remains; retain diagnosis
   if it recurs. Opposite-camera handspring test intentionally now usesS insteadW.
 - Main live Pipeline7checksPASS,114motorTicks/81clips/2chakrammeshes46tris,
-  0errors/warnings. Own Editor2728 used; close before end, preserveHub/CLI.
+  0errors/warnings. Own Editor2728 gracefully CLOSED; userHub/CLI preserved.
+  Checkpoint7a73441. WindowsZIP197files40655986bytes; UnityZIP268files17977206bytes;
+  both archive-read verified, packaged runtime DLL hash matches tested build.
 - PRIOR AUDIT interrupted by explicit user priorities: Bandit import NOT started.
   Uncommitted research tools/capture_action_reference.mjs (delayedtarget fixture)
   and tools/lib/mips_pose_oracle.mjs (DIVU1B) retained separately, NOT part camera fix.
