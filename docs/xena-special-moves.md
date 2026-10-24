@@ -45,3 +45,11 @@ node tools/verify_action_reference.mjs guardattacks
 Круговой удар проверяет манекены со всех сторон, удар `46` — спереди;
 обе атаки наносят временный урон 15, по одному контакту на цель. Исходные активные
 кадры попаданий, радиусы, неуязвимость и точное перемещение ещё не перенесены.
+
+`node tools/check_special_moves_player.mjs` выполняет 13 проверок в настоящей
+Windows-сборке с виртуальными устройствами Input System. Используется временная
+твёрдая платформа, чтобы полный цикл переката и прыжка не зависел от склона/обрыва;
+платформа не сохраняется в сцену и не появляется при обычной игре. Прежний
+`check_movement_player.mjs` продолжает проверять исходную локацию.
+Отчёт: `build/unity-import/special-moves-player-verification.json`, снимки:
+`special-running-roll.png`, `special-frontflip.png`, `special-guard-strike.png`.

@@ -161,9 +161,10 @@ namespace Xena.Assets
             yield return new WaitForEndOfFrame(); Capture("combat-block.png");
             PlaceTarget(1.05f, true); combat.Target.Pulse(); Require(combat.Health == 90, "Guard incorrectly blocked rear hit"); report.checks.Add("rear practice hit bypasses guard");
             InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 3 }); yield return Ticks(3);
+            Require(combat.Slot == 0x46 && visual.CurrentSlot == 0x46, "Guard-sword did not select native46");
             InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 2 }); yield return Ticks(3);
-            Release(); yield return Ticks(35);
-            Require(!combat.Busy && combat.Target.Hits == 0, "Guard released a stale buffered attack"); report.checks.Add("guard suppresses stale attack on release");
+            Release(); yield return Idle(); yield return Ticks(3);
+            Require(!combat.Busy && combat.Target.Hits == 0, "Guard released a stale buffered attack"); report.checks.Add("guard-sword46 finishes without a stale attack on release");
             PlaceTarget(1.05f); combat.Target.Pulse(); Require(combat.Health == 80, "Unguarded hit did not damage player"); report.checks.Add("unguarded practice hit damages player");
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.R)); yield return Ticks(3); Release();
             Require(combat.Health == 100 && combat.Target.Health == 100 && !combat.Busy, "R did not reset combat state"); report.checks.Add("R restores player and target state");

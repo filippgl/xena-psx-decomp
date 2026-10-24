@@ -17,8 +17,9 @@ namespace Xena.Assets
         private int firstAction, secondAction, reservedSlot = -1, reservedFrame;
         private int heldEvade;
         private Vector3 evadeVelocity;
-        public bool IsEvading => slot == 0x28 || slot == 0x29 || slot == 0x2a;
-        public Vector3 EvasionVelocity => IsEvading ? evadeVelocity : Vector3.zero;
+        public bool IsEvading => slot == 0x28 || slot == 0x29 || slot == 0x2a || slot == 0x3c;
+        public bool DrivesMotion => IsEvading || slot == 0x3e;
+        public Vector3 ActionVelocity => DrivesMotion ? evadeVelocity : Vector3.zero;
         public bool Busy => slot >= 0;
         public bool IsBlocking => slot == 0x80;
         public int Slot => slot;
@@ -44,7 +45,8 @@ namespace Xena.Assets
                 case 0x61: return 18; case 0x62: return 31; case 0x5a: return 22;
                 case 0x57: return 6; case 0x56: return 3; case 0x4f: return 40;
                 case 0x55: return 23; case 0x53: return 25;
-                case 0x28: return 24; case 0x29: return 25; case 0x2a: return 38; default: return 0; }
+                case 0x28: return 24; case 0x29: return 25; case 0x2a: return 38;
+                case 0x3c: return 41; case 0x3e: return 40; case 0x5c: return 39; case 0x46: return 28; default: return 0; }
         }
         private int Follow(int action)
         {
@@ -88,7 +90,20 @@ namespace Xena.Assets
             bool evadePressed = evade != 0 && evade != heldEvade; heldEvade = evade;
             while (buffer.Count > 0 && buffer.Peek().expires < clock) buffer.Dequeue();
             if (!grounded) { slot = -1; buffer.Clear(); ClearChain(); return; }
-            if (evadePressed && (slot < 0 || IsBlocking))
+            bool canStart = slot < 0 || IsBlocking;
+            if (canStart && input.Block && action != 0)
+            {
+                buffer.Clear(); ClearChain(); Begin(action == 2 ? 0x5c : 0x46);
+                action = 0; // A guard combination consumes its single attack edge.
+            }
+            else if (slot < 0 && !input.Block && input.Sprint && requested.sqrMagnitude >= 0.25f && action != 0)
+            {
+                buffer.Clear(); ClearChain(); Begin(action == 2 ? 0x3c : 0x3e);
+                transform.rotation = Quaternion.LookRotation(requested);
+                evadeVelocity = requested.normalized * ((slot == 0x3c ? 8f : 5f) / (Frames(slot) / 30f));
+                action = 0;
+            }
+            else if (evadePressed && canStart)
             {
                 buffer.Clear(); ClearChain(); Begin(evade);
                 // Original clips/durations; displacement is provisional motor tuning.
@@ -159,7 +174,7 @@ namespace Xena.Assets
         }
         private void StrikePracticeTargets()
         {
-            bool kick = slot == 0x61 || slot == 0x62 || slot == 0x5a;
+            bool kick = slot == 0x61 || slot == 0x62 || slot == 0x5a || slot == 0x5c || slot == 0x46;
             float reach = kick ? 1.25f : 1.65f;
             Vector3 origin = transform.position + Vector3.up * 0.9f;
             foreach (Collider collider in Physics.OverlapSphere(origin, reach, ~(1 << 2), QueryTriggerInteraction.Collide))
@@ -167,7 +182,7 @@ namespace Xena.Assets
                 var target = collider.GetComponentInParent<PrototypePracticeTarget>();
                 if (target == null || struck.Contains(target) || target.Health <= 0) continue;
                 Vector3 offset = target.transform.position - origin; offset.y = 0;
-                if (Vector3.Dot(transform.forward, offset.normalized) < 0.5f) continue;
+                if (slot != 0x5c && Vector3.Dot(transform.forward, offset.normalized) < 0.5f) continue;
                 if (Physics.Linecast(origin, target.transform.position, out RaycastHit hit, ~(1 << 2), QueryTriggerInteraction.Ignore)
                     && hit.collider.GetComponentInParent<PrototypePracticeTarget>() != target) continue;
                 struck.Add(target); target.ReceiveHit(kick ? 15 : 20);

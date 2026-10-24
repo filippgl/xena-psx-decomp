@@ -5,6 +5,34 @@ One issue per task. Nothing here is a claim without the command/measurement that
 
 ## Current task — Unity combat and original collision audit (2026-10-24)
 
+- LATEST BATCH COMPLETE: five more original actions playable. Runningkick=3C41frame
+  roll, runningsword=3E40frame movingattack, runningjump=3147frame frontflip,
+  blockkick=5C39frame radialpracticekick, blocksword=4628frame frontstrike. Original
+  clips/nativephase table verified; displacement8mroll/5mslash andhitwindows/damage
+  PROVISIONAL. Jump31 retimed6->19->32air/33..46landing toexistingmodernballistics.
+  Ordinary2Fjump/rollwallcollision/reset/pause/gamepad retained. No invulnerability.
+- Audit checkpoint ac6f7f9. Native running243samples46656posecomponents,
+  guardattacks233/44736 PASS; nativeEXE untouched. 4C->4D->4E observed butnotported
+  until loop conditions verified. Docs/xena-special-moves.md hascommands/evidence.
+  New PrototypeSpecialMovesSmoke tests on temporarysolidplatform NOTsavedscene.
+- FINAL Windows106checks PASS:26movement/38combat/14settings/15chakram/13special.
+  All41rollframes observed, noheldrepeat, targethitonce,runningfrontfliplanding,
+  regularjump unchanged,guardcombinationpriority, gamepadtested. Oldguardtest now
+  requires46combo thenno staleattack (intendedbehaviorchange, originalaudited).
+  Final executable build/unity-movement/XenaMovementPrototype.exe,128720355bytes.
+  DLL2026-10-24T03:54:50.503Z SHAfc75ef0f7c0dda7ee43d3023e7dd4a8968841933da03e14ad377ebe8e60febab;
+  resources.assets2026-10-24T03:54:50.068Z SHA1d5f597858936a0f1cb69aa4ef2cb9fe8755a987400f5bb31e118666d0aa7a36.
+  check_prototype_reports PASS allreportsafterfinalbuild+7logsnoexceptions.
+- MainlivePipeline7checksPASS:81clips,119motorTicks,originalchakramReady2/46,
+  Playadvances,0errors/warnings. OwnEditor38428 gracefullyCLOSED; user'sHub kept.
+  HUD+scrollsettings inspected720p, newcontrols visible. Flip/roll screenshots
+  ontestplatform inspected. Packages readverified Windows193files40615812bytes,
+  Unity258files17722376bytes. Usernative edits andstagedrename preserved.
+- Next three tasks: 1) spinning sword4C/4D/4E repeat/exit audit andinput;
+  2) bicyclekick/backflip/directional180attacks;3) nativehitactivation/volumes and
+  originalenemyreactions. Chakramtrajectory/enemyAI/events/saves stillprovisional
+  orpending; do notclaim completegame/fulloriginalcombatparity.
+
 - IN PROGRESS new batch: baseline combat38 PASS, priorfinal93 buildunchanged at
   start. Controlled running243/46656posecomponents andguardattacks233/44736 PASS.
   Native1A->3Croll41,1A->3Erunningslash40,1A->31frontflip47;80->5Cspinkick39,

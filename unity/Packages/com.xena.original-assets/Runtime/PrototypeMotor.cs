@@ -19,6 +19,7 @@ namespace Xena.Assets
         private int groundSlot;
         // Zero-based SMA frames measured against native RAM by inspect_xena_jump.mjs.
         private const int JumpSlot = 0x2f, TakeoffFrame = 6, ApexFrame = 17, TouchdownFrame = 29, LastJumpFrame = 43;
+        private int airSlot = JumpSlot, airTakeoff = TakeoffFrame, airApex = ApexFrame, airTouchdown = TouchdownFrame, airLast = LastJumpFrame;
         public int Ticks { get; private set; }
         public bool Grounded { get; private set; }
         public float VerticalSpeed => vertical;
@@ -41,6 +42,7 @@ namespace Xena.Assets
             controller.enabled = false; transform.position = spawn; controller.enabled = true;
             vertical = 0; Grounded = true; groundSlot = 0; groundTime = 0;
             landingTime = -1; visual.SampleSlotFrame(0, 0);
+            ConfigureJump(false);
             if (combat != null) combat.ResetState();
             if (chakram != null) chakram.ResetState();
         }
@@ -61,9 +63,13 @@ namespace Xena.Assets
             Vector3 motion = Quaternion.Euler(0, orbit.Yaw, 0) * new Vector3(controls.x, 0, controls.y);
             if (combat.Busy || chakram.Active) motion = Vector3.zero;
             if (motion.sqrMagnitude > 0.0001f) transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(motion), 720 * dt);
-            if (input.ConsumeJump() && Grounded && !combat.Busy) { vertical = jumpSpeed; Grounded = false; landingTime = -1; }
+            if (input.ConsumeJump() && Grounded && !combat.Busy)
+            {
+                ConfigureJump(input.Sprint && motion.sqrMagnitude > 0.01f);
+                vertical = jumpSpeed; Grounded = false; landingTime = -1;
+            }
             vertical -= gravity * dt;
-            Vector3 horizontal = combat.IsEvading ? combat.EvasionVelocity : motion * (input.Sprint ? runSpeed : walkSpeed);
+            Vector3 horizontal = combat.DrivesMotion ? combat.ActionVelocity : motion * (input.Sprint ? runSpeed : walkSpeed);
             CollisionFlags collision = controller.Move((horizontal + Vector3.up * vertical) * dt);
             if ((collision & CollisionFlags.Above) != 0 && vertical > 0) vertical = 0;
             float floor = Floor(transform.position);
@@ -73,6 +79,7 @@ namespace Xena.Assets
             }
             else if ((collision & CollisionFlags.Below) != 0 && vertical <= 0) { Grounded = true; vertical = -1; }
             else Grounded = false;
+            if (wasGrounded && !Grounded && vertical <= 0) ConfigureJump(false);
             if (Grounded && !wasGrounded) landingTime = 0;
             if (!chakram.PresentPose() && !combat.PresentPose()) SampleLocomotion(motion.sqrMagnitude > 0.01f, dt);
             else { groundSlot = 0; groundTime = 0; landingTime = -1; }
@@ -90,17 +97,17 @@ namespace Xena.Assets
                 // to ascent/descent rather than looping a 44-frame jump in air.
                 float phase = Mathf.Clamp01(Mathf.Abs(vertical) / jumpSpeed);
                 int frame = vertical > 0
-                    ? Mathf.RoundToInt(Mathf.Lerp(ApexFrame, TakeoffFrame, phase))
-                    : Mathf.RoundToInt(Mathf.Lerp(ApexFrame, TouchdownFrame - 1, phase));
-                visual.SampleSlotFrame(JumpSlot, frame);
+                    ? Mathf.RoundToInt(Mathf.Lerp(airApex, airTakeoff, phase))
+                    : Mathf.RoundToInt(Mathf.Lerp(airApex, airTouchdown - 1, phase));
+                visual.SampleSlotFrame(airSlot, frame);
                 return;
             }
             if (landingTime >= 0 && !moving)
             {
-                int frame = TouchdownFrame + Mathf.FloorToInt(landingTime * 30);
-                if (frame <= LastJumpFrame)
+                int frame = airTouchdown + Mathf.FloorToInt(landingTime * 30);
+                if (frame <= airLast)
                 {
-                    visual.SampleSlotFrame(JumpSlot, frame); landingTime += dt; return;
+                    visual.SampleSlotFrame(airSlot, frame); landingTime += dt; return;
                 }
             }
             landingTime = -1;
@@ -136,5 +143,11 @@ namespace Xena.Assets
             groundTime += dt;
         }
         private void SetGroundSlot(int slot) { groundSlot = slot; groundTime = 0; }
+        private void ConfigureJump(bool running)
+        {
+            airSlot = running ? 0x31 : JumpSlot; airTakeoff = TakeoffFrame;
+            airApex = running ? 19 : ApexFrame; airTouchdown = running ? 33 : TouchdownFrame;
+            airLast = running ? 46 : LastJumpFrame;
+        }
     }
 }
