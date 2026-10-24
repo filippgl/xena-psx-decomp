@@ -15,6 +15,10 @@ namespace Xena.Assets
         private float clock, time;
         private int slot = -1;
         private int firstAction, secondAction, reservedSlot = -1, reservedFrame;
+        private int heldEvade;
+        private Vector3 evadeVelocity;
+        public bool IsEvading => slot == 0x28 || slot == 0x29 || slot == 0x2a;
+        public Vector3 EvasionVelocity => IsEvading ? evadeVelocity : Vector3.zero;
         public bool Busy => slot >= 0;
         public bool IsBlocking => slot == 0x80;
         public int Slot => slot;
@@ -39,7 +43,8 @@ namespace Xena.Assets
             switch (value) { case 0x51: return 15; case 0x52: return 20; case 0x3a: return 23;
                 case 0x61: return 18; case 0x62: return 31; case 0x5a: return 22;
                 case 0x57: return 6; case 0x56: return 3; case 0x4f: return 40;
-                case 0x55: return 23; case 0x53: return 25; default: return 0; }
+                case 0x55: return 23; case 0x53: return 25;
+                case 0x28: return 24; case 0x29: return 25; case 0x2a: return 38; default: return 0; }
         }
         private int Follow(int action)
         {
@@ -69,14 +74,33 @@ namespace Xena.Assets
         {
             slot = -1; time = 0; clock = 0; buffer.Clear(); struck.Clear(); input.ClearPending();
             ClearChain();
+            heldEvade = 0; evadeVelocity = Vector3.zero;
             Health = 100; BlockedHits = 0; if (Target != null) Target.ResetTarget();
         }
-        public void Tick(float dt, bool grounded)
+        public void Tick(float dt, bool grounded, float cameraYaw)
         {
             clock += dt;
             int action = input.ConsumeAttack();
+            Vector3 requested = Quaternion.Euler(0, cameraYaw, 0) * new Vector3(input.Move.x, 0, input.Move.y);
+            Vector3 local = transform.InverseTransformDirection(requested);
+            int evade = !input.Block || requested.sqrMagnitude < 0.25f ? 0
+                : Mathf.Abs(local.x) > Mathf.Abs(local.z) ? (local.x < 0 ? 0x28 : 0x29) : local.z < -0.5f ? 0x2a : 0;
+            bool evadePressed = evade != 0 && evade != heldEvade; heldEvade = evade;
             while (buffer.Count > 0 && buffer.Peek().expires < clock) buffer.Dequeue();
             if (!grounded) { slot = -1; buffer.Clear(); ClearChain(); return; }
+            if (evadePressed && (slot < 0 || IsBlocking))
+            {
+                buffer.Clear(); ClearChain(); Begin(evade);
+                // Original clips/durations; displacement is provisional motor tuning.
+                evadeVelocity = evade == 0x2a ? -transform.forward * (4f / (38f / 30))
+                    : transform.right * (evade == 0x28 ? -1 : 1) * (2.35f / (Frames(evade) / 30f));
+            }
+            if (IsEvading)
+            {
+                buffer.Clear();
+                if (Frame < Frames(slot)) { time += dt; return; }
+                slot = -1; time = 0;
+            }
             if (input.Block)
             {
                 buffer.Clear(); // Never release a queued attack after a held guard.
@@ -129,7 +153,7 @@ namespace Xena.Assets
                 visual.SampleSlotFrame(slot, Mathf.Min(Frame, Frames(slot) - 1));
                 // These contact frames/radii affect only the practice target.
                 int contact = slot == 0x51 ? 5 : slot == 0x61 ? 6 : Frames(slot) / 2;
-                if (slot != 0x56 && slot != 0x57 && Frame >= contact && Frame <= contact + 2) StrikePracticeTargets();
+                if (!IsEvading && slot != 0x56 && slot != 0x57 && Frame >= contact && Frame <= contact + 2) StrikePracticeTargets();
             }
             return true;
         }

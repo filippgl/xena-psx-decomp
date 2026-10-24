@@ -52,14 +52,15 @@ namespace Xena.Assets
             if (input.Paused) return;
             float dt = Time.fixedDeltaTime;
             bool wasGrounded = Grounded;
-            combat.Tick(dt, Grounded);
+            combat.Tick(dt, Grounded, orbit.Yaw);
             Vector2 controls = input.Move;
             Vector3 motion = Quaternion.Euler(0, orbit.Yaw, 0) * new Vector3(controls.x, 0, controls.y);
             if (combat.Busy) motion = Vector3.zero;
             if (motion.sqrMagnitude > 0.0001f) transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(motion), 720 * dt);
             if (input.ConsumeJump() && Grounded && !combat.Busy) { vertical = jumpSpeed; Grounded = false; landingTime = -1; }
             vertical -= gravity * dt;
-            CollisionFlags collision = controller.Move((motion * (input.Sprint ? runSpeed : walkSpeed) + Vector3.up * vertical) * dt);
+            Vector3 horizontal = combat.IsEvading ? combat.EvasionVelocity : motion * (input.Sprint ? runSpeed : walkSpeed);
+            CollisionFlags collision = controller.Move((horizontal + Vector3.up * vertical) * dt);
             if ((collision & CollisionFlags.Above) != 0 && vertical > 0) vertical = 0;
             float floor = Floor(transform.position);
             if (vertical <= 0 && !float.IsNegativeInfinity(floor) && transform.position.y <= floor + 0.08f && floor - transform.position.y < 0.4f)

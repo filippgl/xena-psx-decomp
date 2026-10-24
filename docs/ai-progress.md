@@ -5,6 +5,15 @@ One issue per task. Nothing here is a claim without the command/measurement that
 
 ## Current task — Unity combat and original collision audit (2026-10-24)
 
+- DEFENSIVE ACROBATICS implemented/verified: block+body-relativedirection uses
+  native28left24frames/29right25/2Aback38. Motor capsule displacement provisional
+  2.35m side/4mback, facing held, no practice attack or invented invulnerability.
+  Held direction single trigger, finishes onrelease, returns heldguard, Rclears.
+  Real Windows combat38checks PASS inclleft/right/back180deg-relative/wall/reset/
+  gamepad, DLL2026-10-24T03:23:25.148Z SHA4e73f92f3fd65af9f095935979c3155cd35aaed9cddded076b69cbdb73a13db1.
+  Runfix alreadyfd68557. Next Qaim/LMBchakram original64throw/65catch and projectile,
+  mouse steering/camera/return, then final regression and package. User asked all3.
+
 - USER PRIORITY Oct24: sprint is walking, chakram absent, block+cartwheel absent.
   Root cause CONFIRMED:15isWALK, notrun! ControlledUP+L1 uses1A20frames,stop1F5.
   New capture_action_reference/verify_action_reference movement141snapshots27072
