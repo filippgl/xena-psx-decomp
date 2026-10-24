@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import './prepare_movement_input.mjs';
+import './export_chakram_unity.mjs';
 const source=JSON.parse(fs.readFileSync('build/level-assets/01/collision-source.json'));
 const vertices=[];
 for(const group of source.groups){

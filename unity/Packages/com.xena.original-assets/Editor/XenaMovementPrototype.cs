@@ -17,7 +17,7 @@ namespace Xena.Assets.Editor
         [Serializable] private sealed class Report
         {
             public string result = "FAIL", error, unityVersion, scene, executable;
-            public int terrainTriangles, originalCollisionTriangles, inputActions;
+            public int terrainTriangles, originalCollisionTriangles, inputActions, chakramMeshes, chakramTriangles;
             public ulong bytes;
             public string scope = "Movement prototype using original assets/terrain, approximate capsule collision and tuning; no combat/AI parity.";
         }
@@ -94,11 +94,19 @@ namespace Xena.Assets.Editor
             {
                 AssetDatabase.ImportAsset(XenaImportVerification.ModelPath, ImportAssetOptions.ForceSynchronousImport);
                 AssetDatabase.ImportAsset("Assets/Imported/Level01/Level01.xenamodel", ImportAssetOptions.ForceSynchronousImport);
+                const string chakramPath = "Assets/Imported/Resources/Chakram/Chakram.xenamodel";
+                AssetDatabase.ImportAsset(chakramPath, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
+                var chakramPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(chakramPath);
+                if (chakramPrefab == null) throw new InvalidDataException("Standalone original chakram failed import");
+                var chakramGeometry = chakramPrefab.GetComponentsInChildren<MeshFilter>(true);
+                report.chakramMeshes = chakramGeometry.Length;
+                report.chakramTriangles = chakramGeometry.Sum(filter => filter.sharedMesh.triangles.Length / 3);
+                if (report.chakramMeshes != 2 || report.chakramTriangles != 46) throw new InvalidDataException("Standalone chakram geometry differs");
                 CreateScene();
                 report.terrainTriangles = GameObject.Find("OriginalLevel01").GetComponentsInChildren<MeshCollider>().Single().sharedMesh.triangles.Length / 3;
                 report.originalCollisionTriangles = GameObject.Find("OriginalCLSWalls").GetComponent<MeshCollider>().sharedMesh.triangles.Length / 6;
                 report.inputActions = AssetDatabase.LoadAssetAtPath<InputActionAsset>("Packages/com.xena.original-assets/Input/XenaPrototype.inputactions").actionMaps[0].actions.Count;
-                if (report.terrainTriangles != 2290 || report.originalCollisionTriangles != 119 || report.inputActions != 12) throw new InvalidDataException("Prototype scene totals differ");
+                if (report.terrainTriangles != 2290 || report.originalCollisionTriangles != 119 || report.inputActions != 13) throw new InvalidDataException("Prototype scene totals differ");
                 if (Environment.GetCommandLineArgs().Contains("--build-movement"))
                 {
                     report.executable = Path.GetFullPath(Path.Combine(Output, "../unity-movement/XenaMovementPrototype.exe"));

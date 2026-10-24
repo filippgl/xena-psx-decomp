@@ -13,7 +13,7 @@ const stages = [
 if (fs.existsSync('build/xena-upscale/xena-atlas-ai-v1.png')) stages.push(['tools/apply_xena_upscale.mjs']);
 stages.push(['tools/export_xena_gltf.mjs']);
 if (fs.existsSync('build/xena-upscale/xena-atlas-ai-v1.png')) stages.push(['tools/verify_xena_gltf.mjs']);
-if (process.argv.includes('--unity')) stages.push(['tools/export_xena_unity.mjs'], ['tools/prepare_unity_project.mjs'], ['tools/check_unity_assets.mjs']);
+if (process.argv.includes('--unity')) stages.push(['tools/export_xena_unity.mjs'], ['tools/export_chakram_unity.mjs'], ['tools/prepare_unity_project.mjs'], ['tools/check_unity_assets.mjs']);
 if (process.argv.includes('--native-reference')) stages.push(['tools/capture_xena_reference.mjs'], ['tools/verify_xena_reference.mjs']);
 if (process.argv.includes('--browser')) stages.push(['tools/check_xena_preview.mjs']);
 for (const args of stages) {

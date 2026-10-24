@@ -14,6 +14,7 @@ namespace Xena.Assets
         private Vector3 smoothFocus, focusVelocity;
         private bool initialized;
         private PrototypeCombat combat;
+        private PrototypeChakram chakram;
         public float Yaw => yaw;
         public float Pitch => pitch;
         public float DistanceToTarget { get; private set; }
@@ -27,25 +28,31 @@ namespace Xena.Assets
                 if (input.CenterCameraPressed) yaw = target.eulerAngles.y;
                 input.Preferences.Data.cameraDistance = Mathf.Clamp(DesiredDistance - input.Zoom * 0.01f, 2, 7);
             }
-            Vector3 desiredFocus = target.position + Vector3.up * 1.1f;
+            if (chakram == null) chakram = target.GetComponent<PrototypeChakram>();
+            bool flightCamera = chakram != null && chakram.Flying;
+            Vector3 desiredFocus = flightCamera ? chakram.ProjectilePosition : target.position + Vector3.up * 1.1f;
             if (!initialized || Vector3.Distance(smoothFocus, desiredFocus) > 8)
             { smoothFocus = desiredFocus; focusVelocity = Vector3.zero; initialized = true; }
             else smoothFocus = Vector3.SmoothDamp(smoothFocus, desiredFocus, ref focusVelocity, 0.08f);
             Vector3 focus = smoothFocus;
             Vector3 back = Quaternion.Euler(pitch, yaw, 0) * Vector3.back;
-            float radius = DesiredDistance;
+            float radius = flightCamera ? 1.8f : DesiredDistance;
             if (Physics.SphereCast(focus, 0.18f, back, out RaycastHit hit, radius, ~(1 << 2), QueryTriggerInteraction.Ignore)) radius = Mathf.Max(0.35f, hit.distance - 0.12f);
             transform.position = focus + back * radius; transform.LookAt(focus); DistanceToTarget = radius;
         }
         private void OnGUI()
         {
             if (combat == null) combat = target.GetComponent<PrototypeCombat>();
-            GUILayout.BeginArea(new Rect(16, 16, input.Paused ? 520 : 470, input.Paused ? Mathf.Min(Screen.height - 32, 690) : 175), GUI.skin.box);
+            if (chakram != null && chakram.Active && !input.Paused)
+                GUI.Label(new Rect(Screen.width / 2 - 8, Screen.height / 2 - 12, 24, 30), "+");
+            GUILayout.BeginArea(new Rect(16, 16, input.Paused ? 520 : 560, input.Paused ? Mathf.Min(Screen.height - 32, 690) : 220), GUI.skin.box);
             GUILayout.Label("Xena — movement & combat prototype");
             GUILayout.Label(input.BindingLabel("Forward") + "/" + input.BindingLabel("Left") + "/" + input.BindingLabel("Back") + "/" + input.BindingLabel("Right") + " move · " + input.BindingLabel("Sprint") + " run · " + input.BindingLabel("Jump") + " jump · Esc pause");
             GUILayout.Label("Gamepad: sticks · L3 run · A jump · Start pause");
             GUILayout.Label(input.BindingLabel("Sword") + " sword · " + input.BindingLabel("Kick") + " kick · hold " + input.BindingLabel("Block") + " block");
             GUILayout.Label("Gamepad: X sword · Y kick · LB block");
+            GUILayout.Label("Hold block + direction: cartwheel / backward handspring");
+            GUILayout.Label("Hold " + input.BindingLabel("Chakram") + " / RB aim · sword button throws · release aim recalls");
             GUILayout.Label("Wheel zoom · " + input.BindingLabel("CenterCamera") + " / R3 center camera");
             if (combat != null) GUILayout.Label("Health: " + combat.Health + " | " + input.BindingLabel("Reset") + " resets you and the dummy");
             if (input.Paused)

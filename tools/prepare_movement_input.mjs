@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 const guid = name => { const h = crypto.createHash('md5').update('xena-movement-v1:' + name).digest('hex'); return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`; };
-const actions = ['Move', 'LookMouse', 'LookStick', 'Sprint', 'Jump', 'Pause', 'Reset', 'Sword', 'Kick', 'Block', 'CenterCamera', 'Zoom'].map(name => ({ name, id: guid(name),
+const actions = ['Move', 'LookMouse', 'LookStick', 'Sprint', 'Jump', 'Pause', 'Reset', 'Sword', 'Kick', 'Block', 'CenterCamera', 'Zoom', 'Chakram'].map(name => ({ name, id: guid(name),
   type: ['Move','LookMouse','LookStick','Zoom'].includes(name) ? 'Value' : 'Button', expectedControlType: name === 'Zoom' ? 'Axis' : ['Move','LookMouse','LookStick'].includes(name) ? 'Vector2' : 'Button',
   processors: '', interactions: '', initialStateCheck: true }));
 const bindings = [];
@@ -14,6 +14,7 @@ for (const [action,path] of [['Sword','<Mouse>/leftButton'],['Kick','<Keyboard>/
 for (const [action,path] of [['Sword','buttonWest'],['Kick','buttonNorth'],['Block','leftShoulder']]) bind(action,'<Gamepad>/'+path,'Gamepad');
 bind('CenterCamera','<Keyboard>/c','KeyboardMouse'); bind('CenterCamera','<Gamepad>/rightStickPress','Gamepad');
 bind('Zoom','<Mouse>/scroll/y','KeyboardMouse');
+bind('Chakram','<Keyboard>/q','KeyboardMouse'); bind('Chakram','<Gamepad>/rightShoulder','Gamepad');
 fs.mkdirSync('unity/Packages/com.xena.original-assets/Input',{recursive:true});
 fs.writeFileSync('unity/Packages/com.xena.original-assets/Input/XenaPrototype.inputactions',JSON.stringify({name:'XenaPrototype',maps:[{name:'Player',id:guid('Player'),actions,bindings}],controlSchemes:[]},null,2)+'\n');
 for (const project of ['XenaUnity','XenaLightingVerification']) {

@@ -5,6 +5,34 @@ One issue per task. Nothing here is a claim without the command/measurement that
 
 ## Current task — Unity combat and original collision audit (2026-10-24)
 
+- FINAL USER FIX BATCH COMPLETE: fd68557 distinct native run1A20frames +stop1F5
+  replaces acceleratedwalk15; 06b7ad5 block+direction originalcartwheel28/29 and
+  backwardhandspring2A. Q/RBaim +LMB/gamepadWest throw, mouse/rightsticksteering,
+  releaseaim recalls, native64throw21/65catch19. Full flight is PROVISIONAL
+ 14m/s out/20return/150deg steering/2.2s outbound cap; notnativephysicsparity.
+- Standalone CHAKRAM.TMD/SMI/STM exported viaexport_chakram_unity:2meshes39source
+  vertices46triangles1palettepage135UVcorners validated, hashesinreport. Handmesh32
+  firstprobe includedfingers, REPLACED bystandalone. Firststandaloneexportfailed
+  onerootvalidator; addedroot and mandatoryEditorbuild resourceimport+2/46check.
+  That failedWindowschakram run is not counted asPASS. Finalassetsverifiedbelow.
+- FINAL Windows93checks PASS:26movement/38combat/14settings/15chakram. Allafter
+  finalresourcebuild, sixplayerlogs checkednoexceptions; check_prototype_reports.mjs
+  rejects stale reports after either code or Resources assetbuild changes.
+  Executable build/unity-movement/XenaMovementPrototype.exe, finalbytes128706692.
+  DLL2026-10-24T03:32:21.830Z SHA05ed82ad24e22f35e1db50e9dca07284fc005277fe92b8356475fd38d4a36986;
+  resources.assets2026-10-24T03:34:30.162Z SHAb562705e38669ad824fd91d5ac1be1a211a49e968db8e23790468472fe07a055.
+  actions-final-verification.json recordsboth. Nativecaptures465snapshots89280pose
+  componentsPASS totalmovement/defense/chakram. Screenshotrun/cartwheel/cleanring
+  visuallyinspected1280x720; newHUD instructions allvisible.
+- MainlivePipeline7checksPASS:81clips,113motorTicks,chakramReady2meshes46tris,
+  advancingPlay,capture,no consoleerrors/warnings. OwnEditor43240 gracefullyCLOSED.
+  13actions/12rebindrows. Mainproject+private use sharedruntime andoriginalresource.
+  Archives readverifiedWindows189files40582104bytes,Unity249files17343503bytes.
+  Native/user edits/stagedrename preserved. No disk/sourceasset forcedintoGit.
+- Next user-gameplay work: originalchakram flight/ricochet/eventsalgorithm; remaining
+  runningroll/frontflip/attackandblockattackvariants; originalhitactivation/volumes.
+  EnemyAI/events/saves/completelevel stillpending; do not claimalloriginalmoves done.
+
 - DEFENSIVE ACROBATICS implemented/verified: block+body-relativedirection uses
   native28left24frames/29right25/2Aback38. Motor capsule displacement provisional
   2.35m side/4mback, facing held, no practice attack or invented invulnerability.

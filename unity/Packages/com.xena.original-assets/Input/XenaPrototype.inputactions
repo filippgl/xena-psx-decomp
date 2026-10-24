@@ -112,6 +112,15 @@
           "processors": "",
           "interactions": "",
           "initialStateCheck": true
+        },
+        {
+          "name": "Chakram",
+          "id": "5dcda304-fcdb-2636-0a18-ed812a0eaf93",
+          "type": "Button",
+          "expectedControlType": "Button",
+          "processors": "",
+          "interactions": "",
+          "initialStateCheck": true
         }
       ],
       "bindings": [
@@ -387,6 +396,28 @@
           "processors": "",
           "groups": "KeyboardMouse",
           "action": "Zoom",
+          "isComposite": false,
+          "isPartOfComposite": false
+        },
+        {
+          "name": "",
+          "id": "515565f7-bb17-4336-786b-ebfaefb0023c",
+          "path": "<Keyboard>/q",
+          "interactions": "",
+          "processors": "",
+          "groups": "KeyboardMouse",
+          "action": "Chakram",
+          "isComposite": false,
+          "isPartOfComposite": false
+        },
+        {
+          "name": "",
+          "id": "dd6c2ae6-ed62-1bbd-310a-29d373f2b17b",
+          "path": "<Gamepad>/rightShoulder",
+          "interactions": "",
+          "processors": "",
+          "groups": "Gamepad",
+          "action": "Chakram",
           "isComposite": false,
           "isPartOfComposite": false
         }
