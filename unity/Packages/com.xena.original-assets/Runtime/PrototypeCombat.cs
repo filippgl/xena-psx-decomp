@@ -14,6 +14,7 @@ namespace Xena.Assets
         private PrototypeMotor motor;
         private float clock, time;
         private int slot = -1;
+        private int firstAction, secondAction, reservedSlot = -1, reservedFrame;
         public bool Busy => slot >= 0;
         public bool IsBlocking => slot == 0x80;
         public int Slot => slot;
@@ -36,22 +37,38 @@ namespace Xena.Assets
         private static int Frames(int value)
         {
             switch (value) { case 0x51: return 15; case 0x52: return 20; case 0x3a: return 23;
-                case 0x61: return 18; case 0x62: return 31; case 0x5a: return 22; default: return 0; }
+                case 0x61: return 18; case 0x62: return 31; case 0x5a: return 22;
+                case 0x57: return 6; case 0x56: return 3; case 0x4f: return 40;
+                case 0x55: return 23; case 0x53: return 25; default: return 0; }
         }
-        private static int Follow(int value, int action)
+        private int Follow(int action)
         {
-            if (action == 1) { if (value == 0x51) return 0x52; if (value == 0x52) return 0x3a; }
-            if (action == 2) { if (value == 0x61) return 0x62; if (value == 0x62) return 0x5a; }
+            if (secondAction == 0)
+            {
+                if (slot == 0x51) return action == 1 ? 0x52 : 0x57;
+                if (slot == 0x61) return action == 2 ? 0x62 : 0x56;
+            }
+            if (slot == 0x52 && action == 1) return firstAction == 1 ? 0x3a : 0x53;
+            if (slot == 0x62)
+            {
+                if (firstAction == 2) return action == 2 ? 0x5a : 0x55;
+                if (action == 1) return 0x4f;
+            }
             return -1;
         }
-        private static int ChainFrame(int value)
+        private int ChainFrame(int next)
         {
-            switch (value) { case 0x51: case 0x52: return 10; case 0x61: return 9; case 0x62: return 22; default: return int.MaxValue; }
+            switch (slot) { case 0x51: case 0x52: return 10;
+                case 0x61: return next == 0x56 ? 11 : 9;
+                case 0x62: return next == 0x4f ? 31 : next == 0x55 ? 19 : 22;
+                default: return int.MaxValue; }
         }
-        private void Begin(int value) { slot = value; time = 0; struck.Clear(); }
+        private void Begin(int value, int frame = 0) { slot = value; time = frame / 30f; struck.Clear(); }
+        private void ClearChain() { firstAction = secondAction = 0; reservedSlot = -1; }
         public void ResetState()
         {
             slot = -1; time = 0; clock = 0; buffer.Clear(); struck.Clear(); input.ClearPending();
+            ClearChain();
             Health = 100; BlockedHits = 0; if (Target != null) Target.ResetTarget();
         }
         public void Tick(float dt, bool grounded)
@@ -59,10 +76,11 @@ namespace Xena.Assets
             clock += dt;
             int action = input.ConsumeAttack();
             while (buffer.Count > 0 && buffer.Peek().expires < clock) buffer.Dequeue();
-            if (!grounded) { slot = -1; buffer.Clear(); return; }
+            if (!grounded) { slot = -1; buffer.Clear(); ClearChain(); return; }
             if (input.Block)
             {
                 buffer.Clear(); // Never release a queued attack after a held guard.
+                reservedSlot = -1;
                 if (slot < 0) Begin(0x80);
             }
             else
@@ -72,14 +90,33 @@ namespace Xena.Assets
             }
             if (!IsBlocking && slot >= 0)
             {
-                int follow = buffer.Count == 0 ? -1 : Follow(slot, buffer.Peek().action);
-                if (follow >= 0 && Frame >= ChainFrame(slot)) { buffer.Dequeue(); Begin(follow); }
-                else if (Frame >= Frames(slot)) { slot = -1; time = 0; }
+                // A recognized native combo request stays reserved through the current
+                // animation; expiry only applies to input that has not been accepted.
+                if (reservedSlot < 0 && buffer.Count > 0)
+                {
+                    int follow = Follow(buffer.Peek().action);
+                    if (follow >= 0)
+                    {
+                        int accepted = buffer.Dequeue().action;
+                        reservedSlot = follow; reservedFrame = ChainFrame(follow);
+                        if (secondAction == 0) secondAction = accepted;
+                    }
+                }
+                if (reservedSlot >= 0 && Frame >= reservedFrame)
+                { int next = reservedSlot; reservedSlot = -1; Begin(next); }
+                else if (Frame >= Frames(slot))
+                {
+                    // The original bridges replace the first poses of the next clip.
+                    if (slot == 0x57) Begin(0x62, 5);
+                    else if (slot == 0x56) Begin(0x52, 2);
+                    else { slot = -1; time = 0; ClearChain(); }
+                }
             }
             if (slot < 0)
             {
                 if (input.Block) Begin(0x80);
-                else if (buffer.Count > 0) Begin(buffer.Dequeue().action == 1 ? 0x51 : 0x61);
+                else if (buffer.Count > 0)
+                { ClearChain(); firstAction = buffer.Dequeue().action; Begin(firstAction == 1 ? 0x51 : 0x61); }
             }
             if (Busy) time += dt;
         }
@@ -92,7 +129,7 @@ namespace Xena.Assets
                 visual.SampleSlotFrame(slot, Mathf.Min(Frame, Frames(slot) - 1));
                 // These contact frames/radii affect only the practice target.
                 int contact = slot == 0x51 ? 5 : slot == 0x61 ? 6 : Frames(slot) / 2;
-                if (Frame >= contact && Frame <= contact + 2) StrikePracticeTargets();
+                if (slot != 0x56 && slot != 0x57 && Frame >= contact && Frame <= contact + 2) StrikePracticeTargets();
             }
             return true;
         }

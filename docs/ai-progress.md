@@ -5,6 +5,16 @@ One issue per task. Nothing here is a claim without the command/measurement that
 
 ## Current task — Unity repair and first level audit (2026-10-23)
 
+- LATEST: mixed combat now PLAYABLE. Native-confirmed SKS51-57-62(resume5)-4F,
+  KKS61-62-55 and KSS61-56-52(resume2)-53. Bridges cause no practice contact.
+  Recognized follow-up reserved beyond generic0.65s expiry; unrecognized input
+  still expires. Pause/guard/reset retained. Windows71 checks PASS(31combat,
+  26movement,14settings), same SHA586a4769c2be67e80691f5ba9b959bf573210f5b45a20f455eb5eec78e0d3baf,
+  DLL2026-10-24T02:44:50.428Z. Build128324590bytes,0errors. combat-mixed.png
+  inspected1280x720. Main live Pipeline6checks PASS,81clips/advancing111motorTicks/
+  zero console errors; own Editor45472 open for next verification, stopped Play.
+  Next checkpoint runtime, complete anchor audit/report/package; no native edits.
+
 - IN PROGRESS: mixed combat audit checkpoint. Baseline Windows combat24 PASS,
   codeSHA8e4e53c0.../DLL2026-10-23T19:53:04.625Z. New native --mixed scenario
   234RAM snapshots/44928pose components PASS. Confirmed SKS51-57-62(resume5)-4F,

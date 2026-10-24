@@ -104,6 +104,50 @@ namespace Xena.Assets
             yield return Ticks(8); yield return Tap(2); yield return Slot(0x5a); yield return Idle();
             report.kickComboHits = combat.Target.Hits;
             Require(combat.Target.Hits == 3 && combat.Target.Health == 55, "Kick triple did not hit once per61/62/5A"); report.checks.Add("buffered original kick chain61-62-5A");
+
+            motor.ResetToSpawn(); PlaceTarget(1.05f);
+            yield return Tap(1); yield return Tap(2); yield return Slot(0x57);
+            Require(visual.CurrentSlot == 0x57, "Sword-kick bridge pose missing");
+            int beforeBridgeHits = combat.Target.Hits;
+            yield return Slot(0x62);
+            Require(combat.Frame == 5 && visual.CurrentFrame == 5, "Sword-kick did not resume62 at native frame5");
+            Require(combat.Target.Hits == beforeBridgeHits, "Bridge generated an extra practice hit");
+            report.checks.Add("sword-kick bridge57 resumes62 at frame5 without extra contact");
+            yield return Tap(1); yield return Ticks(40);
+            Require(combat.Slot == 0x62, "Mixed finisher interrupted62 too early");
+            yield return Slot(0x4f); yield return new WaitForEndOfFrame(); Capture("combat-mixed.png");
+            yield return Idle();
+            Require(combat.Target.Hits == 3 && combat.Target.Health == 45, "Sword-kick-sword finisher missing or duplicated");
+            report.checks.Add("sword-kick-sword51-57-62-4F keeps accepted finisher beyond input expiry");
+
+            motor.ResetToSpawn(); PlaceTarget(1.05f);
+            yield return Tap(2); yield return Tap(2); yield return Slot(0x62);
+            yield return Tap(1); yield return Slot(0x55);
+            Require(visual.CurrentSlot == 0x55, "Kick-kick-sword finisher pose missing"); yield return Idle();
+            Require(combat.Target.Hits == 3 && combat.Target.Health == 50, "Kick-kick-sword contacts differ");
+            report.checks.Add("kick-kick-sword61-62-55 uses original distinct finisher");
+
+            motor.ResetToSpawn(); PlaceTarget(1.05f);
+            yield return Tap(2); yield return Tap(1); yield return Slot(0x56);
+            Require(visual.CurrentSlot == 0x56, "Kick-sword bridge pose missing");
+            yield return Slot(0x52);
+            Require(combat.Frame == 2 && visual.CurrentFrame == 2, "Kick-sword did not resume52 at native frame2");
+            report.checks.Add("kick-sword bridge56 resumes52 at frame2");
+            yield return Tap(1); yield return Slot(0x53); yield return Idle();
+            Require(combat.Target.Hits == 3 && combat.Target.Health == 45, "Kick-sword-sword contacts differ");
+            report.checks.Add("kick-sword-sword61-56-52-53 uses original distinct finisher");
+
+            motor.ResetToSpawn(); PlaceTarget(1.05f);
+            yield return Tap(1); yield return Tap(2); yield return Slot(0x57);
+            yield return Idle(); yield return Ticks(4);
+            Require(combat.Target.Hits == 2 && combat.Target.Health == 65 && !combat.Busy, "Two-action mixed series invented a third attack");
+            report.checks.Add("sword-kick pair recovers without an unrequested finisher");
+
+            motor.ResetToSpawn(); PlaceTarget(1.05f);
+            yield return Tap(1); yield return Tap(2); yield return Slot(0x57);
+            motor.ResetToSpawn(); PlaceTarget(1.05f); yield return Ticks(90);
+            Require(!combat.Busy && combat.Target.Hits == 0, "Reset during bridge retained a chain or contact");
+            report.checks.Add("reset during mixed bridge cancels animation and reserved chain");
             motor.ResetToSpawn(); PlaceTarget(1.05f);
             InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 1 }); yield return Ticks(80);
             Require(combat.Target.Hits == 1 && !combat.Busy, "Held mouse generated repeated attacks"); report.checks.Add("holding attack does not auto-repeat"); Release(); yield return Ticks(2);
