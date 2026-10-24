@@ -34,7 +34,9 @@ One issue per task. Nothing here is a claim without the command/measurement that
   ActualWindows build/unity-movement/XenaMovementPrototype.exe128765523bytes.
   Finalviewportwidth.313356,closecamera.828734m; novertexnearclip.
   MainPipeline7PASS/113motorTicks/81clips/2meshes46tris/0errorswarnings;
-  ownEditor42304 usedafterearlier39396closed; close42304beforeend. UserHub/CLIkept.
+  ownEditors42304/39396 gracefullyCLOSED. UserHub/CLIkept.
+  Checkpoint01ff16e. WindowsZIP200files41914642bytes,UnityZIP277files19133587bytes;
+  both archive-read verified and packagedDLLmatches finaltestedSHA.
   NEXTpending:originalBanditimport andbicycleeligibilityaudit below; noclaimported.
 
 - USER-STEERED CAMERA/ACROBATICS/CHAKRAM FIX COMPLETE (24Oct20:32MSK build):
