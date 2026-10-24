@@ -38,6 +38,7 @@ namespace Xena.Assets
             visual.SetUpscale(true); visual.enabled = false;
             combat = GetComponent<PrototypeCombat>(); if (combat == null) combat = gameObject.AddComponent<PrototypeCombat>();
             chakram = GetComponent<PrototypeChakram>(); if (chakram == null) chakram = gameObject.AddComponent<PrototypeChakram>();
+            if (GetComponent<PrototypeGraphics>() == null) gameObject.AddComponent<PrototypeGraphics>();
         }
         private void Start() { ResetToSpawn(); }
         public void ResetToSpawn()

@@ -65,6 +65,7 @@ if ($Package -in @('All', 'Unity')) {
     Add-FileEntry $entries 'docs/xena-combat-anchors.md' 'Documentation/xena-combat-anchors.md'
     Add-FileEntry $entries 'docs/xena-defense-audit.md' 'Documentation/xena-defense-audit.md'
     Add-FileEntry $entries 'docs/xena-chakram-prototype.md' 'Documentation/xena-chakram-prototype.md'
+    Add-FileEntry $entries 'docs/visual-modes.md' 'Documentation/visual-modes.md'
     Add-FileEntry $entries 'docs/xena-special-moves.md' 'Documentation/xena-special-moves.md'
     Add-FileEntry $entries 'docs/xena-advanced-moves.md' 'Documentation/xena-advanced-moves.md'
     Add-FileEntry $entries 'build/unity-import/advanced-moves-player-verification.json' 'Verification/advanced-moves-player-verification.json'
@@ -73,6 +74,8 @@ if ($Package -in @('All', 'Unity')) {
     Add-FileEntry $entries 'build/unity-import/chakram-export.json' 'Verification/chakram-export.json'
     Add-FileEntry $entries 'build/unity-import/actions-final-verification.json' 'Verification/actions-final-verification.json'
     Add-FileEntry $entries 'build/unity-import/chakram-flight.png' 'Verification/chakram-flight.png'
+    Add-FileEntry $entries 'build/unity-import/chakram-close-flight.png' 'Verification/chakram-close-flight.png'
+    Add-FileEntry $entries 'build/unity-import/chakram-impact-sparks.png' 'Verification/chakram-impact-sparks.png'
     foreach ($action in @('movement', 'defense', 'chakram', 'running', 'guardattacks', 'spin', 'directional-classic')) {
         Add-FileEntry $entries "build/action-reference-$action/verification.json" "Verification/native-$action-actions.json"
     }
@@ -113,6 +116,8 @@ if ($Package -in @('All', 'Unity')) {
 }
 if ($Package -in @('All', 'Movement')) {
     $entries = [System.Collections.Generic.List[object]]::new()
+    Add-FileEntry $entries 'build/unity-import/chakram-close-flight.png' 'Verification/chakram-close-flight.png'
+    Add-FileEntry $entries 'build/unity-import/chakram-impact-sparks.png' 'Verification/chakram-impact-sparks.png'
     Add-FolderEntries $entries 'build/unity-movement' 'XenaMovementPrototype'
     Add-FileEntry $entries 'docs/movement-prototype.md' 'README.md'
     Add-FileEntry $entries 'docs/xena-jump-audit.md' 'Verification/xena-jump-audit.md'
@@ -121,6 +126,7 @@ if ($Package -in @('All', 'Movement')) {
     Add-FileEntry $entries 'docs/xena-combat-anchors.md' 'Verification/xena-combat-anchors.md'
     Add-FileEntry $entries 'docs/xena-defense-audit.md' 'Verification/xena-defense-audit.md'
     Add-FileEntry $entries 'docs/xena-chakram-prototype.md' 'Verification/xena-chakram-prototype.md'
+    Add-FileEntry $entries 'docs/visual-modes.md' 'Verification/visual-modes.md'
     Add-FileEntry $entries 'docs/xena-special-moves.md' 'Verification/xena-special-moves.md'
     Add-FileEntry $entries 'docs/xena-advanced-moves.md' 'Verification/xena-advanced-moves.md'
     Add-FileEntry $entries 'build/unity-import/advanced-moves-player-verification.json' 'Verification/advanced-moves-player-verification.json'

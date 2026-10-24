@@ -69,7 +69,9 @@ namespace Xena.Assets
                 yield return Bind("Forward", Key.I);
                 Require(input.BindingPath("Forward") == "<Keyboard>/i", "WASD composite part did not rebind"); report.checks.Add("movement composite part rebind");
                 input.Preferences.Data.mouseSensitivity = 0.23f; input.Preferences.Data.invertY = true; input.Preferences.Data.cameraDistance = 5;
+                motor.GetComponent<PrototypeGraphics>().SetMode(XenaVisualMode.Original);
                 Require(input.SaveSettings() && File.Exists(input.Preferences.FilePath), "Settings were not written"); report.checks.Add("camera and bindings saved to isolated file");
+                Require(input.Preferences.Data.originalGraphics, "Original graphics preference missing"); report.checks.Add("graphics mode saved to isolated preferences");
                 yield return new WaitForEndOfFrame();
                 Texture2D picture = ScreenCapture.CaptureScreenshotAsTexture(); File.WriteAllBytes(Path.Combine(output, "settings-menu.png"), picture.EncodeToPNG()); Destroy(picture);
                 yield return Pause(false);
@@ -84,6 +86,7 @@ namespace Xena.Assets
                 Require(input.BindingPath("Jump") == "<Keyboard>/k" && input.BindingPath("Forward") == "<Keyboard>/i" && input.BindingPath("Sword") == "<Mouse>/middleButton", "Binding overrides did not survive restart");
                 Require(Mathf.Abs(orbit.Sensitivity - 0.23f) < 0.001f && orbit.InvertY, "Camera settings did not survive restart"); report.checks.Add("new process loads camera settings and binding overrides");
                 Require(Mathf.Abs(orbit.DesiredDistance - 5) < 0.001f, "Camera distance did not survive restart"); report.checks.Add("camera zoom distance survives restart");
+                Require(motor.GetComponent<PrototypeGraphics>().Mode == XenaVisualMode.Original && !motor.GetComponentInChildren<XenaAssetPreview>().UsingUpscale, "Original graphics mode did not survive restart"); report.checks.Add("new process restores actual Original graphics materials");
                 float pitch = orbit.Pitch;
                 InputSystem.QueueStateEvent(mouse, new MouseState { delta = new Vector2(0, 50) }); yield return Frames();
                 Require(orbit.Pitch > pitch + 5, "Loaded inversion did not change actual camera direction"); report.checks.Add("loaded inversion affects mouse camera");
@@ -99,6 +102,7 @@ namespace Xena.Assets
                 Require(!motor.Grounded && motor.transform.position.y > y + 0.2f, "Loaded K binding did not jump"); report.checks.Add("loaded jump binding works and original key is inactive");
                 InputSystem.QueueStateEvent(keyboard, new KeyboardState()); yield return Pause(true); input.ResetPreferences();
                 Require(input.BindingPath("Jump") == "<Keyboard>/space" && input.BindingPath("Forward") == "<Keyboard>/w" && Mathf.Abs(orbit.Sensitivity - 0.12f) < 0.001f && !orbit.InvertY && Mathf.Abs(orbit.DesiredDistance - 4) < 0.001f, "Defaults did not restore"); report.checks.Add("restore defaults resets bindings and camera");
+                yield return Frames(); Require(motor.GetComponent<PrototypeGraphics>().Mode == XenaVisualMode.Remaster && motor.GetComponentInChildren<XenaAssetPreview>().UsingUpscale, "Defaults did not restore Remaster presentation"); report.checks.Add("restoring defaults restores Remaster presentation");
             }
             else if (phase == "malformed")
             {

@@ -20,7 +20,11 @@ namespace Xena.Assets
         public Vector3 FlightDirection => direction;
         public bool Visible => projectile != null && projectile.activeSelf;
         public Vector3 DiscNormal => projectile.transform.up;
-        public int TrailPoints => flightTrail == null ? 0 : flightTrail.positionCount;
+        public int TrailPoints => spinHalo == null ? 0 : spinHalo.VertexCount;
+        public int SparkBursts { get; private set; }
+        public int SparkCount => sparks == null ? 0 : sparks.particleCount;
+        public bool Rebounding => Flying && reboundTime > 0;
+        public Vector3 ImpactPosition { get; private set; }
         private PrototypeInput input;
         private PrototypeCombat combat;
         private XenaAssetPreview visual;
@@ -31,10 +35,10 @@ namespace Xena.Assets
         private readonly List<Vector3> trail = new List<Vector3>();
         private readonly HashSet<PrototypePracticeTarget> struck = new HashSet<PrototypePracticeTarget>();
         private int returnIndex;
-        private LineRenderer flightTrail;
-        private readonly List<Vector3> rimPositions = new List<Vector3>();
-        private readonly List<float> rimAges = new List<float>();
+        private PrototypeSpinHalo spinHalo;
         private Material trailMaterial;
+        private ParticleSystem sparks;
+        private float reboundTime;
         private void Awake()
         {
             input = GetComponent<PrototypeInput>(); combat = GetComponent<PrototypeCombat>();
@@ -44,21 +48,28 @@ namespace Xena.Assets
             projectile = Instantiate(original); projectile.name = "OriginalChakramProjectile";
             foreach (Transform part in projectile.GetComponentsInChildren<Transform>(true)) part.gameObject.layer = 2;
             projectile.GetComponent<XenaAssetPreview>().enabled = false;
-            var trailObject = new GameObject("ChakramSpinTrail"); trailObject.layer = 2;
+            var trailObject = new GameObject("ChakramSpinHalo"); trailObject.layer = 2;
             trailObject.transform.SetParent(projectile.transform, false);
-            flightTrail = trailObject.AddComponent<LineRenderer>(); flightTrail.useWorldSpace = true;
-            flightTrail.sharedMaterial = Resources.Load<Material>("Chakram/FlightTrail");
-            if (flightTrail.sharedMaterial == null)
+            Material effectMaterial = Resources.Load<Material>("Chakram/FlightTrail");
+            if (effectMaterial == null)
             {
                 trailMaterial = new Material(Shader.Find("Xena/ChakramTrail"));
-                flightTrail.sharedMaterial = trailMaterial;
+                effectMaterial = trailMaterial;
             }
-            flightTrail.widthCurve = AnimationCurve.Linear(0, 0.045f, 1, 0.012f);
-            flightTrail.colorGradient = new Gradient {
-                colorKeys = new[] { new GradientColorKey(new Color(1, 0.55f, 0.14f), 0), new GradientColorKey(new Color(1, 0.9f, 0.55f), 1) },
-                alphaKeys = new[] { new GradientAlphaKey(0, 0), new GradientAlphaKey(0.65f, 1) }
+            spinHalo = trailObject.AddComponent<PrototypeSpinHalo>(); spinHalo.Configure(effectMaterial);
+            var sparkObject = new GameObject("ChakramImpactSparks"); sparkObject.layer = 2;
+            sparks = sparkObject.AddComponent<ParticleSystem>();
+            var main = sparks.main; main.playOnAwake = false; main.loop = false; main.maxParticles = 48;
+            main.simulationSpace = ParticleSystemSimulationSpace.World; main.gravityModifier = 0.7f;
+            var emission = sparks.emission; emission.enabled = false;
+            var shape = sparks.shape; shape.enabled = false;
+            var color = sparks.colorOverLifetime; color.enabled = true;
+            color.color = new Gradient {
+                colorKeys = new[] { new GradientColorKey(new Color(1, 0.95f, 0.65f), 0), new GradientColorKey(new Color(1, 0.3f, 0.03f), 1) },
+                alphaKeys = new[] { new GradientAlphaKey(1, 0), new GradientAlphaKey(0, 1) }
             };
-            flightTrail.numCornerVertices = 2; flightTrail.numCapVertices = 2;
+            sparks.GetComponent<ParticleSystemRenderer>().sharedMaterial = effectMaterial;
+            sparks.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             projectile.SetActive(false);
         }
         public void ResetState()
@@ -66,11 +77,15 @@ namespace Xena.Assets
             State = Mode.Ready; Flying = Returning = released = false; time = flightAge = spin = 0;
             Throws = Catches = WallContacts = 0; trail.Clear(); struck.Clear();
             ClearSpinTrail();
+            reboundTime = 0; SparkBursts = 0;
+            if (sparks != null) sparks.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             if (projectile != null) projectile.SetActive(false);
         }
         private void SetMode(Mode mode) { State = mode; time = 0; }
         public void Tick(float dt, bool grounded, float yaw, float pitch)
         {
+            // Manual simulation shares the flight clock, including pause/reset.
+            if (sparks.particleCount > 0) { sparks.Simulate(dt, true, false, false); sparks.Pause(true); }
             if (!Active && input.Chakram && grounded && !combat.Busy && !input.Block) SetMode(Mode.Aiming);
             if (!Active) return;
             int attack = input.ConsumeAttack(); input.ConsumeJump();
@@ -107,7 +122,7 @@ namespace Xena.Assets
                     Advance(direction * (14 * dt));
                 }
                 Vector3 travel = projectile.transform.position - previousPosition;
-                if (travel.sqrMagnitude > 0.000001f) direction = travel.normalized;
+                if (!Rebounding && travel.sqrMagnitude > 0.000001f) direction = travel.normalized;
                 // The original mesh lies in local XZ. Spin around its own normal
                 // AFTER orienting its plane along travel; world-Y Euler rotation
                 // of a tilted disc made the normal precess like a wobbling coin.
@@ -118,19 +133,9 @@ namespace Xena.Assets
             if (Active) time += dt;
         }
         private void ClearSpinTrail()
-        { rimPositions.Clear(); rimAges.Clear(); if (flightTrail != null) flightTrail.positionCount = 0; }
+        { if (spinHalo != null) spinHalo.Clear(); }
         private void UpdateSpinTrail(float dt)
-        {
-            for (int i = rimAges.Count - 1; i >= 0; i--)
-            {
-                rimAges[i] += dt;
-                if (rimAges[i] > 0.16f) { rimAges.RemoveAt(i); rimPositions.RemoveAt(i); }
-            }
-            // A point on the rim traces the actual spin, leaving a short fading
-            // corkscrew. Simulation ages freeze with flight when the game pauses.
-            rimPositions.Add(projectile.transform.TransformPoint(Vector3.right * 0.145f)); rimAges.Add(0);
-            flightTrail.positionCount = rimPositions.Count; flightTrail.SetPositions(rimPositions.ToArray());
-        }
+        { spinHalo.Tick(dt); }
         private void Advance(Vector3 step)
         {
             Vector3 start = projectile.transform.position;
@@ -145,16 +150,37 @@ namespace Xena.Assets
                 else if (!hit.collider.isTrigger)
                 {
                     projectile.transform.position = start + step.normalized * Mathf.Max(0, hit.distance - 0.03f);
-                    trail.Add(projectile.transform.position); WallContacts++; BeginReturn(); return;
+                    trail.Add(projectile.transform.position); WallContacts++;
+                    EmitImpactSparks(hit.point, hit.normal);
+                    BeginReturn(); reboundTime = 0.12f; direction = -step.normalized;
+                    return;
                 }
             }
             projectile.transform.position += step; trail.Add(projectile.transform.position);
         }
         private void BeginReturn() { Returning = true; returnIndex = trail.Count - 1; }
+        private void EmitImpactSparks(Vector3 point, Vector3 normal)
+        {
+            ImpactPosition = point; SparkBursts++;
+            Vector3 tangent = Vector3.Cross(normal, Mathf.Abs(normal.y) > 0.9f ? Vector3.right : Vector3.up).normalized;
+            Vector3 side = Vector3.Cross(normal, tangent);
+            for (int i = 0; i < 18; i++)
+            {
+                float angle = i * 2.399963f;
+                Vector3 velocity = (normal * (0.7f + i % 3 * 0.15f) + tangent * Mathf.Cos(angle) + side * Mathf.Sin(angle)).normalized * (2 + i % 5 * 0.5f);
+                var particle = new ParticleSystem.EmitParams { position = point + normal * 0.015f, velocity = velocity,
+                    startLifetime = 0.22f + i % 4 * 0.05f, startSize = 0.02f + i % 3 * 0.008f, startColor = Color.white };
+                sparks.Emit(particle, 1);
+            }
+            // Emit can resume an otherwise stopped system. Keep automatic
+            // particle updates off; only Tick is allowed to advance the burst.
+            sparks.Pause(true);
+        }
         private void Return(float dt)
         {
             // Retrace the outgoing path so the prototype does not cut through walls on return.
-            float distance = 20 * dt;
+            float distance = (Rebounding ? 24 : 20) * dt;
+            reboundTime = Mathf.Max(0, reboundTime - dt);
             while (distance > 0 && returnIndex >= 0)
             {
                 Vector3 next = trail[returnIndex]; float gap = Vector3.Distance(projectile.transform.position, next);
@@ -172,6 +198,6 @@ namespace Xena.Assets
             else visual.SampleSlot(0, time);
             return true;
         }
-        private void OnDestroy() { if (projectile != null) Destroy(projectile); if (trailMaterial != null) Destroy(trailMaterial); }
+        private void OnDestroy() { if (projectile != null) Destroy(projectile); if (sparks != null) Destroy(sparks.gameObject); if (trailMaterial != null) Destroy(trailMaterial); }
     }
 }

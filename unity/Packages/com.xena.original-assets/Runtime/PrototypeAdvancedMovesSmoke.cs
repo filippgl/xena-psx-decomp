@@ -203,6 +203,12 @@ namespace Xena.Assets
                 changed |= Quaternion.Angle(rotations[i], nextRotations[i]) > 1;
             }
             Require(changed, "Interpolation check used static poses"); report.checks.Add("acrobatics render between actual original joint poses while preserving discrete visibility");
+            Reset(); yield return Ticks(3); yield return BeginSpin(); yield return Slot(0x4d);
+            var graphics = motor.GetComponent<PrototypeGraphics>();
+            int moveFrame = combat.Frame, moveSlot = combat.Slot, health = combat.Health; Vector3 actorPosition = motor.transform.position;
+            graphics.SetMode(XenaVisualMode.Original); graphics.SetMode(XenaVisualMode.Remaster);
+            Require(combat.Frame == moveFrame && combat.Slot == moveSlot && combat.Health == health && motor.transform.position == actorPosition, "Graphics switch changed combat state or actor position");
+            yield return Idle(); report.checks.Add("graphics modes switch mid-spin without resetting combat phase health or movement");
             Destroy(platform); Destroy(material); motor.ResetToSpawn(); report.result = "PASS"; Finish(null);
         }
         private void Capture(string name) { Texture2D shot = ScreenCapture.CaptureScreenshotAsTexture(); File.WriteAllBytes(Path.Combine(output, name), shot.EncodeToPNG()); Destroy(shot); }

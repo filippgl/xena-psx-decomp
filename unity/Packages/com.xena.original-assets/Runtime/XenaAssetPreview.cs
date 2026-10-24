@@ -28,6 +28,7 @@ namespace Xena.Assets
         private Quaternion[] poseRotations;
 
         public int ClipCount => clips == null ? 0 : clips.Length;
+        public bool UsingUpscale => useUpscale;
         public int CurrentSlot => ClipCount == 0 ? -1 : slots[selected];
         public int CurrentFrame => ClipCount == 0 ? -1 : Mathf.Clamp(Mathf.RoundToInt(time * rates[selected]), 0, frameCounts[selected] - 1);
 

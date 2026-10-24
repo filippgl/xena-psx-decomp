@@ -5,6 +5,38 @@ One issue per task. Nothing here is a claim without the command/measurement that
 
 ## Current task — Unity combat and original collision audit (2026-10-24)
 
+- COMPLETE user-requested close chakram camera + collision sparks/rebound.
+  Baseline18chakramchecksPASS on89bc DLL. New camera measured actual original
+  mesh width0.319383viewport anddistance0.828734m, looksdown/forward, no lensclip;
+  screenshotchakram-close-flight.png inspected. Fixed horizontalFOV acrossaspects,
+  nearclip.02, originalplayerlens restoredonautomaticreturn; noflightpositionlag.
+  Solidcollisionburst18sparks, reverseheading and.12sec24m/sinitialreturn phase,
+  then20m/sbreadcrumbreturn. Practice target hits stillpass through asbefore.
+  ParticleSystemModule initiallyabsent; localUPMpackage now declares builtin
+  com.unity.modules.particlesystem1.0.0, auto-resolvedbyUPM, no Editor download.
+  First Windows run passedcamera/returnchecks butfailedpausedparticleschanged;
+  Emit canresume automatic simulation. ExplicitPause addedafterEmit/Simulate,
+  fresh builds andtargetedWindowschecksPASS. Initial close-return screenshot
+  exposedcamera turningintoXena; returning nowrestoresplayercamera immediately.
+- USER EXTENSION COMPLETE: F10Original/Remaster swaps realmaterial bindings and
+  halo withouttouchingcurrentpose/flight/combat. Preference persists across
+  processes; defaultsrestoreRemaster. PrototypeGraphics/IXenaVisualModeTarget/
+  XenaVisualVariantRendererbindings formhooks forfuturematchedHDmodels/light;
+  noHDmodelset orPS1rasterparityclaim. Allcontrollers/colliders/clocks remainshared.
+  Replacedribbon withPrototypeSpinHalo:4localplaneafterimageages/6arcs,radius
+  .14..20m,fade.16s,originalopaque discsharp; Original hideshalo. Imageinspected.
+  NeweffectMeshFilter excludedONLYfromoriginalgeometrycount test; originalresource
+  still2meshes46tris, distincthalo bounded/planar/fading separatelyverified.
+- FINAL143WindowschecksPASS:26movement/38combat/17settings/26chakram/13special/
+  23advanced. Fresh8logs clean; aggregate rejectsoldcode/assets. FinalDLL
+  2026-10-24T18:13:40.321Z SHAd4adde7ff870232008061329df11d3ad7e7240708275f0cb6af1ae8fe2c122b0;
+  resources2026-10-24T18:13:39.938Z SHA0dd02e7f950436de208c52260b1cb38419b967a2d59a04ac989554d363666d8f.
+  ActualWindows build/unity-movement/XenaMovementPrototype.exe128765523bytes.
+  Finalviewportwidth.313356,closecamera.828734m; novertexnearclip.
+  MainPipeline7PASS/113motorTicks/81clips/2meshes46tris/0errorswarnings;
+  ownEditor42304 usedafterearlier39396closed; close42304beforeend. UserHub/CLIkept.
+  NEXTpending:originalBanditimport andbicycleeligibilityaudit below; noclaimported.
+
 - USER-STEERED CAMERA/ACROBATICS/CHAKRAM FIX COMPLETE (24Oct20:32MSK build):
   Guard synchronizes camera yaw to body BEFORE movement/combo selection; S/A/D
   therefore remain back/left/right with previous orbit90/180off. Horizontal orbit

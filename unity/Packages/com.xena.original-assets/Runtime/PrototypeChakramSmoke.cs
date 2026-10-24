@@ -10,7 +10,7 @@ namespace Xena.Assets
 {
     internal sealed class PrototypeChakramSmoke : MonoBehaviour
     {
-        [Serializable] private sealed class Report { public string result = "FAIL", error; public List<string> checks = new List<string>(); }
+        [Serializable] private sealed class Report { public string result = "FAIL", error; public float discScreenWidth, flightCameraDistance; public List<string> checks = new List<string>(); }
         private Report report = new Report();
         private string output;
         private bool finished;
@@ -81,7 +81,7 @@ namespace Xena.Assets
             Require(chakram.Flying && chakram.Visible && chakram.Throws == 1, "Original chakram did not launch");
             var projectile = GameObject.Find("OriginalChakramProjectile");
             Require(projectile != null, "Projectile original resource absent");
-            MeshFilter[] meshes = projectile.GetComponentsInChildren<MeshFilter>(); int triangles = 0;
+            MeshFilter[] meshes = Array.FindAll(projectile.GetComponentsInChildren<MeshFilter>(), item => item.GetComponent<PrototypeSpinHalo>() == null); int triangles = 0;
             foreach (MeshFilter mesh in meshes) triangles += mesh.sharedMesh.triangles.Length / 3;
             Require(meshes.Length == 2 && triangles == 46, "Projectile is not standalone original46-triangle Chakram");
             report.checks.Add("standalone original2-mesh46-triangle textured chakram launches once");
@@ -94,10 +94,46 @@ namespace Xena.Assets
             }
             Require(Vector3.Angle(rim, projectile.transform.right) > 30, "Disc does not rotate around its own normal");
             report.checks.Add("disc spins around its own stable normal with flight direction in its plane");
-            var spinTrail = projectile.GetComponentInChildren<LineRenderer>();
-            Require(chakram.TrailPoints >= 3 && chakram.TrailPoints <= 12 && spinTrail.sharedMaterial.shader.isSupported && spinTrail.sharedMaterial.shader.name == "Xena/ChakramTrail", "Spin trail missing, unbounded or shader stripped");
-            Require(spinTrail.colorGradient.Evaluate(0).a == 0 && spinTrail.colorGradient.Evaluate(1).a > 0.5f, "Spin trail does not fade into air");
-            report.checks.Add("rim rotation leaves a bounded widening fading trail with supported build shader");
+            var halo = projectile.GetComponentInChildren<PrototypeSpinHalo>();
+            var spinTrail = halo.GetComponent<MeshFilter>().sharedMesh;
+            var haloRenderer = halo.GetComponent<MeshRenderer>();
+            Require(chakram.TrailPoints > 0 && haloRenderer.sharedMaterial.shader.isSupported && haloRenderer.sharedMaterial.shader.name == "Xena/ChakramTrail", "Spin halo missing or shader stripped");
+            foreach (Vector3 vertex in spinTrail.vertices) Require(Mathf.Abs(vertex.y) < 0.01f && vertex.magnitude >= 0.139f && vertex.magnitude < 0.22f, "Rotational afterimage left the local rim plane or became a long ribbon");
+            bool transparent = false, bright = false;
+            foreach (Color color in spinTrail.colors) { transparent |= color.a == 0; bright |= color.a > 0.1f; }
+            Require(transparent && bright && projectile.GetComponentInChildren<LineRenderer>() == null, "Spin halo does not fade or retained a world-space ribbon");
+            report.checks.Add("rotational afterimages expand and fade within local disc plane without a ribbon");
+            var graphics = motor.GetComponent<PrototypeGraphics>();
+            Vector3 unchangedPosition = chakram.ProjectilePosition; Quaternion unchangedRotation = projectile.transform.rotation;
+            int unchangedFrame = chakram.Frame; var unchangedState = chakram.State;
+            var body = visual.GetComponentInChildren<MeshRenderer>(); var enhancedMaterial = body.sharedMaterial;
+            graphics.SetMode(XenaVisualMode.Original);
+            Require(!visual.UsingUpscale && body.sharedMaterial != enhancedMaterial && !haloRenderer.enabled, "Original mode did not change real materials and disable remaster halo");
+            graphics.SetMode(XenaVisualMode.Remaster);
+            Require(visual.UsingUpscale && body.sharedMaterial == enhancedMaterial && haloRenderer.enabled && chakram.ProjectilePosition == unchangedPosition && projectile.transform.rotation == unchangedRotation && chakram.Frame == unchangedFrame && chakram.State == unchangedState, "Graphics mode reset flight state or pose");
+            report.checks.Add("Original-Remaster swaps real materials and halo without touching position pose or flight state");
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Q, Key.F10)); yield return null; yield return null;
+            Require(graphics.Mode == XenaVisualMode.Original && !haloRenderer.enabled, "F10 did not select Original during flight");
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Q)); yield return null; yield return null;
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Q, Key.F10)); yield return null; yield return null;
+            Require(graphics.Mode == XenaVisualMode.Remaster && haloRenderer.enabled && chakram.Throws == 1, "F10 did not restore Remaster during same throw");
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Q));
+            report.checks.Add("actual F10 input switches both graphics modes during the same throw");
+            yield return new WaitForEndOfFrame();
+            Camera camera = orbit.GetComponent<Camera>(); float left = 1, right = 0;
+            foreach (MeshFilter mesh in meshes)
+            foreach (Vector3 vertex in mesh.sharedMesh.vertices)
+            {
+                Vector3 screen = camera.WorldToViewportPoint(mesh.transform.TransformPoint(vertex));
+                Require(screen.z > camera.nearClipPlane, "Close camera clips original disc");
+                left = Mathf.Min(left, screen.x); right = Mathf.Max(right, screen.x);
+            }
+            report.discScreenWidth = right - left; report.flightCameraDistance = orbit.DistanceToTarget;
+            Require(report.discScreenWidth > 0.26f && report.discScreenWidth < 0.42f && orbit.DistanceToTarget < 0.9f, "Chase camera does not frame original disc at roughly one third screen width: " + report.discScreenWidth);
+            Require(Vector3.Dot(camera.transform.forward, chakram.FlightDirection) > 0.9f && Vector3.Dot(camera.transform.forward, chakram.DiscNormal) < -0.1f, "Chase camera does not look forward and slightly down");
+            report.checks.Add("close flight camera frames original disc at about one third screen width without clipping");
+            report.checks.Add("flight camera looks forward and slightly downward along actual travel");
+            Capture("chakram-close-flight.png");
             Require(combat.Target.Hits == 1 && combat.Target.Health == 65, "Chakram target contact missing or repeated");
             report.checks.Add("swept chakram hits practice target once per throw");
             Vector3 beforeSteer = chakram.FlightDirection;
@@ -110,11 +146,12 @@ namespace Xena.Assets
             yield return new WaitForEndOfFrame(); Capture("chakram-flight.png");
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Q, Key.Escape)); yield return null; yield return null;
             Require(input.Paused, "Cannot pause flight"); Vector3 paused = chakram.ProjectilePosition;
-            Vector3[] pausedTrail = new Vector3[spinTrail.positionCount]; spinTrail.GetPositions(pausedTrail);
+            Vector3[] pausedTrail = spinTrail.vertices;
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Q)); yield return new WaitForSecondsRealtime(0.2f);
             Require(chakram.ProjectilePosition == paused, "Flight advanced while paused"); report.checks.Add("pause freezes chakram flight");
-            Require(spinTrail.positionCount == pausedTrail.Length, "Paused trail kept aging");
-            for (int i = 0; i < pausedTrail.Length; i++) Require(spinTrail.GetPosition(i) == pausedTrail[i], "Paused spin trail moved");
+            Require(spinTrail.vertexCount == pausedTrail.Length, "Paused trail kept aging");
+            Vector3[] frozenHalo = spinTrail.vertices;
+            for (int i = 0; i < pausedTrail.Length; i++) Require(frozenHalo[i] == pausedTrail[i], "Paused spin halo moved");
             report.checks.Add("pause freezes spin trail geometry and lifetime");
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Q, Key.Escape)); yield return null; yield return null;
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Q)); yield return Ticks(2);
@@ -122,6 +159,9 @@ namespace Xena.Assets
             Require(chakram.Catches == 1 && !chakram.Visible && visual.CurrentSlot == 0x65, "Recall did not play original catch65");
             Require(chakram.TrailPoints == 0, "Catch retained old flight trail");
             report.checks.Add("release Q recalls along flight path and plays catch65"); yield return Mode(PrototypeChakram.Mode.Ready);
+            yield return null; yield return null;
+            Require(Mathf.Abs(camera.fieldOfView - 60) < 0.1f && Mathf.Abs(camera.nearClipPlane - 0.08f) < 0.001f, "Catch retained close-flight lens on player camera");
+            report.checks.Add("catch restores player camera field of view and near clipping plane");
             Require(combat.Target.Hits == 1, "Returning chakram duplicated damage"); report.checks.Add("return does not duplicate practice damage");
             InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 1 }); yield return Ticks(3); Release();
             Require(combat.Slot == 0x51, "Melee did not resume after catch"); report.checks.Add("normal sword resumes after catch"); yield return Ticks(35);
@@ -132,9 +172,32 @@ namespace Xena.Assets
             wall.transform.position = motor.transform.position + forward * 0.8f + Vector3.up;
             wall.transform.rotation = Quaternion.LookRotation(forward); wall.transform.localScale = new Vector3(3, 3, 0.1f); Physics.SyncTransforms();
             yield return Throw();
+            for (int i = 0; i < 90 && chakram.SparkBursts == 0; i++) yield return new WaitForFixedUpdate();
+            Require(chakram.SparkBursts == 1 && chakram.SparkCount > 0 && chakram.Returning && chakram.Rebounding, "Wall contact did not emit sparks and start rebound");
+            Vector3 impactCenter = chakram.ProjectilePosition;
+            Require(Vector3.Dot(chakram.FlightDirection, forward) < -0.9f, "Impact did not reverse flight direction");
+            yield return Ticks(1); yield return null;
+            Require(Mathf.Abs(camera.fieldOfView - 60) < 0.1f, "Impact retained a reversed close lens inside Xena");
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Q, Key.Escape)); yield return null; yield return null;
+            Require(input.Paused, "Cannot pause impact sparks");
+            var particles = GameObject.Find("ChakramImpactSparks").GetComponent<ParticleSystem>();
+            var beforeParticles = new ParticleSystem.Particle[48]; int sparkCount = particles.GetParticles(beforeParticles);
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Q)); yield return new WaitForSecondsRealtime(0.15f);
+            var afterParticles = new ParticleSystem.Particle[48]; int afterCount = particles.GetParticles(afterParticles);
+            Require(afterCount == sparkCount, "Impact sparks kept aging while paused");
+            for (int i = 0; i < sparkCount; i++) Require(afterParticles[i].position == beforeParticles[i].position && Mathf.Abs(afterParticles[i].remainingLifetime - beforeParticles[i].remainingLifetime) < 0.001f, "Paused impact particles changed");
+            yield return new WaitForEndOfFrame(); Capture("chakram-impact-sparks.png");
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Q, Key.Escape)); yield return null; yield return null;
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Q));
+            yield return Ticks(2);
+            Require(Vector3.Dot(chakram.ProjectilePosition - impactCenter, forward) < -0.1f, "Rebound did not move disc away from wall");
+            report.checks.Add("wall emits one visible spark burst and reverses disc away from impact");
+            report.checks.Add("pause freezes impact particle positions and lifetimes");
             for (int i = 0; i < 180 && chakram.Catches == 0; i++) yield return new WaitForFixedUpdate();
             Release(); Require(chakram.WallContacts == 1 && chakram.Catches == 1 && combat.Target.Hits == 0, "Chakram crossed wall or failed to return");
             report.checks.Add("solid wall stops outgoing flight and protects target behind it");
+            yield return Ticks(30); Require(chakram.SparkCount == 0 && chakram.SparkBursts == 1, "Impact sparks did not expire or impact repeated");
+            report.checks.Add("impact sparks expire after catch without repeated contact bursts");
             yield return Mode(PrototypeChakram.Mode.Ready); Destroy(wall); yield return null;
             motor.ResetToSpawn(); PlaceTarget(20);
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Q)); yield return Mode(PrototypeChakram.Mode.Aiming);
@@ -144,7 +207,7 @@ namespace Xena.Assets
             for (int i = 0; i < 80 && !chakram.Flying; i++) yield return new WaitForFixedUpdate();
             Require(chakram.Flying, "No flight for reset check");
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.R)); yield return Ticks(3); Release();
-            Require(!chakram.Active && !chakram.Visible && chakram.Throws == 0, "R retained projectile state"); report.checks.Add("R clears projectile and ability state in flight");
+            Require(!chakram.Active && !chakram.Visible && chakram.Throws == 0 && chakram.SparkCount == 0 && chakram.SparkBursts == 0, "R retained projectile or impact state"); report.checks.Add("R clears projectile and ability state in flight");
             yield return Ticks(3);
             InputSystem.QueueStateEvent(pad, new GamepadState { buttons = 1u << (int)GamepadButton.RightShoulder }); yield return Mode(PrototypeChakram.Mode.Aiming);
             InputSystem.QueueStateEvent(pad, new GamepadState { buttons = (1u << (int)GamepadButton.RightShoulder) | (1u << (int)GamepadButton.West) });

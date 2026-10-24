@@ -16,6 +16,8 @@ namespace Xena.Assets
         private bool suppressPause;
         public PrototypePreferences Preferences { get; private set; }
         public bool IsRebinding => rebinding != null;
+        public bool GraphicsTogglePressed => !IsRebinding && Keyboard.current != null &&
+            (allowedDevices == null || allowedDevices.Contains(Keyboard.current)) && Keyboard.current.f10Key.wasPressedThisFrame;
         public string BindingStatus { get; private set; } = "";
         public static readonly string[] BindingKeys = { "Forward", "Back", "Left", "Right", "Sprint", "Jump", "Sword", "Kick", "Block", "Reset", "CenterCamera", "Chakram" };
         public bool Chakram => !Paused && chakram.IsPressed();

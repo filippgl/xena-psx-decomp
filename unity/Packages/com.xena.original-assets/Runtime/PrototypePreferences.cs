@@ -11,6 +11,7 @@ namespace Xena.Assets
         public float mouseSensitivity = 0.12f;
         public float cameraDistance = 4;
         public bool invertY;
+        public bool originalGraphics;
         public string bindingOverrides = "";
     }
     public sealed class PrototypePreferences
