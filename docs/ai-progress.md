@@ -5,6 +5,17 @@ One issue per task. Nothing here is a claim without the command/measurement that
 
 ## Current task — Unity combat and original collision audit (2026-10-24)
 
+- IN PROGRESS advancedbatch. Baselinespecial13PASS on fc75... build. Native spin
+  253/48576components andclassicdirectional228/43776PASS:4C18->4D7(pair)->4E31,
+  tap/hold/repeats=2/2/4cycles; nativebudget6 fromgp4AB0 andE4pairlatch4/5.
+  ClassicDown+Jump35backflip32frames,headingheld,phasetable4/13/22/40. Modern
+  nativecontrols initiallyhid35 behind2F; new isolated--optmodern_controls=0.
+  Bicycleattemptswithouttarget/withstagger/guestRAMrelocatedNPC didNOTprove5F.
+  SourceA794requiresclassflag10/range1000/angle700; reaction/eligibilityunresolved.
+  Do notinventbicycle behavior. Newruntime editsnotyetbuilt/verified:spinpaired
+  loops+inputchord,backflip35,directionalbaseattackturn. NextadvancedWindows smoke,
+  regress,commit. Detailsdocs/xena-advanced-moves.md. Allusernativeedits preserved.
+
 - LATEST BATCH COMPLETE: five more original actions playable. Runningkick=3C41frame
   roll, runningsword=3E40frame movingattack, runningjump=3147frame frontflip,
   blockkick=5C39frame radialpracticekick, blocksword=4628frame frontstrike. Original
