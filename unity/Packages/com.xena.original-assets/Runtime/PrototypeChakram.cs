@@ -19,6 +19,8 @@ namespace Xena.Assets
         public Vector3 ProjectilePosition => projectile == null ? transform.position : projectile.transform.position;
         public Vector3 FlightDirection => direction;
         public bool Visible => projectile != null && projectile.activeSelf;
+        public Vector3 DiscNormal => projectile.transform.up;
+        public int TrailPoints => flightTrail == null ? 0 : flightTrail.positionCount;
         private PrototypeInput input;
         private PrototypeCombat combat;
         private XenaAssetPreview visual;
@@ -29,6 +31,10 @@ namespace Xena.Assets
         private readonly List<Vector3> trail = new List<Vector3>();
         private readonly HashSet<PrototypePracticeTarget> struck = new HashSet<PrototypePracticeTarget>();
         private int returnIndex;
+        private LineRenderer flightTrail;
+        private readonly List<Vector3> rimPositions = new List<Vector3>();
+        private readonly List<float> rimAges = new List<float>();
+        private Material trailMaterial;
         private void Awake()
         {
             input = GetComponent<PrototypeInput>(); combat = GetComponent<PrototypeCombat>();
@@ -38,12 +44,28 @@ namespace Xena.Assets
             projectile = Instantiate(original); projectile.name = "OriginalChakramProjectile";
             foreach (Transform part in projectile.GetComponentsInChildren<Transform>(true)) part.gameObject.layer = 2;
             projectile.GetComponent<XenaAssetPreview>().enabled = false;
+            var trailObject = new GameObject("ChakramSpinTrail"); trailObject.layer = 2;
+            trailObject.transform.SetParent(projectile.transform, false);
+            flightTrail = trailObject.AddComponent<LineRenderer>(); flightTrail.useWorldSpace = true;
+            flightTrail.sharedMaterial = Resources.Load<Material>("Chakram/FlightTrail");
+            if (flightTrail.sharedMaterial == null)
+            {
+                trailMaterial = new Material(Shader.Find("Xena/ChakramTrail"));
+                flightTrail.sharedMaterial = trailMaterial;
+            }
+            flightTrail.widthCurve = AnimationCurve.Linear(0, 0.045f, 1, 0.012f);
+            flightTrail.colorGradient = new Gradient {
+                colorKeys = new[] { new GradientColorKey(new Color(1, 0.55f, 0.14f), 0), new GradientColorKey(new Color(1, 0.9f, 0.55f), 1) },
+                alphaKeys = new[] { new GradientAlphaKey(0, 0), new GradientAlphaKey(0.65f, 1) }
+            };
+            flightTrail.numCornerVertices = 2; flightTrail.numCapVertices = 2;
             projectile.SetActive(false);
         }
         public void ResetState()
         {
             State = Mode.Ready; Flying = Returning = released = false; time = flightAge = spin = 0;
             Throws = Catches = WallContacts = 0; trail.Clear(); struck.Clear();
+            ClearSpinTrail();
             if (projectile != null) projectile.SetActive(false);
         }
         private void SetMode(Mode mode) { State = mode; time = 0; }
@@ -66,6 +88,7 @@ namespace Xena.Assets
                     released = true; Flying = true; Returning = false; flightAge = 0; Throws++; struck.Clear(); trail.Clear();
                     projectile.transform.position = transform.position + Vector3.up * 1.1f;
                     direction = Quaternion.Euler(pitch, yaw, 0) * Vector3.forward;
+                    ClearSpinTrail(); spin = 0;
                     trail.Add(projectile.transform.position); projectile.SetActive(true);
                 }
                 if (Frame >= 21) SetMode(Mode.Flight);
@@ -73,6 +96,7 @@ namespace Xena.Assets
             else if (State == Mode.Catching && Frame >= 19) { SetMode(Mode.Ready); input.ClearPending(); }
             if (Flying)
             {
+                Vector3 previousPosition = projectile.transform.position;
                 flightAge += dt;
                 if (!Returning && (!input.Chakram || flightAge >= 2.2f)) BeginReturn();
                 if (Returning) Return(dt);
@@ -82,9 +106,30 @@ namespace Xena.Assets
                     direction = Vector3.RotateTowards(direction, desired, 150 * Mathf.Deg2Rad * dt, 0);
                     Advance(direction * (14 * dt));
                 }
-                spin += 900 * dt; projectile.transform.rotation = Quaternion.Euler(65, spin, 0);
+                Vector3 travel = projectile.transform.position - previousPosition;
+                if (travel.sqrMagnitude > 0.000001f) direction = travel.normalized;
+                // The original mesh lies in local XZ. Spin around its own normal
+                // AFTER orienting its plane along travel; world-Y Euler rotation
+                // of a tilted disc made the normal precess like a wobbling coin.
+                spin = (spin + 900 * dt) % 360;
+                projectile.transform.rotation = Quaternion.LookRotation(direction, Vector3.up) * Quaternion.AngleAxis(spin, Vector3.up);
+                if (Flying) UpdateSpinTrail(dt); else ClearSpinTrail();
             }
             if (Active) time += dt;
+        }
+        private void ClearSpinTrail()
+        { rimPositions.Clear(); rimAges.Clear(); if (flightTrail != null) flightTrail.positionCount = 0; }
+        private void UpdateSpinTrail(float dt)
+        {
+            for (int i = rimAges.Count - 1; i >= 0; i--)
+            {
+                rimAges[i] += dt;
+                if (rimAges[i] > 0.16f) { rimAges.RemoveAt(i); rimPositions.RemoveAt(i); }
+            }
+            // A point on the rim traces the actual spin, leaving a short fading
+            // corkscrew. Simulation ages freeze with flight when the game pauses.
+            rimPositions.Add(projectile.transform.TransformPoint(Vector3.right * 0.145f)); rimAges.Add(0);
+            flightTrail.positionCount = rimPositions.Count; flightTrail.SetPositions(rimPositions.ToArray());
         }
         private void Advance(Vector3 step)
         {
@@ -127,6 +172,6 @@ namespace Xena.Assets
             else visual.SampleSlot(0, time);
             return true;
         }
-        private void OnDestroy() { if (projectile != null) Destroy(projectile); }
+        private void OnDestroy() { if (projectile != null) Destroy(projectile); if (trailMaterial != null) Destroy(trailMaterial); }
     }
 }

@@ -92,6 +92,15 @@ namespace Xena.Assets.Editor
             var report = new Report { unityVersion = Application.unityVersion, scene = ScenePath };
             try
             {
+                // A Resources material keeps the trail shader in standalone builds.
+                const string trailPath = "Assets/Imported/Resources/Chakram/FlightTrail.mat";
+                if (AssetDatabase.LoadAssetAtPath<Material>(trailPath) == null)
+                {
+                    Shader trailShader = Shader.Find("Xena/ChakramTrail");
+                    if (trailShader == null) throw new InvalidDataException("Chakram trail shader unavailable");
+                    AssetDatabase.CreateAsset(new Material(trailShader), trailPath);
+                    AssetDatabase.SaveAssets();
+                }
                 AssetDatabase.ImportAsset(XenaImportVerification.ModelPath, ImportAssetOptions.ForceSynchronousImport);
                 AssetDatabase.ImportAsset("Assets/Imported/Level01/Level01.xenamodel", ImportAssetOptions.ForceSynchronousImport);
                 const string chakramPath = "Assets/Imported/Resources/Chakram/Chakram.xenamodel";

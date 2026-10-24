@@ -86,23 +86,41 @@ namespace Xena.Assets
             Require(meshes.Length == 2 && triangles == 46, "Projectile is not standalone original46-triangle Chakram");
             report.checks.Add("standalone original2-mesh46-triangle textured chakram launches once");
             yield return Ticks(18);
+            Vector3 normal = chakram.DiscNormal, rim = projectile.transform.right;
+            for (int i = 0; i < 6; i++)
+            {
+                yield return Ticks(1);
+                Require(Mathf.Abs(Vector3.Dot(chakram.DiscNormal, chakram.FlightDirection)) < 0.001f && Vector3.Angle(normal, chakram.DiscNormal) < 0.1f, "Spinning disc normal wobbles or is not in flight plane");
+            }
+            Require(Vector3.Angle(rim, projectile.transform.right) > 30, "Disc does not rotate around its own normal");
+            report.checks.Add("disc spins around its own stable normal with flight direction in its plane");
+            var spinTrail = projectile.GetComponentInChildren<LineRenderer>();
+            Require(chakram.TrailPoints >= 3 && chakram.TrailPoints <= 12 && spinTrail.sharedMaterial.shader.isSupported && spinTrail.sharedMaterial.shader.name == "Xena/ChakramTrail", "Spin trail missing, unbounded or shader stripped");
+            Require(spinTrail.colorGradient.Evaluate(0).a == 0 && spinTrail.colorGradient.Evaluate(1).a > 0.5f, "Spin trail does not fade into air");
+            report.checks.Add("rim rotation leaves a bounded widening fading trail with supported build shader");
             Require(combat.Target.Hits == 1 && combat.Target.Health == 65, "Chakram target contact missing or repeated");
             report.checks.Add("swept chakram hits practice target once per throw");
             Vector3 beforeSteer = chakram.FlightDirection;
             InputSystem.QueueStateEvent(mouse, new MouseState { delta = new Vector2(150, 0) }); yield return null; yield return null; yield return Ticks(8);
             Require(chakram.Flying && !chakram.Returning && Vector3.Angle(beforeSteer, chakram.FlightDirection) > 5, "Mouse did not steer flying chakram");
+            Require(Mathf.Abs(Vector3.Dot(chakram.DiscNormal, chakram.FlightDirection)) < 0.001f, "Steering tipped disc out of flight plane");
             report.checks.Add("actual mouse motion steers outgoing flight");
             Require(Vector3.Distance(orbit.transform.position, chakram.ProjectilePosition) < 5, "Camera did not follow flight");
             report.checks.Add("camera follows chakram flight");
             yield return new WaitForEndOfFrame(); Capture("chakram-flight.png");
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Q, Key.Escape)); yield return null; yield return null;
             Require(input.Paused, "Cannot pause flight"); Vector3 paused = chakram.ProjectilePosition;
+            Vector3[] pausedTrail = new Vector3[spinTrail.positionCount]; spinTrail.GetPositions(pausedTrail);
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Q)); yield return new WaitForSecondsRealtime(0.2f);
             Require(chakram.ProjectilePosition == paused, "Flight advanced while paused"); report.checks.Add("pause freezes chakram flight");
+            Require(spinTrail.positionCount == pausedTrail.Length, "Paused trail kept aging");
+            for (int i = 0; i < pausedTrail.Length; i++) Require(spinTrail.GetPosition(i) == pausedTrail[i], "Paused spin trail moved");
+            report.checks.Add("pause freezes spin trail geometry and lifetime");
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Q, Key.Escape)); yield return null; yield return null;
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Q)); yield return Ticks(2);
             Release(); yield return Mode(PrototypeChakram.Mode.Catching);
             Require(chakram.Catches == 1 && !chakram.Visible && visual.CurrentSlot == 0x65, "Recall did not play original catch65");
+            Require(chakram.TrailPoints == 0, "Catch retained old flight trail");
             report.checks.Add("release Q recalls along flight path and plays catch65"); yield return Mode(PrototypeChakram.Mode.Ready);
             Require(combat.Target.Hits == 1, "Returning chakram duplicated damage"); report.checks.Add("return does not duplicate practice damage");
             InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 1 }); yield return Ticks(3); Release();

@@ -24,6 +24,7 @@ namespace Xena.Assets
         private int airSlot = JumpSlot, airTakeoff = TakeoffFrame, airApex = ApexFrame, airTouchdown = TouchdownFrame, airLast = LastJumpFrame;
         public int Ticks { get; private set; }
         public bool Grounded { get; private set; }
+        public bool Backflipping => backwardsJump;
         public float VerticalSpeed => vertical;
         public void Configure(TextAsset data, XenaAssetPreview model, PrototypeCamera camera, Vector3 start)
         { terrainSource = data; visual = model; orbit = camera; spawn = start; }
@@ -60,6 +61,7 @@ namespace Xena.Assets
             if (input.Paused) return;
             float dt = Time.fixedDeltaTime;
             bool wasGrounded = Grounded;
+            orbit.SynchronizeGuardCamera();
             chakram.Tick(dt, Grounded, orbit.Yaw, orbit.Pitch);
             if (!chakram.Active) combat.Tick(dt, Grounded, orbit.Yaw);
             Vector2 controls = input.Move;
@@ -150,6 +152,20 @@ namespace Xena.Assets
             groundTime += dt;
         }
         private void SetGroundSlot(int slot) { groundSlot = slot; groundTime = 0; }
+        private void LateUpdate()
+        {
+            if (input.Paused || chakram.Active) return;
+            float renderStep = Mathf.Clamp(Time.time - Time.fixedTime, 0, Time.fixedDeltaTime);
+            if (combat.IsEvading)
+                visual.SampleInterpolatedSlotFrame(combat.Slot, (combat.PoseTime + renderStep) * 30);
+            else if (!Grounded && (backwardsJump || airSlot == 0x31))
+            {
+                float speed = vertical - gravity * renderStep;
+                float phase = Mathf.Clamp01(Mathf.Abs(speed) / jumpSpeed);
+                float frame = speed > 0 ? Mathf.Lerp(airApex, airTakeoff, phase) : Mathf.Lerp(airApex, airTouchdown - 1, phase);
+                visual.SampleInterpolatedSlotFrame(airSlot, frame);
+            }
+        }
         private void ConfigureJump(bool running, bool backwards = false)
         {
             airSlot = backwards ? 0x35 : running ? 0x31 : JumpSlot; airTakeoff = backwards ? 4 : TakeoffFrame;

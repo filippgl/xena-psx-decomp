@@ -27,6 +27,7 @@ namespace Xena.Assets
         public bool IsBlocking => slot == 0x80;
         public int Slot => slot;
         public int Frame => Mathf.FloorToInt(time * 30);
+        public float PoseTime => time;
         public int Health { get; private set; } = 100;
         public int BlockedHits { get; private set; }
         public PrototypePracticeTarget Target { get; private set; }

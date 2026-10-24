@@ -15,16 +15,31 @@ namespace Xena.Assets
         private bool initialized;
         private PrototypeCombat combat;
         private PrototypeChakram chakram;
+        private PrototypeMotor motor;
+        public bool BehindCharacter { get; private set; }
         public float Yaw => yaw;
         public float Pitch => pitch;
         public float DistanceToTarget { get; private set; }
         public void Configure(Transform follow, PrototypeInput controls) { target = follow; input = controls; }
+        // Also called before the simulation consumes movement: the first guard
+        // tick must use the same frame of reference as the camera, not last yaw.
+        public void SynchronizeGuardCamera()
+        {
+            if (combat == null) combat = target.GetComponent<PrototypeCombat>();
+            if (motor == null) motor = target.GetComponent<PrototypeMotor>();
+            if (chakram == null) chakram = target.GetComponent<PrototypeChakram>();
+            BehindCharacter = (chakram == null || !chakram.Active) &&
+                (input.Block || (combat != null && combat.IsEvading) || (motor != null && motor.Backflipping));
+            if (BehindCharacter) yaw = target.eulerAngles.y;
+        }
         private void LateUpdate()
         {
+            SynchronizeGuardCamera();
             if (!input.Paused)
             {
                 Vector2 look = input.MouseLook * Sensitivity + input.StickLook * (120 * Time.deltaTime);
-                yaw += look.x; pitch = Mathf.Clamp(pitch + look.y * (InvertY ? 1 : -1), -30, 70);
+                if (!BehindCharacter) yaw += look.x;
+                pitch = Mathf.Clamp(pitch + look.y * (InvertY ? 1 : -1), -30, 70);
                 if (input.CenterCameraPressed) yaw = target.eulerAngles.y;
                 input.Preferences.Data.cameraDistance = Mathf.Clamp(DesiredDistance - input.Zoom * 0.01f, 2, 7);
             }

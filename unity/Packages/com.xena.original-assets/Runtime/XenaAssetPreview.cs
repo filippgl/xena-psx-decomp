@@ -23,6 +23,9 @@ namespace Xena.Assets
         private int selected;
         private float time;
         private float yaw;
+        private Transform[] poseParts;
+        private Vector3[] posePositions, poseScales;
+        private Quaternion[] poseRotations;
 
         public int ClipCount => clips == null ? 0 : clips.Length;
         public int CurrentSlot => ClipCount == 0 ? -1 : slots[selected];
@@ -76,6 +79,39 @@ namespace Xena.Assets
             int index = Array.IndexOf(slots, slot);
             if (index < 0) throw new ArgumentOutOfRangeException(nameof(slot), "Original animation slot unavailable");
             SampleFrame(index, frame);
+        }
+
+        // Presentation only: imported clips keep their verified STEP keys.
+        // Blend local joint transforms between adjacent original poses without
+        // changing gameplay clocks, hit windows or discrete part visibility.
+        public void SampleInterpolatedSlotFrame(int slot, float frame)
+        {
+            int index = Array.IndexOf(slots, slot);
+            if (index < 0) throw new ArgumentOutOfRangeException(nameof(slot));
+            frame = Mathf.Clamp(frame, 0, frameCounts[index] - 1);
+            int lower = Mathf.FloorToInt(frame); float blend = frame - lower;
+            SampleFrame(index, lower);
+            if (blend < 0.0001f || lower == frameCounts[index] - 1) return;
+            if (poseParts == null)
+            {
+                poseParts = GetComponentsInChildren<Transform>(true);
+                posePositions = new Vector3[poseParts.Length]; poseScales = new Vector3[poseParts.Length];
+                poseRotations = new Quaternion[poseParts.Length];
+            }
+            for (int i = 0; i < poseParts.Length; i++)
+            {
+                posePositions[i] = poseParts[i].localPosition; poseRotations[i] = poseParts[i].localRotation;
+                poseScales[i] = poseParts[i].localScale;
+            }
+            clips[index].SampleAnimation(gameObject, (lower + 1) / rates[index]);
+            for (int i = 0; i < poseParts.Length; i++)
+            {
+                Transform part = poseParts[i];
+                part.localPosition = Vector3.Lerp(posePositions[i], part.localPosition, blend);
+                part.localRotation = Quaternion.Slerp(poseRotations[i], part.localRotation, blend);
+                part.localScale = poseScales[i];
+            }
+            time = frame / rates[index];
         }
 
         private void Sample()

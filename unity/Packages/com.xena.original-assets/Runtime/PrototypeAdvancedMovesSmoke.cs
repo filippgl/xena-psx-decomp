@@ -152,6 +152,57 @@ namespace Xena.Assets
             Reset(1.05f); yield return Ticks(3); motor.transform.rotation = Quaternion.Euler(0, orbit.Yaw + 180, 0);
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.W)); InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 1 }); yield return Slot(0x51); Release(); yield return Idle();
             Require(combat.Target.Hits == 1 && Mathf.Abs(Mathf.DeltaAngle(motor.transform.eulerAngles.y, orbit.Yaw)) < 0.1f, "Backward attack used keyboard S instead of body-relative direction"); report.checks.Add("directional attack uses actual facing rather than fixed S");
+            // Reproduce the reported case: orbit a quarter turn away from Xena,
+            // then press guard and a direction in the SAME input event.
+            foreach (int turn in new[] { 90, 180 })
+            foreach (Key key in new[] { Key.S, Key.A, Key.D })
+            {
+                Reset(); yield return Ticks(3);
+                motor.transform.rotation = Quaternion.Euler(0, orbit.Yaw + turn, 0);
+                facing = motor.transform.rotation; begin = motor.transform.position;
+                Vector3 expected = key == Key.S ? -motor.transform.forward : motor.transform.right * (key == Key.A ? -1 : 1);
+                InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 2, delta = new Vector2(350, 0) });
+                InputSystem.QueueStateEvent(keyboard, new KeyboardState(key));
+                yield return Slot(key == Key.S ? 0x2a : key == Key.A ? 0x28 : 0x29);
+                yield return null; yield return null;
+                Require(orbit.BehindCharacter && Mathf.Abs(Mathf.DeltaAngle(orbit.Yaw, motor.transform.eulerAngles.y)) < 0.1f, "Guard did not align camera before directional selection");
+                Release(); InputSystem.QueueStateEvent(pad, new GamepadState { rightStick = Vector2.right });
+                yield return Ticks(8); yield return null;
+                Require(orbit.BehindCharacter && Quaternion.Angle(facing, motor.transform.rotation) < 0.1f && Mathf.Abs(Mathf.DeltaAngle(orbit.Yaw, motor.transform.eulerAngles.y)) < 0.1f, "Released guard let camera spin during acrobatics");
+                Release(); yield return Idle();
+                Require(Vector3.Dot(motor.transform.position - begin, expected) > 1, "Defensive acrobatics used old camera direction");
+            }
+            report.checks.Add("guard same-tick S/A/D uses body axes with camera90or180degrees off");
+            report.checks.Add("mouse and right stick cannot orbit during defensive move even after guard release");
+            Reset(); yield return Ticks(3);
+            InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 2 }); yield return Slot(0x80);
+            float lockedYaw = orbit.Yaw;
+            InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 2, delta = new Vector2(400, 0) }); yield return null; yield return null;
+            Require(Mathf.Abs(Mathf.DeltaAngle(lockedYaw, orbit.Yaw)) < 0.1f, "Mouse moved guarded camera");
+            Release(); yield return Ticks(3); yield return null;
+            InputSystem.QueueStateEvent(mouse, new MouseState { delta = new Vector2(150, 0) }); yield return null; yield return null;
+            Require(!orbit.BehindCharacter && Mathf.Abs(Mathf.DeltaAngle(lockedYaw, orbit.Yaw)) > 10, "Free orbit did not return after guard"); Release();
+            report.checks.Add("guard locks horizontal orbit and releasing guard restores free mouse look");
+            Reset(); yield return Ticks(3);
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.S, Key.Space)); yield return Ticks(4); Release();
+            InputSystem.QueueStateEvent(mouse, new MouseState { delta = new Vector2(350, 0) }); yield return null; yield return null;
+            Require(orbit.BehindCharacter && Mathf.Abs(Mathf.DeltaAngle(orbit.Yaw, motor.transform.eulerAngles.y)) < 0.1f, "Backflip allowed camera orbit"); Release(); yield return Ticks(85);
+            report.checks.Add("backflip keeps camera behind body during mouse input");
+            // Check the actual joint midpoint against the two original poses.
+            Transform[] parts = visual.GetComponentsInChildren<Transform>(true);
+            var positions = new Vector3[parts.Length]; var rotations = new Quaternion[parts.Length]; var scales = new Vector3[parts.Length];
+            visual.SampleSlotFrame(0x2a, 10);
+            for (int i = 0; i < parts.Length; i++) { positions[i] = parts[i].localPosition; rotations[i] = parts[i].localRotation; scales[i] = parts[i].localScale; }
+            visual.SampleSlotFrame(0x2a, 11);
+            var nextPositions = new Vector3[parts.Length]; var nextRotations = new Quaternion[parts.Length];
+            for (int i = 0; i < parts.Length; i++) { nextPositions[i] = parts[i].localPosition; nextRotations[i] = parts[i].localRotation; }
+            visual.SampleInterpolatedSlotFrame(0x2a, 10.5f); bool changed = false;
+            for (int i = 0; i < parts.Length; i++)
+            {
+                Require(Vector3.Distance(parts[i].localPosition, Vector3.Lerp(positions[i], nextPositions[i], 0.5f)) < 0.0001f && Quaternion.Angle(parts[i].localRotation, Quaternion.Slerp(rotations[i], nextRotations[i], 0.5f)) < 0.1f && parts[i].localScale == scales[i], "Interpolated original joint midpoint or discrete visibility differs");
+                changed |= Quaternion.Angle(rotations[i], nextRotations[i]) > 1;
+            }
+            Require(changed, "Interpolation check used static poses"); report.checks.Add("acrobatics render between actual original joint poses while preserving discrete visibility");
             Destroy(platform); Destroy(material); motor.ResetToSpawn(); report.result = "PASS"; Finish(null);
         }
         private void Capture(string name) { Texture2D shot = ScreenCapture.CaptureScreenshotAsTexture(); File.WriteAllBytes(Path.Combine(output, name), shot.EncodeToPNG()); Destroy(shot); }

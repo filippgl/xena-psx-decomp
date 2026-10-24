@@ -39,3 +39,15 @@ Windows-проверка: `node tools/check_chakram_player.mjs`, отчёт
 `build/unity-import/chakram-player-verification.json`, снимок `chakram-flight.png`.
 Проверяются фактический ввод, модель и клипы, управление мышью, камера,
 попадание/препятствие, пауза, отмена, возврат, сброс, геймпад и удержание атаки.
+
+## Flight presentation correction (2026-10-24)
+
+The standalone mesh lies in local XZ (0.29 x 0.01 x 0.285 metres). The previous
+world-Y Euler spin of a 65-degree tilted mesh changed the disc normal every tick.
+Flight now composes a travel-aligned frame with a local-Y spin at 900 degrees/sec.
+The normal remains perpendicular to velocity, including steering and return.
+
+A point on the 0.145-metre rim leaves a widening, fading 0.16-second trail.
+Trail samples use the simulation clock, freeze during pause, and clear on catch,
+reset and the next launch. A Resources material retains its transparent URP shader
+in Windows builds. This is a new presentation effect; flight tuning remains provisional.

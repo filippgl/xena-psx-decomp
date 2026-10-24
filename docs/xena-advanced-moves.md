@@ -56,3 +56,20 @@ Windows-проверка `node tools/check_advanced_moves_player.mjs` включ
 сохраняется и не появляется в обычной игре. Отчёт —
 `build/unity-import/advanced-moves-player-verification.json`; снимки —
 `advanced-sword-spin.png`, `advanced-backflip.png`.
+
+## Guard camera and acrobatics presentation correction (2026-10-24)
+
+Guard immediately aligns camera yaw behind Xena BEFORE interpreting directional
+input in the same simulation tick. Guard+S always requests backward handspring,
+guard+A/D left/right cartwheel, regardless of the previous orbit angle. Horizontal
+mouse and right-stick orbit stay locked through the entire defensive move after
+guard release. Backflip also holds the camera behind the body until landing.
+Free orbit returns outside these states; vertical look, zoom and wall avoidance remain.
+
+Acrobatic presentation samples neighbouring original joint poses and blends local
+translation/rotation every rendered frame. Visibility remains discrete and imported
+STEP clips are unchanged. Gameplay still advances at 60Hz with the original 30Hz
+animation timing. This removes pose stepping for cartwheels, handsprings, rolls,
+backflips and running flips. No temporal-AA or motion-blur ghost was established;
+the baseline backflip capture has one silhouette. Visual feedback on the reported
+ghosting still needs comparison on the user's display.

@@ -215,7 +215,9 @@ namespace Xena.Assets
             motor.transform.rotation = Quaternion.Euler(0, FindFirstObjectByType<PrototypeCamera>().Yaw + 180, 0);
             evadeStart = motor.transform.position; Vector3 backward = -motor.transform.forward;
             InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 2 });
-            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.W)); yield return Slot(0x2a);
+            // Guard now aligns the camera before this same simulation tick;
+            // backward is S even when the camera started opposite the body.
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.S)); yield return Slot(0x2a);
             Require(visual.CurrentSlot == 0x2a, "Back handspring did not use character-relative direction");
             yield return Ticks(30); Release(); yield return Idle();
             Require(Vector3.Dot(motor.transform.position - evadeStart, backward) > 0.5f, "Back handspring moved forward");

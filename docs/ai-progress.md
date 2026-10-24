@@ -5,6 +5,43 @@ One issue per task. Nothing here is a claim without the command/measurement that
 
 ## Current task — Unity combat and original collision audit (2026-10-24)
 
+- USER-STEERED CAMERA/ACROBATICS/CHAKRAM FIX COMPLETE (24Oct20:32MSK build):
+  Guard synchronizes camera yaw to body BEFORE movement/combo selection; S/A/D
+  therefore remain back/left/right with previous orbit90/180off. Horizontal orbit
+  locked through defensive move even after release and through backflip flight.
+  Free orbit returns outside these states; zoom/pitch/wall spherecast retained.
+  Original STEP clips unchanged: render-only adjacent local-pose interpolation
+  covers cartwheels/handsprings/rolls/backflips/runningflips; visibility stays discrete.
+  Ghosting NOT independently reproduced: live camera SolidColor/no additional
+  URP camera data/no post, exactly33player renderers; baseline capture one silhouette.
+  Build removes pose stepping; do NOT claim display ghosting conclusively fixed.
+- Chakram mesh localXZ bounds .29/.01/.285m. Root Euler65/worldY spin caused
+  normal precession. Travel frame * localY spin900deg/s fixes wobble including
+  steering/return. Rim .145m leaves .16sec bounded widening fading line trail;
+  simulation ages freeze onpause, clear oncatch/reset/launch. Resources material
+  retains new transparent URP shader in standalone. No flight-physics parity claim.
+- FINAL131WindowschecksPASS:26movement/38combat/14settings/18chakram/13special/
+  22advanced; aggregate8currentlogs clean. DLL2026-10-24T17:32:36.003Z
+  SHA89bc449b98ed67e51c3920d66de744f76778a4e9577a60d82d6b31925529fb7a;
+  resources2026-10-24T17:32:35.609Z
+  SHAdf70a56624734bfa4f83c7b6b9084383894ce0b0f8cca3b154e669773412ab5b.
+  Windows executable build/unity-movement/XenaMovementPrototype.exe128751123bytes.
+  Targeted advanced22/chakram18 PASS before final rebuild, allsix fresh after.
+  Initial concurrent combat run duringEditor startup failed short3tick guard-sword
+  expectation after21checks; SAME DLL then passed38 twice, no expectation weakened.
+  Possible inputUpdate/fixed-tick test timing sensitivity remains; retain diagnosis
+  if it recurs. Opposite-camera handspring test intentionally now usesS insteadW.
+- Main live Pipeline7checksPASS,114motorTicks/81clips/2chakrammeshes46tris,
+  0errors/warnings. Own Editor2728 used; close before end, preserveHub/CLI.
+- PRIOR AUDIT interrupted by explicit user priorities: Bandit import NOT started.
+  Uncommitted research tools/capture_action_reference.mjs (delayedtarget fixture)
+  and tools/lib/mips_pose_oracle.mjs (DIVU1B) retained separately, NOT part camera fix.
+  New MIPS evidence: target149 range369..461/relativeangle-26..-162/classC93
+  satisfies5F target gate, request3F6AC returns1/pending5F; modeF2010+4=1 not2.
+  Delayed20frame Kick->Jump+Kick fixture still42/61 not5F, so geometry/earlypriority
+  are insufficient explanations. Next inspectgp4B24/inputevent/list at actual gate,
+  then import Level01BANDIT.TMD/STM with BANDIT.SMI/SMA; do notrepeat samefixture.
+
 - LATEST ADVANCED BATCH COMPLETE: spinning sword4C18->4D7paired->4E31, chord
   LMB+F, freshkick extendsonepair perpair up to6additionalpairs; holdingdoesnot.
   Grace2precontactframes permitsstagger, noextra singlehit. Guard/chakrampriority
