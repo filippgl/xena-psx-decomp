@@ -84,6 +84,24 @@ namespace Xena.Assets
             report.checks.Add("Remaster sky and far fog show the painted 360-degree landscape");
             yield return SkyViews(motor, orbit, camera, "presentation-sky-remaster.png");
             yield return WallCamera(motor, orbit, camera, level);
+            var shafts = motor.GetComponent<PrototypeLightShafts>(); Renderer sunbeam = null;
+            foreach (var r in level.GetComponentsInChildren<MeshRenderer>()) if (r.name.Contains("@sunbm")) sunbeam = r;
+            Require(shafts.Shafts == 1 && shafts.RemasterShown && sunbeam != null && !sunbeam.enabled, "Remaster did not replace the @sunbm beam with a light shaft");
+            report.checks.Add("Remaster replaces the original @sunbm beam with a volumetric-style light shaft");
+            orbit.enabled = false; Vector3 beamAt = sunbeam.bounds.center;
+            Vector3 viewFrom = beamAt + new Vector3(6, -2.5f, 6); float floor = motor.GroundHeight(viewFrom + Vector3.up * 3); if (!float.IsNegativeInfinity(floor)) viewFrom.y = Mathf.Max(viewFrom.y, floor + 1.7f);
+            camera.transform.position = viewFrom; camera.transform.LookAt(beamAt);
+            yield return null; yield return new WaitForEndOfFrame(); Capture("presentation-sunbeam-remaster.png");
+            graphics.SetMode(XenaVisualMode.Original); yield return null; yield return new WaitForEndOfFrame(); Capture("presentation-sunbeam-original.png");
+            Require(sunbeam.enabled && !shafts.RemasterShown, "Original mode did not restore the @sunbm beam");
+            graphics.SetMode(XenaVisualMode.Remaster); yield return null; orbit.enabled = true;
+            foreach (var r in level.GetComponentsInChildren<MeshRenderer>())
+            {
+                var mats = r.sharedMaterials;
+                for (int i = 0; i < mats.Length; i++)
+                    if (mats[i] != null && mats[i].shader.name == "Xena/OriginalSemiTransparent")
+                        report.checks.Add("stp " + r.name + " slot " + i + " " + (mats[i].mainTexture != null ? mats[i].mainTexture.name : "-") + " blend " + mats[i].GetFloat("_Ps1BlendMode") + " centre " + r.bounds.center.ToString("F1") + " size " + r.bounds.size.ToString("F1"));
+            }
             var bandits = motor.GetComponent<PrototypeBandits>(); report.bandits = bandits.Bandits.Count;
             Require(bandits.GeneratorCount == 11 && bandits.Spawned + bandits.TotalRemaining == 12 && bandits.Live() <= bandits.MaxLiveEnemies, "Level01 bandit generators differ from the original records");
             report.checks.Add("11 original bandit generators hold 12 bandits, at most 3 alive");

@@ -93,7 +93,7 @@ namespace Xena.Assets.Editor
         private static void CreateRemasterResources()
         {
             Directory.CreateDirectory("Assets/Imported/Resources/Remaster");
-            foreach (var (file, shaderName) in new[] { ("Water", "Xena/RemasterWater"), ("Waterfall", "Xena/RemasterWaterfall"), ("Rainbow", "Xena/RemasterRainbow"), ("LevelLit", "Xena/RemasterLit"), ("Foam", "Xena/RemasterFoam") })
+            foreach (var (file, shaderName) in new[] { ("Water", "Xena/RemasterWater"), ("Waterfall", "Xena/RemasterWaterfall"), ("Rainbow", "Xena/RemasterRainbow"), ("LevelLit", "Xena/RemasterLit"), ("Foam", "Xena/RemasterFoam"), ("LightShaft", "Xena/RemasterLightShaft") })
             {
                 string path = "Assets/Imported/Resources/Remaster/" + file + ".mat";
                 Shader shader = Shader.Find(shaderName); if (shader == null) throw new InvalidDataException(shaderName + " unavailable");
