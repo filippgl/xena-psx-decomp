@@ -94,10 +94,10 @@ namespace Xena.Assets
                 if (chosen[0].Slot == PrototypeBanditBrain.Run || chosen[0].Slot == PrototypeBanditBrain.Walk)
                 {
                     yield return new WaitForEndOfFrame();
-                    // Stalled = the drawn body froze although the AI root moved within the last
-                    // AI step (two 60 Hz ticks); a bandit standing blocked is not counted.
+                    // Stalled = the drawn body froze although the current AI step moves the
+                    // actor (previous != current); a stop or a blocked bandit is not counted.
                     float moved = Vector3.Distance(drawn.position, lastDrawn);
-                    bool rootMoved = Vector3.Distance(chosen[0].transform.position, rootTwoAgo) > 0.0005f;
+                    bool rootMoved = chosen[0].StepTravel > 0.0005f;
                     if (moved > 0.0005f) movingFrames++; else if (rootMoved) stalledFrames++;
                 }
                 lastDrawn = drawn.position; rootTwoAgo = rootOneAgo; rootOneAgo = chosen[0].transform.position;
@@ -150,6 +150,10 @@ namespace Xena.Assets
             }
             Require(foe.Dying && foe.Health == 0, "Bandit did not die from original damage"); report.deathSlot = foe.Slot;
             Require(foe.Slot >= 0x8A && foe.Slot <= 0x91, "Death did not play an original 8A..91 clip"); report.checks.Add("bandit at 0 health plays an original death clip");
+            var ring = motor.GetComponent<PrototypeHud>(); damage.SetKarmaForTest(48); for (int i = 0; i < 4; i++) yield return null;
+            Require(ring.LitSegments == 48 * 29 / 96, "Karma ring did not light trunc(meter*29/96) segments: " + ring.LitSegments);
+            report.checks.Add("karma ring lights trunc(meter*29/96) segments");
+            damage.SetKarmaForTest(0);
             int liveBefore = bandits.Live(); Time.timeScale = 4;
             for (int i = 0; i < 60 * 25 && !foe.Removed; i++) yield return new WaitForFixedUpdate();
             Time.timeScale = 1;
@@ -174,6 +178,7 @@ namespace Xena.Assets
             Require(hud.Loaded && hud.TargetLength == PrototypeHud.HealthLength(damage.Health, 500) && hud.ShownLength == hud.TargetLength,
                 "HUD did not follow the original health mapping: " + hud.ShownLength + "/" + hud.TargetLength + " bars " + hud.VisibleEnemyBars);
             report.checks.Add("HUD sword length = clamp(109*hp/500,3,109)");
+            Require(hud.HdTextures == 8, "Remaster HUD HD textures missing: " + hud.HdTextures); report.checks.Add("Remaster HUD loads 8 Codex-remastered -4x textures");
             yield return new WaitForEndOfFrame(); Capture("hud-remaster.png");
             PrototypeGraphics.Active.SetMode(XenaVisualMode.Original); for (int i = 0; i < 3; i++) yield return null; yield return new WaitForEndOfFrame(); Capture("hud-original.png");
             PrototypeGraphics.Active.SetMode(XenaVisualMode.Remaster);
@@ -200,6 +205,9 @@ namespace Xena.Assets
             var scripts = motor.GetComponent<PrototypeLevelScripts>();
             var signs = new List<Vector3>(scripts.TriggerPositions("sign"));
             Require(scripts.PlacedSprites == 6, "Pickup sprites not placed: " + scripts.PlacedSprites); report.checks.Add("6 original pickup sprites (health2 x3, scroll x2, up_sword) placed screen-facing");
+            var spriteViews = FindObjectsByType<PrototypeScreenSprite>(FindObjectsSortMode.None); bool allHd = spriteViews.Length == 6;
+            foreach (var view in spriteViews) allHd &= view.UsingRemaster;
+            Require(allHd, "Remaster did not use the Codex HD pickup sprites"); report.checks.Add("Remaster pickups use the Codex-remastered HD sprites");
             var music = motor.GetComponent<PrototypeMusic>(); Require(music != null && music.enabled && music.Track >= 0 && music.Muted, "Original m_vill music not loaded"); report.checks.Add("m_vill sequences load; exploration track plays (muted in smoke)");
             Require(scripts.PlacedModels == 4, "Original sign/Siras models not placed: " + scripts.PlacedModels); report.checks.Add("3 original SIGN_PT models and SIRAS placed from the level records");
             yield return Visit(motor, signs[0]);
@@ -234,6 +242,18 @@ namespace Xena.Assets
             report.checks.Add("health2 is used at once when health+150 < 500, otherwise kept");
             yield return Visit(motor, pickups[0]); Require(scripts.Modal && scripts.ShownIndex == 69 && scripts.SwordLevel == 1, "Sword upgrade did not apply"); scripts.Close();
             report.checks.Add("up_sword raises sword level and shows message 69");
+            var frogs = motor.GetComponent<PrototypeFrogs>(); Require(frogs.Frogs.Count == 5, "Original frogs not placed: " + frogs.Frogs.Count);
+            var frog = frogs.Frogs[0]; Vector3 frogAt = frog.root.position; int frogStalled = 0, frogMoved = 0; Vector3 lastBody = frog.body.position;
+            yield return Visit(motor, frogAt + Vector3.right * 1.2f);
+            for (int i = 0; i < 240 && !frog.gone; i++)
+            {
+                yield return null;
+                if (frog.jumping && !frog.gone) { if (Vector3.Distance(frog.body.position, lastBody) > 0.0005f) frogMoved++; else frogStalled++; }
+                lastBody = frog.body.position;
+            }
+            Require(frog.jumping && frog.gone, "Frog did not jump and despawn when Xena came within 1000 units");
+            Require(frogMoved > 5 && frogStalled == 0, "Frog jump is not render-interpolated: " + frogStalled + "/" + (frogMoved + frogStalled));
+            report.checks.Add("frog jumps (65 up, gravity 5, 40 forward) when Xena is within 1000, despawns on landing, interpolated");
             var siras = new List<Vector3>(scripts.TriggerPositions("levelEndNpc"));
             yield return Visit(motor, siras[0] + Vector3.forward * 2.5f); for (int i = 0; i < 10; i++) yield return new WaitForFixedUpdate();
             Require(scripts.CutsceneActive && scripts.CutsceneFrames == 563, "Reaching Siras did not start the 563-frame ending: " + scripts.CutsceneFrames);

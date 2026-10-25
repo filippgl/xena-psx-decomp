@@ -123,6 +123,12 @@ One issue per task. Nothing here is a claim without the command/measurement that
   min(d,30), input lock, invulnerable during reaction; none for 1-damage blocked hits.
   Frontal bandit hit -> 0x72 (same as native capture). Bandit continuity metric now counts
   frames where the AI root moved but the body froze; strict 0 (78 frames).
+  CODEX HD ART (07:3x): Codex CLI 0.163 `codex exec -s workspace-write -i <ref>` with the
+  built-in image_gen; inputs build/codex-remaster/in (nearest x9..16, magenta bg), prompts
+  tools/codex-remaster/, fit tools/finish_codex_remaster.py (alpha-bbox crop, own alpha) ->
+  HUD/<name>-4x.png (8) and Props/Pickups/<name>-hd.png (3). Remaster uses them (checked).
+  Karma meter + power-up (x2 damage, 825 steps) + 29-segment ring; frogs (0x8001B12C jump,
+  despawn, interpolated). Bandit AI steps on integer ticks; stall metric uses step travel.
   Unverified/next: original Xena radius obj+0x28=150u (.375m) vs capsule .28m;
   normal-Y<3200 slope block not implemented (query has no normal); narrowphase
   800A129C slide math. Next: cartwheel/backflip continuity measurement; then F10

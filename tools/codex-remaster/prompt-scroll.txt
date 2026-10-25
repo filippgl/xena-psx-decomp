@@ -1,0 +1,7 @@
+Use your built-in image_gen tool (imagegen skill, built-in mode, not the CLI) to remaster the attached game sprite.
+The attached image is a tiny PS1 sprite (32x32 pixels, shown enlarged 16x). Magenta (#FF00FF) is the transparent background.
+It is a rolled parchment scroll pickup from "Xena: Warrior Princess" (1999).
+Create a modern high-resolution hand-painted version of exactly this object: same silhouette, same pose/angle, same proportions,
+same colour palette (cream parchment, dark brown shadows/edges), same framing so it fills the canvas the same way.
+No new elements, no text, no border, no drop shadow. Transparent background (real alpha), square 1024x1024 output.
+Save the final selected image into this workspace as out/scroll.png (copy it from CODEX_HOME/generated_images). Do nothing else.

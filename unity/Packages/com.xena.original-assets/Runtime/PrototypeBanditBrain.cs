@@ -72,10 +72,15 @@ namespace Xena.Assets
         private PrototypeMotor target;
         private Dictionary<int, MotionClip> motion;
         private int aggression, heading; // heading in original units (0..4095), Unity yaw = heading * 360/4096
-        private float clock;
+        // Integer tick count: one 30/s AI step every 2nd 60 Hz tick (float accumulation
+        // occasionally slipped a step to the 3rd tick and broke the drawn rhythm).
+        private int ticks, ticksSinceStep;
+        private float clock => ticksSinceStep * Time.fixedDeltaTime;
         // Render-only interpolation between the last two AI steps (30/s): the
         // drawn body glides, the root/actor state stays on the discrete step.
-        private Vector3 previousPosition, currentPosition; private Quaternion previousRotation, currentRotation; private bool hasStep;
+        private Vector3 previousPosition, currentPosition;
+        // Distance the drawn body travels across the current AI step (tests).
+        public float StepTravel => Vector3.Distance(previousPosition, currentPosition); private Quaternion previousRotation, currentRotation; private bool hasStep;
         private System.Random random;
         private static readonly List<PrototypeBanditBrain> all = new List<PrototypeBanditBrain>();
 
@@ -93,10 +98,10 @@ namespace Xena.Assets
         {
             if (!Active || target == null || pose == null) return;
             var input = target.GetComponent<PrototypeInput>(); if (input != null && input.Paused) return;
-            clock += Time.fixedDeltaTime;
-            while (clock >= 1f / 30)
+            int perStep = Mathf.Max(1, Mathf.RoundToInt(1f / 30 / Time.fixedDeltaTime)); ticksSinceStep++;
+            if (++ticks % perStep == 0)
             {
-                clock -= 1f / 30;
+                ticksSinceStep = 0;
                 if (transform.position != currentPosition || !hasStep) { previousPosition = currentPosition = transform.position; previousRotation = currentRotation = transform.rotation; hasStep = true; }
                 previousPosition = currentPosition; previousRotation = currentRotation;
                 Step();
@@ -108,7 +113,10 @@ namespace Xena.Assets
             if (pose == null) return;
             Transform body = pose.transform;
             if (!hasStep || !Active || transform.position != currentPosition) { body.localPosition = Vector3.zero; body.localRotation = Quaternion.Euler(0, 180, 0); return; }
-            float alpha = Mathf.Clamp01((clock + Mathf.Clamp(Time.time - Time.fixedTime, 0, Time.fixedDeltaTime)) * 30);
+            // The AI step runs inside the 60 Hz tick, so up to 1/60 s can pass beyond the
+            // 1/30 s step before it fires: extrapolate (<= 1.5) instead of holding a frame.
+            float alpha = Mathf.Clamp((clock + Mathf.Clamp(Time.time - Time.fixedTime, 0, Time.fixedDeltaTime)) * 30, 0, 1.5f);
+            if (alpha > 1) { body.SetPositionAndRotation(Vector3.LerpUnclamped(previousPosition, currentPosition, alpha), Quaternion.SlerpUnclamped(previousRotation, currentRotation, alpha) * Quaternion.Euler(0, 180, 0)); return; }
             Quaternion rotation = Quaternion.Slerp(previousRotation, currentRotation, alpha);
             body.SetPositionAndRotation(Vector3.Lerp(previousPosition, currentPosition, alpha), rotation * Quaternion.Euler(0, 180, 0));
         }

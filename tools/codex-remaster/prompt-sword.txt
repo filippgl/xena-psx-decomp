@@ -1,0 +1,7 @@
+Use your built-in image_gen tool (imagegen skill, built-in mode, not the CLI) to remaster the attached game sprite.
+The attached image is a tiny PS1 sprite from "Xena: Warrior Princess" (1999), shown enlarged with nearest-neighbour pixels. Magenta (#FF00FF) is the transparent background.
+It shows a long thin polished steel sword blade seen from the side, horizontal, pointing right (full health bar of a HUD).
+Create a modern high-resolution hand-painted version of exactly this object: same silhouette, same orientation, same proportions and the same colour palette as the sprite.
+The object must fill the canvas edge to edge in the same way as the sprite fills its frame. No new elements, no text, no border, no drop shadow, no background.
+Transparent background (real alpha). Output size 1536x1024.
+Save the final selected image into this workspace as out/sword.png (copy it from CODEX_HOME/generated_images). Do nothing else.

@@ -1,0 +1,7 @@
+Use your built-in image_gen tool (imagegen skill, built-in mode, not the CLI) to remaster the attached game sprite.
+The attached image is a tiny PS1 HUD sprite (48x11 pixels, enlarged with nearest-neighbour). Magenta (#FF00FF) is transparent.
+It is the EMPTY part of a horizontal dagger enemy health bar in "Xena: Warrior Princess" (1999). Keep EXACTLY its layout:
+pommel at the far left edge, a dark wrapped grip, a TALL narrow golden cross-guard that spans the FULL height of the image located at about 45% of the width from the left, and a straight steel blade from the guard to a point at the right edge.
+Same colours as the sprite: the WHOLE dagger is dark red, blood-soaked (guard, grip and blade all deep red). Modern high-resolution hand-painted look.
+The dagger must fill the canvas from the left edge to the right edge; the guard touches the top and bottom edges. No text, no border, no shadow, transparent background.
+Output 1536x1024. Save the final image into this workspace as out/daggered.png, overwriting it (copy it from CODEX_HOME/generated_images). Do nothing else.

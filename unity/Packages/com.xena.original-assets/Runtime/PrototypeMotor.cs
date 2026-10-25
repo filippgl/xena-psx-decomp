@@ -54,6 +54,7 @@ namespace Xena.Assets
             if (GetComponent<PrototypeOriginalDamage>() == null) gameObject.AddComponent<PrototypeOriginalDamage>();
             if (GetComponent<PrototypeMusic>() == null) gameObject.AddComponent<PrototypeMusic>();
             if (GetComponent<PrototypeHud>() == null) gameObject.AddComponent<PrototypeHud>();
+            if (GetComponent<PrototypeFrogs>() == null) gameObject.AddComponent<PrototypeFrogs>();
             if (GetComponent<PrototypeGraphics>() == null) gameObject.AddComponent<PrototypeGraphics>();
             AddHoleSolidColliders();
         }

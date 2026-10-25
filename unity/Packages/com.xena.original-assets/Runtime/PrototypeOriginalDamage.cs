@@ -42,6 +42,15 @@ namespace Xena.Assets
         public int BlockedHits { get; private set; }
         public int HitsDealt { get; private set; }
         public int LastDamageDealt { get; private set; }
+        // Karma meter D_800F1135 (func_80032904): +10 for kills while Xena is in
+        // 0x61/0x62/0x5A/0x60/0x49/0x55/0x3F/0x5C/0x5F, -10 for killing a fleeing
+        // enemy (flee not ported); at >= 96 the power-up D_800F1136 = 825 steps
+        // doubles Xena's damage; the meter resets when it ends.
+        public int Karma { get; private set; }
+        public int PowerUp { get; private set; }
+        public int PowerUps { get; private set; }
+        private static readonly int[] KarmaStates = { 0x61, 0x62, 0x5A, 0x60, 0x49, 0x55, 0x3F, 0x5C, 0x5F };
+        public void SetKarmaForTest(int value) { Karma = Mathf.Clamp(value, 0, 96); }
         public bool Dead { get; private set; }
         // Xena hit reactions (docs/xena-hit-reactions.md, func_800367BC 0x80037E68..0x800383F8):
         // only when final damage >= 2; sector s = (atan2(Xena - attacker) - rotY + 0x200) & 0xFFF:
@@ -107,7 +116,7 @@ namespace Xena.Assets
             if (Health + MaxHealth * 30 / 100 < MaxHealth && scripts != null && scripts.UsePotion()) Health = Mathf.Min(MaxHealth, Health + MaxHealth * 30 / 100);
         }
         public void SetHealthForTest(int value) { Health = Mathf.Clamp(value, 0, MaxHealth); }
-        public void ResetState() { Reacting = false; ReactionSlot = -1; Reactions = 0; Health = MaxHealth; Dead = false; deathFrame = 0; HitsTaken = 0; BlockedHits = 0; HitsDealt = 0; struck.Clear(); attackSlot = -1; if (motor != null) motor.enabled = true; }
+        public void ResetState() { Karma = 0; PowerUp = 0; Reacting = false; ReactionSlot = -1; Reactions = 0; Health = MaxHealth; Dead = false; deathFrame = 0; HitsTaken = 0; BlockedHits = 0; HitsDealt = 0; struck.Clear(); attackSlot = -1; if (motor != null) motor.enabled = true; }
 
         private void FixedUpdate()
         {
@@ -122,6 +131,7 @@ namespace Xena.Assets
                 visual.SampleSlotFrame(0x91, deathFrame); deathFrame++;
                 return;
             }
+            if (PowerUp > 0 && --PowerUp == 0) Karma = 0;
             if (combat == null || bandits == null) return;
             // One hit per target per attack instance (a new clip start clears it).
             if (!combat.Busy || combat.Slot != attackSlot) { struck.Clear(); attackSlot = combat.Busy ? combat.Slot : -1; }
@@ -133,14 +143,18 @@ namespace Xena.Assets
                 bool kick = window.damage < 0;
                 float reach = kick ? 1.25f : 1.65f;
                 bool spin = combat.Slot == 0x5C || combat.Slot == 0x46 || combat.Slot == 0x4D;
-                int damage = Math.Abs(window.damage) + (scripts != null ? scripts.SwordLevel : 0);
+                int damage = Math.Abs(window.damage) * (PowerUp > 0 ? 2 : 1) + (scripts != null ? scripts.SwordLevel : 0);
                 foreach (var bandit in bandits.Brains)
                 {
                     if (bandit == null || bandit.Removed || bandit.Health <= 0 || struck.Contains(bandit)) continue;
                     Vector3 offset = bandit.transform.position - transform.position; float dy = offset.y; offset.y = 0;
                     if (offset.magnitude > reach + PrototypeBanditBrain.Radius / 400f || Mathf.Abs(dy) * 400 > 750) continue;
                     if (!spin && offset.sqrMagnitude > 0.0001f && Vector3.Angle(transform.forward, offset) > 60) continue;
-                    if (bandit.TakeHit(damage, transform.position, kick)) { struck.Add(bandit); HitsDealt++; LastDamageDealt = damage; }
+                    if (bandit.TakeHit(damage, transform.position, kick))
+                    {
+                        struck.Add(bandit); HitsDealt++; LastDamageDealt = damage;
+                        if (bandit.Health == 0 && PowerUp == 0 && Array.IndexOf(KarmaStates, combat.Slot) >= 0 && (Karma = Mathf.Min(96, Karma + 10)) >= 96) { PowerUp = 825; PowerUps++; }
+                    }
                 }
             }
         }

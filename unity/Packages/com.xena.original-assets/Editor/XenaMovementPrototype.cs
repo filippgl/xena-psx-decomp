@@ -125,7 +125,7 @@ namespace Xena.Assets.Editor
                 rockImporter.maxTextureSize = 2048; rockImporter.SaveAndReimport();
             }
             // Original HUD pixels (tools/export_hud.mjs): uncompressed, point, no mips.
-            foreach (string hudPath in Directory.GetFiles("Assets/Imported/Resources/HUD", "*.png"))
+            foreach (string hudPath in Directory.GetFiles("Assets/Imported/Resources/HUD", "*.png", SearchOption.AllDirectories))
                 if (AssetImporter.GetAtPath(hudPath.Replace(Path.DirectorySeparatorChar, '/')) is TextureImporter hudImporter)
                 {
                     hudImporter.textureCompression = TextureImporterCompression.Uncompressed; hudImporter.mipmapEnabled = false;

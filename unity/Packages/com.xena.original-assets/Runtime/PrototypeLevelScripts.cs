@@ -102,7 +102,9 @@ namespace Xena.Assets
             material.SetFloat("_UseVertexLighting", 0); material.SetFloat("_Cull", 0); material.SetFloat("_Cutoff", 0.5f);
             if (half) { material.SetTexture("_StpMask", Texture2D.whiteTexture); material.SetFloat("_Ps1BlendMode", 0); material.SetFloat("_SrcBlend", 5); material.SetFloat("_DstBlend", 10); }
             root.AddComponent<MeshRenderer>().sharedMaterial = material;
-            root.AddComponent<PrototypeScreenSprite>(); PlacedSprites++;
+            texture.filterMode = FilterMode.Point;
+            var sprite = root.AddComponent<PrototypeScreenSprite>(); sprite.Original = texture;
+            sprite.Remaster = Resources.Load<Texture2D>("Props/Pickups/" + actor.name + "-hd"); PlacedSprites++;
             return root;
         }
         private void Place(string model, Actor actor, bool animate)

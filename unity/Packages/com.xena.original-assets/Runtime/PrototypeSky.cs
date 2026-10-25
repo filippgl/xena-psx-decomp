@@ -42,7 +42,7 @@ namespace Xena.Assets
             }
             sun.enabled = remaster;
             // The importer disables shadows (original look); Remaster turns them on.
-            foreach (string root in new[] { "OriginalLevel01", "ControlledXena", "Level01Bandits", "Level01Props" })
+            foreach (string root in new[] { "OriginalLevel01", "ControlledXena", "Level01Bandits", "Level01Props", "Level01Frogs" })
             {
                 GameObject owner = GameObject.Find(root); if (owner == null) continue;
                 foreach (Renderer item in owner.GetComponentsInChildren<Renderer>(true))
