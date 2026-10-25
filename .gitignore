@@ -50,3 +50,5 @@ tools/UnityAssetCheck/obj/
 tools/codex-remaster/in/
 tools/codex-remaster/out/
 tools/codex-remaster/*.log
+tools/codex-remaster/prompt-page-*.txt
+!tools/codex-remaster/prompt-page-2.txt

@@ -102,6 +102,15 @@ namespace Xena.Assets.Editor
                 if (existing != null) AssetDatabase.DeleteAsset(path);
                 AssetDatabase.CreateAsset(new Material(shader), path);
             }
+            // Original hit effects (Xena/HitEffect): additive bursts (PS1 abr 1) and opaque blood lines.
+            foreach (var (file, src, dst) in new[] { ("HitAdditive", BlendMode.One, BlendMode.One), ("HitOpaque", BlendMode.One, BlendMode.Zero) })
+            {
+                string path = "Assets/Imported/Resources/Remaster/" + file + ".mat";
+                Shader shader = Shader.Find("Xena/HitEffect"); if (shader == null) throw new InvalidDataException("Xena/HitEffect unavailable");
+                if (AssetDatabase.LoadAssetAtPath<Material>(path) != null) AssetDatabase.DeleteAsset(path);
+                var material = new Material(shader); material.SetFloat("_SrcBlend", (float)src); material.SetFloat("_DstBlend", (float)dst);
+                AssetDatabase.CreateAsset(material, path);
+            }
             const string puffPath = "Assets/Imported/Resources/Remaster/MistPuff.asset";
             var puff = AssetDatabase.LoadAssetAtPath<Texture2D>(puffPath);
             if (puff == null)

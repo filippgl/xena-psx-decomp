@@ -16,7 +16,7 @@ namespace Xena.Assets
         [Serializable] private sealed class Report
         {
             public string result = "FAIL", error; public List<string> checks = new List<string>();
-            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError, deathLensHeight, gameOverVideoSeconds; public int gameOverMenuStep; public string gameOverVideo; public int menuBolts; public List<string> runTrace = new List<string>();
+            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError, deathLensHeight, gameOverVideoSeconds; public int gameOverMenuStep; public string gameOverVideo; public int hitFlashLife, hitDiscs, hitTriangles, remasterDroplets, discFrames, discStalls; public int menuBolts; public List<string> runTrace = new List<string>();
         }
         private readonly Report report = new Report();
         private string output; private bool finished;
@@ -211,15 +211,46 @@ namespace Xena.Assets
             var foe = bandits.SpawnForTest(front); Require(foe != null, "No pending bandit for damage test");
             foe.transform.rotation = Quaternion.LookRotation(-motor.transform.forward); foe.Configure(foe.GetComponentInChildren<XenaAssetPreview>(), motor, Motion(foe), 75, 0, 7);
             foe.Active = false; // stand still while Xena strikes
-            int before = foe.Health;
+            int before = foe.Health, reactionsAtStrike = damage.Reactions, hitsAtStrike = damage.HitsTaken;
             // Hold the press for real frames: after the 4x ending, fixed-step catch-up
             // could otherwise deliver press and release to Input System in one update.
             yield return null; yield return null;
             InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 1 }); for (int i = 0; i < 4; i++) yield return null;
-            InputSystem.QueueStateEvent(mouse, new MouseState()); for (int i = 0; i < 30; i++) yield return new WaitForFixedUpdate();
+            var slots = new List<int>();
+            var effects = motor.GetComponent<PrototypeHitEffects>(); int sparks = effects.SparkLog.Count, bleeds = effects.BleedLog.Count; bool shot = false;
+            InputSystem.QueueStateEvent(mouse, new MouseState());
+            for (int i = 0; i < 30; i++)
+            {
+                yield return new WaitForFixedUpdate();
+                var combatNow = motor.GetComponent<PrototypeCombat>(); if (combatNow.Busy && !slots.Contains(combatNow.Slot)) slots.Add(combatNow.Slot);
+                if (!shot && effects.SparkLog.Count > sparks && effects.ActiveDrops > 0) { shot = true; yield return new WaitForEndOfFrame(); Capture("hit-effects-remaster.png"); report.hitTriangles = effects.LastDrawnTriangles; report.remasterDroplets = effects.RemasterDroplets; }
+            }
             report.firstHitDamage = before - foe.Health;
-            Require(report.firstHitDamage == 30 + scripts.SwordLevel, "Sword 51 did not deal original 30 + sword level: " + report.firstHitDamage);
+            Require(report.firstHitDamage == 30 + scripts.SwordLevel, "Sword 51 did not deal original 30 + sword level: " + report.firstHitDamage + " (Xena hit " + (damage.HitsTaken - hitsAtStrike) + "x, reactions " + (damage.Reactions - reactionsAtStrike) + ", live bandits " + bandits.Live() + ", Xena clips " + string.Join(",", slots.ConvertAll(x => x.ToString("X"))) + ", foe at " + Vector3.Distance(foe.transform.position, motor.transform.position).ToString("F2") + " m, angle " + Vector3.Angle(motor.transform.forward, foe.transform.position - motor.transform.position).ToString("F0") + ")");
             report.checks.Add("sword 51 deals the original 30 + sword level to a bandit");
+            int d = report.firstHitDamage;
+            // The sword spark: (Hit, d) logged, flash life / ring / discs by func_800291A0, the foe bleeds.
+            Require(effects.SparkLog.GetRange(sparks, effects.SparkLog.Count - sparks).Contains((PrototypeHitEffects.Type.Hit, d, Mathf.Min(d / 4 + 4, 12), d >= 26, Mathf.Clamp(d / 4 - 1, 0, 6)))
+                && effects.BleedLog.GetRange(bleeds, effects.BleedLog.Count - bleeds).Contains(foe.transform) && shot,
+                "Sword hit did not spark red with d = " + d + " or the bandit did not bleed");
+            Require(report.hitTriangles > 0, "Hit effects were not drawn");
+            Require(effects.RemasterDroplets > 0 || report.remasterDroplets > 0, "Remaster blood droplets were not emitted");
+            // Ghosting rule: spark discs move on the 30/s step; per render frame (120 FPS) the drawn
+            // position must advance while the disc moves.
+            effects.Spark(motor.transform.position + motor.transform.forward + Vector3.up, 30, PrototypeHitEffects.Type.Hit);
+            int discFrames = 0, discStalls = 0; Vector3 lastDisc = Vector3.zero; bool haveLast = false;
+            for (int i = 0; i < 40; i++)
+            {
+                yield return null;
+                if (!effects.MovingDisc(out Vector3 disc)) { haveLast = false; continue; }
+                if (haveLast) { discFrames++; if (Vector3.Distance(disc, lastDisc) < 1e-5f) discStalls++; }
+                lastDisc = disc; haveLast = true;
+            }
+            report.discFrames = discFrames; report.discStalls = discStalls;
+            Require(discFrames > 10 && discStalls == 0, "Spark discs step at 30 Hz instead of gliding: " + discStalls + "/" + discFrames);
+            report.checks.Add("hit spark discs are render-interpolated (no stalled frames at 120 FPS)");
+            report.hitFlashLife = effects.LastFlashLife; report.hitDiscs = effects.LastDiscs;
+            report.checks.Add("sword hit: red flash life min(d/4+4,12), ring for d >= 26, clamp(d/4-1,0,6) discs, bandit bleeds");
             Require(motor.GetComponent<PrototypeHud>().VisibleEnemyBars >= 1, "Enemy dagger bar not shown after the hit"); report.checks.Add("HUD shows the enemy dagger bar for 60 frames after its health changes");
             foe.Active = true;
             for (int press = 0; press < 30 && !foe.Dying; press++)
@@ -250,6 +281,8 @@ namespace Xena.Assets
             attacker.transform.rotation = Quaternion.LookRotation(-motor.transform.forward); attacker.Configure(attacker.GetComponentInChildren<XenaAssetPreview>(), motor, Motion(attacker), 75, 90, 11);
             for (int i = 0; i < 60 * 15 && damage.HitsTaken == 0; i++) yield return new WaitForFixedUpdate();
             report.firstIntake = damage.LastIntake;
+            var hitFx = motor.GetComponent<PrototypeHitEffects>();
+            Require(hitFx.LastType == PrototypeHitEffects.Type.Hit && hitFx.BloodEmitters >= 2, "Bandit hit on Xena did not flash red / make her bleed");
             Require(report.firstIntake == 15 || report.firstIntake == 25 || report.firstIntake == 30, "Bandit hit did not use an original window damage: " + report.firstIntake);
             report.checks.Add("bandit attack damages Xena by its original window value");
             Require(damage.Reactions >= 1, "Xena did not play an original hit reaction"); report.xenaReaction = damage.ReactionSlot;
@@ -265,12 +298,19 @@ namespace Xena.Assets
             for (int i = 0; i < 90 && damage.Reacting; i++) yield return new WaitForFixedUpdate();
             int health = damage.Health, blocked = damage.BlockedHits, reactionsBefore = damage.Reactions;
             Vector3 at = attacker.transform.position - motor.transform.position; at.y = 0; motor.transform.rotation = Quaternion.LookRotation(at);
+            int bleedsBefore = motor.GetComponent<PrototypeHitEffects>().BloodEmitters;
             InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 2 });
             for (int i = 0; i < 60 * 15 && damage.BlockedHits == blocked; i++) { yield return new WaitForFixedUpdate(); Vector3 t = attacker.transform.position - motor.transform.position; t.y = 0; if (t.sqrMagnitude > 0.01f) motor.transform.rotation = Quaternion.LookRotation(t); }
             InputSystem.QueueStateEvent(mouse, new MouseState());
             report.blockedIntake = damage.LastIntake;
             Require(damage.BlockedHits > blocked && damage.LastIntakeBlocked && report.blockedIntake == 1, "Blocked bandit hit did not deal original 1 damage: " + report.blockedIntake);
             Require(damage.Reactions == reactionsBefore, "A 1-damage blocked hit staggered Xena");
+            var blockFx = motor.GetComponent<PrototypeHitEffects>();
+            Require(blockFx.LastType == PrototypeHitEffects.Type.Block && blockFx.BloodEmitters == bleedsBefore, "Blocked hit did not flash blue without blood");
+            report.checks.Add("hit effects: red flash + blood on Xena, blue flash and no blood when blocked");
+            PrototypeGraphics.Active.SetMode(XenaVisualMode.Original); blockFx.Spark(motor.transform.position + motor.transform.forward * 0.4f + Vector3.up * 1.1f, 35, PrototypeHitEffects.Type.Special); blockFx.Bleed(motor.transform, motor.transform.position + Vector3.up * 1.1f, 8, 200);
+            for (int i = 0; i < 6; i++) yield return new WaitForFixedUpdate(); yield return new WaitForEndOfFrame(); Capture("hit-effects-original.png");
+            PrototypeGraphics.Active.SetMode(XenaVisualMode.Remaster);
             report.checks.Add("blocked bandit hits deal d>40 ? d-40 : 1 (=1) and do not stagger Xena");
             attacker.Active = false;
         }

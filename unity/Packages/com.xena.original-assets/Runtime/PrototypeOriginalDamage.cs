@@ -49,6 +49,11 @@ namespace Xena.Assets
         public int PowerUp { get; private set; }
         public int PowerUps { get; private set; }
         private static readonly int[] KarmaStates = { 0x61, 0x62, 0x5A, 0x60, 0x49, 0x55, 0x3F, 0x5C, 0x5F };
+        // Hit effect type 2 (yellow) states, D_800C0F4C (docs/xena-hit-effects.md).
+        private static readonly int[] SpecialEffectStates = { 0x61, 0x62, 0x5A, 0x55, 0x60, 0x49, 0x3F, 0x5C, 0x5F };
+        private PrototypeHitEffects effects;
+        // Added after this component by the motor: resolve on first use.
+        private PrototypeHitEffects Effects => effects != null ? effects : (effects = GetComponent<PrototypeHitEffects>());
         public void SetKarmaForTest(int value) { Karma = Mathf.Clamp(value, 0, 96); }
         public bool Dead { get; private set; }
         public int DeathFrame => deathFrame;
@@ -154,6 +159,15 @@ namespace Xena.Assets
                     if (bandit.TakeHit(damage, transform.position, kick))
                     {
                         struck.Add(bandit); HitsDealt++; LastDamageDealt = damage;
+                        // Hit effects at the contact point (docs/xena-hit-effects.md): yellow for the
+                        // kick/special states, red otherwise; the bandit bleeds for d >= 4 (20 steps on a kill).
+                        if (Effects != null)
+                        {
+                            Vector3 toward = transform.position - bandit.transform.position; toward.y = 0; toward = toward.sqrMagnitude > 1e-4f ? toward.normalized : bandit.transform.forward;
+                            Vector3 point = bandit.transform.position + toward * (PrototypeBanditBrain.Radius / 400f) + Vector3.up * ((kick ? 733 : 418) / 400f);
+                            effects.Spark(point, damage, Array.IndexOf(SpecialEffectStates, combat.Slot) >= 0 ? PrototypeHitEffects.Type.Special : PrototypeHitEffects.Type.Hit);
+                            if (damage >= 4) effects.Bleed(bandit.transform, point, bandit.Health == 0 ? 20 : 10, bandit.Health == 0 ? 170 : 80);
+                        }
                         if (bandit.Health == 0 && PowerUp == 0 && Array.IndexOf(KarmaStates, combat.Slot) >= 0 && (Karma = Mathf.Min(96, Karma + 10)) >= 96) { PowerUp = 825; PowerUps++; }
                     }
                 }
@@ -168,7 +182,18 @@ namespace Xena.Assets
             if (Reacting && ReactionSlot != 0x88) return false;
             Vector3 toward = attacker - transform.position; toward.y = 0;
             bool facing = toward.sqrMagnitude < 0.0001f || Vector3.Angle(transform.forward, toward) <= 90;
+            int raw = damage;
             if (combat != null && combat.IsBlocking && facing) { damage = damage > 40 ? damage - 40 : 1; BlockedHits++; }
+            if (Effects != null)
+            {
+                // Contact 447 units above Xena's feet; blue flash with the raw value when blocked;
+                // Xena bleeds for a final d >= 2 (blocked hits deal 1 and never bleed).
+                Vector3 away = attacker - transform.position; away.y = 0; away = away.sqrMagnitude > 1e-4f ? away.normalized : transform.forward;
+                Vector3 point = transform.position + away * 0.3f + Vector3.up * (447 / 400f);
+                bool blocked = combat != null && combat.IsBlocking && facing;
+                effects.Spark(point, blocked ? raw : damage, blocked ? PrototypeHitEffects.Type.Block : PrototypeHitEffects.Type.Hit);
+                if (!blocked && damage >= 2) effects.Bleed(transform, point, 8, 200);
+            }
             Health = Mathf.Max(0, Health - damage); HitsTaken++; LastIntake = damage; LastIntakeBlocked = combat != null && combat.IsBlocking && facing;
             if (Health > 0 && Health < PotionThreshold && scripts != null && scripts.UsePotion()) Health = Mathf.Min(MaxHealth, Health + MaxHealth * 30 / 100);
             if (Health == 0) { Dead = true; deathFrame = 0; motor.enabled = false; Reacting = false; }

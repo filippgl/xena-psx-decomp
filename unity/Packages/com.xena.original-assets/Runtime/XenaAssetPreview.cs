@@ -29,6 +29,17 @@ namespace Xena.Assets
 
         public int ClipCount => clips == null ? 0 : clips.Length;
         public bool UsingUpscale => useUpscale;
+        // Distinct Remaster textures that replace an original one (texture pages with an HD version).
+        public int UpscaledTextureCount
+        {
+            get
+            {
+                var hd = new System.Collections.Generic.HashSet<Texture>();
+                if (materials != null) foreach (var b in materials) for (int i = 0; i < b.upscaled.Length && i < b.original.Length; i++)
+                    if (b.upscaled[i] != null && b.original[i] != null && b.upscaled[i].mainTexture != b.original[i].mainTexture && b.upscaled[i].mainTexture != null) hd.Add(b.upscaled[i].mainTexture);
+                return hd.Count;
+            }
+        }
         public int CurrentSlot => ClipCount == 0 ? -1 : slots[selected];
         public int CurrentFrame => ClipCount == 0 ? -1 : Mathf.Clamp(Mathf.RoundToInt(time * rates[selected]), 0, frameCounts[selected] - 1);
 

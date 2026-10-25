@@ -169,8 +169,10 @@ namespace Xena.Assets
                     break;
                 case Mode.Hold:
                 case Mode.Approach:
-                    if (distance < AttackRange) State = Mode.Attack;
-                    else if (distance < LeaveWait && Attackers() >= 2) State = Mode.Wait;
+                    // The crowd test (0x8002012C) runs before the < 700 attack test: with two
+                    // allies already attacking the target, a third bandit waits even when close.
+                    if (distance < LeaveWait && Attackers() >= 2) State = Mode.Wait;
+                    else if (distance < AttackRange) State = Mode.Attack;
                     else if (State == Mode.Hold && distance > Engage) State = Mode.Approach;
                     break;
                 case Mode.Wait:

@@ -61,6 +61,10 @@ float3 XenaSkyFog(float3 color, float3 positionWS)
     float distance = length(toPoint);
     // Thickens with distance: gentle near the start, opaque at the end.
     float amount = pow(smoothstep(_XenaSkyFogParams.z, _XenaSkyFogParams.w, distance), 0.75);
-    return lerp(color, XenaSkyColor(toPoint / max(distance, 1e-4)), amount);
+    // Partly fogged surfaces fade into the flat horizon haze; only (almost) fully fogged ones take
+    // the detailed sky/landscape behind them. Mixing a wall with the painted crags at 30 m made it
+    // look see-through.
+    float3 far = lerp(_XenaHazeColor.rgb, XenaSkyColor(toPoint / max(distance, 1e-4)), smoothstep(0.8, 1.0, amount));
+    return lerp(color, far, amount);
 }
 #endif

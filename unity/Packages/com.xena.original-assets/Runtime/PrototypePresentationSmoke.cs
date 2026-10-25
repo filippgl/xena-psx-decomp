@@ -54,8 +54,9 @@ namespace Xena.Assets
             foreach (var item in level.GetComponentsInChildren<MeshRenderer>()) foreach (var material in item.sharedMaterials)
                 if (material.mainTexture != null && material.mainTexture.width == 1024) pages.Add(material.mainTexture);
             report.highResolutionPages = pages.Count;
-            Require(graphics.Mode == XenaVisualMode.Remaster && preview.UsingUpscale && pages.Count == 16 && motor.transform.position == position, "F10 did not bind all16 real high-resolution environment pages");
-            report.checks.Add("actual F10 input changes environment256px to16 real1024px pages without moving actor");
+            var levelPreview = level.GetComponentInChildren<XenaAssetPreview>(); int expectedPages = levelPreview != null ? levelPreview.UpscaledTextureCount : 16;
+            Require(graphics.Mode == XenaVisualMode.Remaster && preview.UsingUpscale && pages.Count == expectedPages && pages.Count >= 16 && motor.transform.position == position, "F10 did not bind all real high-resolution environment pages: " + pages.Count + "/" + expectedPages);
+            report.checks.Add("actual F10 input changes environment 256px to all " + pages.Count + " real 1024px pages without moving actor");
             yield return new WaitForEndOfFrame(); Capture("presentation-remaster.png");
             var environment = motor.GetComponent<PrototypeRemasterEnvironment>();
             MeshRenderer water = null, fall = null, bow = null;

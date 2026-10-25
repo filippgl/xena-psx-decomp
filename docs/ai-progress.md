@@ -30,6 +30,18 @@ One issue per task. Nothing here is a claim without the command/measurement that
   XenaWithLandscape (sky + far fog), horizon 0.55. All 8 suites + aggregate PASS
   (claude-v43-*.txt). User feedback pending: hair warp moves shoulder/sky, Google Fonts for
   menu/exit screen, enemy blood, walls see-through when close, Codex repaint of level textures.
+- CLAUDE 2026-10-25 19:55 build (DLL 19:55:39), all 8 suites + aggregate PASS (claude-v56-*.txt):
+  HIT EFFECTS (docs/xena-hit-effects.md, subagent): PrototypeHitEffects = burst pool (flash,
+  ring d>=26, grey discs) as screen-space overlay meshes (GL in endCameraRendering never reached
+  the URP frame), blood emitters (Original lines, Remaster droplets), colours linearised; checks
+  for the sword spark log, blue block w/o blood, disc continuity 0/39 stalled. CODEX PAGES: 22
+  pages repainted (tools/codex-remaster/pages.sh, tools/install_codex_pages.py: original alpha,
+  per-cell palette lock, 12-px seam band, magenta/transparent texels from the pre-Codex
+  reference; bug fixed where a rerun used the installed Codex page as reference); 22 HD pages
+  bound (test now counts the document bindings). FOG: partly fogged surfaces fade into flat
+  haze, only ~fully fogged take the painted landscape (user: see-through walls at 30 m).
+  AI: crowd test before the <700 attack test (third bandit attacked; audit line 123).
+  NEXT: user asks for less boxy environment models and SpeedTree-like trees in Remaster.
 
 - CLAUDE SESSION 2026-10-24 22:20 (continued Codex level-presentation work).
   Build DLL build/unity-movement/.../Xena.Assets.dll 2026-10-24 22:19:51; all7
