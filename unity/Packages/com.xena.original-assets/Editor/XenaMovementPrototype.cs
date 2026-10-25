@@ -89,6 +89,38 @@ namespace Xena.Assets.Editor
         }
         [Serializable] private sealed class CollisionMesh { public int[] vertices; }
 
+        // CC0 Poly Haven plants (tools/fetch_polyhaven.py) -> Resources/Remaster/Vegetation/<asset>.prefab
+        // with a cut-out, two-sided Xena/RemasterLit foliage material (fog, wind sway).
+        private static void CreateVegetationPrefabs()
+        {
+            const string source = "Assets/Imported/Remaster/Vegetation", target = "Assets/Imported/Resources/Remaster/Vegetation";
+            if (!Directory.Exists(source)) return;
+            Directory.CreateDirectory(target);
+            Shader lit = Shader.Find("Xena/RemasterLit"); if (lit == null) throw new InvalidDataException("Xena/RemasterLit unavailable");
+            foreach (string folder in Directory.GetDirectories(source))
+            {
+                string asset = Path.GetFileName(folder);
+                string fbx = Directory.GetFiles(folder, "*.fbx").FirstOrDefault(), albedoPath = Path.Combine(folder, asset + "_albedo.png").Replace(Path.DirectorySeparatorChar, '/');
+                if (fbx == null || !File.Exists(albedoPath)) continue;
+                if (AssetImporter.GetAtPath(albedoPath) is TextureImporter albedoImporter)
+                { albedoImporter.alphaIsTransparency = true; albedoImporter.mipmapEnabled = true; albedoImporter.mipMapsPreserveCoverage = true; albedoImporter.alphaTestReferenceValue = 0.45f; albedoImporter.SaveAndReimport(); }
+                var model = AssetDatabase.LoadAssetAtPath<GameObject>(fbx.Replace(Path.DirectorySeparatorChar, '/'));
+                var albedo = AssetDatabase.LoadAssetAtPath<Texture2D>(albedoPath);
+                if (model == null || albedo == null) continue;
+                string materialPath = target + "/" + asset + ".mat";
+                if (AssetDatabase.LoadAssetAtPath<Material>(materialPath) != null) AssetDatabase.DeleteAsset(materialPath);
+                var material = new Material(lit) { name = asset };
+                material.SetTexture("_MainTex", albedo); material.SetFloat("_Cutoff", 0.45f); material.SetFloat("_Cull", 0);
+                material.SetFloat("_UseVertexLighting", 0); material.SetFloat("_RockDetail", 0); material.SetFloat("_Wind", 0.035f);
+                // The level has baked (dark forest) vertex light; plants have none: shade them to match.
+                material.SetColor("_Color", new Color(0.6f, 0.64f, 0.56f, 1));
+                AssetDatabase.CreateAsset(material, materialPath);
+                var instance = (GameObject)PrefabUtility.InstantiatePrefab(model);
+                foreach (var renderer in instance.GetComponentsInChildren<Renderer>())
+                { var slots = renderer.sharedMaterials; for (int i = 0; i < slots.Length; i++) slots[i] = material; renderer.sharedMaterials = slots; renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On; }
+                PrefabUtility.SaveAsPrefabAsset(instance, target + "/" + asset + ".prefab"); UnityEngine.Object.DestroyImmediate(instance);
+            }
+        }
         // Resources materials keep the Remaster shaders in standalone builds.
         private static void CreateRemasterResources()
         {
@@ -111,6 +143,7 @@ namespace Xena.Assets.Editor
                 var material = new Material(shader); material.SetFloat("_SrcBlend", (float)src); material.SetFloat("_DstBlend", (float)dst);
                 AssetDatabase.CreateAsset(material, path);
             }
+            CreateVegetationPrefabs();
             const string puffPath = "Assets/Imported/Resources/Remaster/MistPuff.asset";
             var puff = AssetDatabase.LoadAssetAtPath<Texture2D>(puffPath);
             if (puff == null)

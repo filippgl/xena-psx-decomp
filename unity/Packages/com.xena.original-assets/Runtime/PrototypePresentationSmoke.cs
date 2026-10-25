@@ -84,6 +84,10 @@ namespace Xena.Assets
             report.checks.Add("Remaster sky and far fog show the painted 360-degree landscape");
             yield return SkyViews(motor, orbit, camera, "presentation-sky-remaster.png");
             yield return WallCamera(motor, orbit, camera, level);
+            var vegetation = motor.GetComponent<PrototypeRemasterVegetation>();
+            Require(vegetation.Replaced == 35 && vegetation.RemasterShown, "Remaster did not replace the 35 @pretty plants: " + vegetation.Replaced);
+            report.checks.Add("Remaster replaces the 35 @pretty plant cards with CC0 Poly Haven plants");
+            yield return VegetationViews(orbit, camera, level);
             var shafts = motor.GetComponent<PrototypeLightShafts>(); Renderer sunbeam = null;
             foreach (var r in level.GetComponentsInChildren<MeshRenderer>()) if (r.name.Contains("@sunbm")) sunbeam = r;
             Require(shafts.Shafts == 1 && shafts.RemasterShown && sunbeam != null && !sunbeam.enabled, "Remaster did not replace the @sunbm beam with a light shaft");
@@ -222,6 +226,45 @@ namespace Xena.Assets
             Require(spots >= 4, "Too few wall spots found: " + spots);
             Require(behind == 0, "Camera lens ends up behind the visible wall at " + behind + "/" + spots + " spots");
             report.checks.Add("camera stays in front of the visible (Remaster) wall surface at " + spots + " wall spots");
+        }
+        // Reference shots of each vegetation kind (first instance), with bounds in the report.
+        private IEnumerator VegetationViews(PrototypeCamera orbit, Camera camera, GameObject level)
+        {
+            orbit.enabled = false;
+            // Each plant model alone on open ground in front of the spawn.
+            var spawnMotor = FindFirstObjectByType<PrototypeMotor>(); spawnMotor.ResetToSpawn();
+            Vector3 stage = spawnMotor.transform.position + spawnMotor.transform.forward * 6;
+            var shown = new List<GameObject>(); int slot = 0;
+            foreach (string name in new[] { "fern_02", "shrub_02" })
+            {
+                var prefab = Resources.Load<GameObject>("Remaster/Vegetation/" + name); if (prefab == null) continue;
+                var go = Instantiate(prefab); go.transform.position = stage + spawnMotor.transform.right * (slot++ * 4f - 3f); shown.Add(go);
+                Bounds gb = go.GetComponentInChildren<Renderer>().bounds; foreach (var r in go.GetComponentsInChildren<Renderer>()) gb.Encapsulate(r.bounds);
+                report.checks.Add("prefab " + name + " unit size " + gb.size.ToString("F2") + " renderers " + go.GetComponentsInChildren<Renderer>().Length);
+            }
+            camera.transform.position = stage - spawnMotor.transform.forward * 5f + Vector3.up * 2.2f; camera.transform.LookAt(stage + Vector3.up * 0.5f);
+            yield return null; yield return new WaitForEndOfFrame(); Capture("veg-prefabs.png");
+            foreach (var go in shown) Destroy(go);
+            var firstPlant = FindFirstObjectByType<PrototypeRemasterVegetation>().FirstPlant;
+            if (firstPlant != null)
+            {
+                Bounds pb = firstPlant.GetComponentInChildren<Renderer>().bounds; foreach (var r in firstPlant.GetComponentsInChildren<Renderer>()) pb.Encapsulate(r.bounds);
+                report.checks.Add("plant " + firstPlant.name + " size " + pb.size.ToString("F2"));
+                camera.transform.position = pb.center + new Vector3(1, 0.8f, 1).normalized * (pb.size.magnitude + 0.8f); camera.transform.LookAt(pb.center);
+                yield return null; yield return new WaitForEndOfFrame(); Capture("veg-plant-closeup.png");
+            }
+            foreach (string kind in new[] { "@tree", "@tritree", "@pretty", "@3dtrees", "@3dtree1", "@3dtree2" })
+            {
+                MeshRenderer first = null; int count = 0;
+                foreach (var r in level.GetComponentsInChildren<MeshRenderer>()) if (r.name.EndsWith(kind) || r.name.Contains(kind + " ") || r.name == kind || r.name.Contains("-" + kind) || r.name.Contains(kind + "_")) { count++; if (first == null) first = r; }
+                if (first == null) { report.checks.Add("veg " + kind + ": none"); continue; }
+                var b = first.bounds; var mesh = first.GetComponent<MeshFilter>().sharedMesh;
+                report.checks.Add("veg " + kind + " x" + count + " size " + b.size.ToString("F1") + " centre " + b.center.ToString("F1") + " tris " + mesh.triangles.Length / 3 + " tex " + (first.sharedMaterial.mainTexture != null ? first.sharedMaterial.mainTexture.name : "-"));
+                float extent = Mathf.Max(b.size.x, Mathf.Max(b.size.y, b.size.z));
+                camera.transform.position = b.center + new Vector3(0.7f, 0.35f, 0.7f).normalized * (extent * 1.6f + 1.5f); camera.transform.LookAt(b.center);
+                yield return null; yield return new WaitForEndOfFrame(); Capture("veg-" + kind.Trim('@') + ".png");
+            }
+            orbit.enabled = true;
         }
         // Sky views: lens at Xena's eye height, 12 deg up, four headings (painted landscape check).
         private IEnumerator SkyViews(PrototypeMotor motor, PrototypeCamera orbit, Camera camera, string name)

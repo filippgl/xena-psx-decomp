@@ -57,6 +57,7 @@ namespace Xena.Assets
             if (GetComponent<PrototypeFrogs>() == null) gameObject.AddComponent<PrototypeFrogs>();
             if (GetComponent<PrototypeHitEffects>() == null) gameObject.AddComponent<PrototypeHitEffects>();
             if (GetComponent<PrototypeLightShafts>() == null) gameObject.AddComponent<PrototypeLightShafts>();
+            if (GetComponent<PrototypeRemasterVegetation>() == null) gameObject.AddComponent<PrototypeRemasterVegetation>();
             if (GetComponent<PrototypeGameOver>() == null) gameObject.AddComponent<PrototypeGameOver>();
             if (GetComponent<PrototypeMainMenu>() == null) gameObject.AddComponent<PrototypeMainMenu>();
             if (GetComponent<PrototypeGraphics>() == null) gameObject.AddComponent<PrototypeGraphics>();

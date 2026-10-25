@@ -13,6 +13,7 @@ Shader "Xena/RemasterLit"
         _SunDirection ("Sun direction", Vector) = (0.35, 0.75, 0.25, 0)
         _Shape ("Shape lighting strength", Range(0, 1)) = 0.75
         _RockDetail ("CC0 rock detail on steep grey surfaces", Float) = 0
+        _Wind ("Foliage wind sway (m per m of height)", Float) = 0
     }
     SubShader
     {
@@ -51,12 +52,24 @@ Shader "Xena/RemasterLit"
                 float4 _SunDirection;
                 float _Shape;
                 float _RockDetail;
+                float _Wind;
             CBUFFER_END
+            // Foliage sway: object-space height above the plant root bends with time and place.
+            float3 XenaWind(float3 positionOS)
+            {
+                if (_Wind <= 0) return positionOS;
+                float3 root = TransformObjectToWorld(float3(0, 0, 0));
+                float h = max(0, positionOS.y);
+                float t = _Time.y * 1.3 + root.x * 0.37 + root.z * 0.29;
+                float2 sway = float2(sin(t) + 0.4 * sin(t * 2.7 + positionOS.x * 3.0), cos(t * 0.8) * 0.6 + 0.3 * sin(t * 3.1 + positionOS.z * 3.0)) * _Wind * h * h;
+                return positionOS + float3(sway.x, 0, sway.y);
+            }
             struct Attributes { float4 positionOS : POSITION; float3 normalOS : NORMAL; float2 uv : TEXCOORD0; float2 seam0 : TEXCOORD1; float2 seam1 : TEXCOORD2; float2 seam2 : TEXCOORD3; float3 seamWeight : TEXCOORD4; float4 color : COLOR; };
             struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; float3 lighting : TEXCOORD1; float3 normalWS : TEXCOORD2; float4 seamA : TEXCOORD3; float2 seamB : TEXCOORD4; float3 seamWeight : TEXCOORD5; float3 positionWS : TEXCOORD6; };
             Varyings Vert(Attributes input)
             {
                 Varyings output;
+                input.positionOS.xyz = XenaWind(input.positionOS.xyz);
                 output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
                 output.positionWS = TransformObjectToWorld(input.positionOS.xyz);
                 output.uv = TRANSFORM_TEX(input.uv, _MainTex);
@@ -160,6 +173,7 @@ Shader "Xena/RemasterLit"
                 float4 _SunDirection;
                 float _Shape;
                 float _RockDetail;
+                float _Wind;
             CBUFFER_END
             float3 _LightDirection;
             float3 _LightPosition;
