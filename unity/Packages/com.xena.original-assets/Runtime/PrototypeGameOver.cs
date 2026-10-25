@@ -58,6 +58,8 @@ namespace Xena.Assets
             if (State == Phase.Menu) { if (Selected == 0) Retry(); else { State = Phase.Confirm; Selected = 1; } }
             else if (State == Phase.Confirm) { if (Selected == 0) PlayGameOver(); else { State = Phase.Menu; Selected = 1; } }
         }
+        // Pause menu "Выход": straight to the GAME OVER video, then the main menu.
+        public void PlayGameOverFromMenu() { PlayGameOver(); }
         private void PlayGameOver()
         {
             State = Phase.Video; videoStart = Time.unscaledTime;

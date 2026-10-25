@@ -58,7 +58,15 @@ One issue per task. Nothing here is a claim without the command/measurement that
   generated boulder (footprint +0 %, own Remaster collider), gate v2 REJECTED by the footprint rule
   (+33 %, IoU 0.17: Hunyuan folded the leaves); river flat faces use the lake water; horizon water
   (2554 tris) continues the lake into the haze. Bandit smoke sword strike flaky ~1/4 (strikeState
-  logged). IN PROGRESS (subagent): original gate fire + pause menu research.
+  logged).
+- CLAUDE 2026-10-26 01:05 build (DLL 01:05:57), all 8 suites + aggregate PASS (claude-v121-*.txt):
+  GATE FIRE (docs/xena-gate-fire.md, subagent): PrototypeFire = original 22-frame FIRE.STM /
+  fire2 additive billboards + smoke emitters from the LEVEL.BIN effect table; Remaster particle
+  flames/embers/smoke + flickering light. PAUSE MENU (docs/xena-pause-menu.md): PrototypePauseMenu
+  (original layout, Original draws exported labels, Remaster Tenor Sans; Нет default, no wrap);
+  Опции = music/effects volume, graphics, mouse, invert, Управление (rebinding moved from the
+  camera overlay); Выход -> GAME OVER -> main menu. OPEN: Original label x alignment for
+  "Опции"/"Вых" is still a few px off (originOffset semantics), lake edge pale triangles.
 
 - CLAUDE SESSION 2026-10-24 22:20 (continued Codex level-presentation work).
   Build DLL build/unity-movement/.../Xena.Assets.dll 2026-10-24 22:19:51; all7

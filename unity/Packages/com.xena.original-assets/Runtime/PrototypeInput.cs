@@ -25,6 +25,9 @@ namespace Xena.Assets
         public float Zoom => Paused ? 0 : zoom.ReadValue<float>();
         public bool Block => !Paused && block.IsPressed();
         public bool Paused { get; private set; }
+        // Pause menu sub-pages handle Esc themselves (back), so it must not resume the game there.
+        public bool PauseLocked { get; set; }
+        public void SetPaused(bool value) { if (Paused == value) return; Paused = value; ClearPending(); CaptureCursor(); }
         // Set while a front-end menu (main menu) owns the keys: no pause toggle, no queued actions;
         // after it is released, actions stay blocked until jump/sword/kick are all let go, so the
         // confirming press (Space = jump) never reaches gameplay.
@@ -56,7 +59,7 @@ namespace Xena.Assets
         private void Update()
         {
             if (suppressPause) { if (!IsRebinding && !pause.IsPressed()) suppressPause = false; }
-            else if (!IsRebinding && !MenuOwnsInput && pause.WasPressedThisFrame()) { Paused = !Paused; ClearPending(); CaptureCursor(); }
+            else if (!IsRebinding && !MenuOwnsInput && !PauseLocked && pause.WasPressedThisFrame()) { Paused = !Paused; ClearPending(); CaptureCursor(); }
             if (waitRelease && !jump.IsPressed() && !sword.IsPressed() && !kick.IsPressed()) waitRelease = false;
             if (menuOwnsInput || waitRelease) { ClearPending(); return; }
             if (!Paused && jump.WasPressedThisFrame()) jumpPending = true;

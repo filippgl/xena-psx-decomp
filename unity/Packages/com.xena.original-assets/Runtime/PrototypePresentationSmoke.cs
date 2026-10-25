@@ -84,6 +84,9 @@ namespace Xena.Assets
             report.checks.Add("Remaster sky and far fog show the painted 360-degree landscape");
             yield return SkyViews(motor, orbit, camera, "presentation-sky-remaster.png");
             yield return WallCamera(motor, orbit, camera, level);
+            var fires = motor.GetComponent<PrototypeFire>();
+            Require(fires.Fires == 6 && fires.RemasterFires == 6 && fires.RemasterShown, "Level fires missing (5 gate fires + fire2): " + fires.Fires);
+            report.checks.Add("level fires: 6 original animated additive sprites (5 at the gate), Remaster particle fires in their place");
             var generatedProps = motor.GetComponent<PrototypeRemasterProps>();
             Require(generatedProps.Replaced >= 1 && generatedProps.RemasterShown, "Remaster did not place the generated props: " + generatedProps.Replaced);
             report.checks.Add("Remaster places " + generatedProps.Replaced + " image-to-3D props: " + generatedProps.Describe());
@@ -98,6 +101,26 @@ namespace Xena.Assets
             report.checks.Add("Remaster grass: " + grass.Tufts + " tufts in " + grass.Chunks + " chunks on " + grass.GrassArea.ToString("F0") + " m2, " + grass.Ferns + " extra ferns");
             yield return VegetationViews(orbit, camera, level);
             yield return OrthoReferences(orbit, camera, level);
+            // Pause menu (docs/xena-pause-menu.md): opens on the main page, no wrap, confirm starts on Нет,
+            // Options holds the moved settings; both graphics modes captured.
+            {
+                var pauseInput = motor.GetComponent<PrototypeInput>(); var pause = motor.GetComponent<PrototypePauseMenu>();
+                orbit.enabled = true; motor.ResetToSpawn(); pauseInput.SetPaused(true); yield return null; yield return null;
+                Require(pause.Current == PrototypePauseMenu.Page.Main && pause.Cursor == 0, "Pause did not open on the main page");
+                pause.Move(-1); Require(pause.Cursor == 0, "Pause cursor wrapped");
+                foreach (var mode in new[] { XenaVisualMode.Original, XenaVisualMode.Remaster })
+                { graphics.SetMode(mode); yield return null; yield return new WaitForEndOfFrame(); Capture("pause-" + mode.ToString().ToLowerInvariant() + ".png"); }
+                pause.Move(3); pause.Select(); Require(pause.Current == PrototypePauseMenu.Page.ConfirmExit && pause.Cursor == 1, "Exit confirm did not start on Нет");
+                yield return null; yield return new WaitForEndOfFrame(); Capture("pause-confirm.png");
+                pause.Select(); Require(pause.Current == PrototypePauseMenu.Page.Main, "Нет did not return to the pause menu");
+                pause.Move(2); pause.Select(); Require(pause.Current == PrototypePauseMenu.Page.Options, "Options did not open");
+                yield return null; yield return new WaitForEndOfFrame(); Capture("pause-options.png");
+                pause.Move(5); pause.Select(); Require(pause.Current == PrototypePauseMenu.Page.Controls, "Controls did not open");
+                yield return null; yield return new WaitForEndOfFrame(); Capture("pause-controls.png");
+                pause.Back(); pause.Back(); Require(pause.Current == PrototypePauseMenu.Page.Main, "Back did not return to the main page");
+                pause.Select(); Require(!pauseInput.Paused, "Продолжить did not resume"); yield return null;
+                report.checks.Add("pause menu: original layout/items, no wrap, Нет default, options + controls pages, resume");
+            }
             // Lake views (user: the water ends at the level edge; stream and lake looked different).
             {
                 orbit.enabled = false; MeshRenderer lakeRenderer = null;

@@ -7,7 +7,6 @@ namespace Xena.Assets
         [SerializeField] private Transform target;
         [SerializeField] private PrototypeInput input;
         [SerializeField] private float yaw, pitch = 18;
-        private Vector2 settingsScroll;
         public float Sensitivity => input.Preferences.Data.mouseSensitivity;
         public bool InvertY => input.Preferences.Data.invertY;
         public float DesiredDistance => input.Preferences.Data.cameraDistance;
@@ -130,7 +129,8 @@ namespace Xena.Assets
             if (combat == null) combat = target.GetComponent<PrototypeCombat>();
             if (chakram != null && chakram.Active && !input.Paused)
                 GUI.Label(new Rect(Screen.width / 2 - 8, Screen.height / 2 - 12, 24, 30), "+");
-            GUILayout.BeginArea(new Rect(16, 16, 560, input.Paused ? Mathf.Min(Screen.height - 32, 690) : 270), GUI.skin.box);
+            if (input.Paused) return; // the pause menu owns the screen
+            GUILayout.BeginArea(new Rect(16, 16, 560, 270), GUI.skin.box);
             GUILayout.Label("Xena — prototype | F10 graphics: " + (PrototypeGraphics.Active == null ? "Remaster" : PrototypeGraphics.Active.Mode.ToString()));
             GUILayout.Label(input.BindingLabel("Forward") + "/" + input.BindingLabel("Left") + "/" + input.BindingLabel("Back") + "/" + input.BindingLabel("Right") + " move · " + input.BindingLabel("Sprint") + " run · " + input.BindingLabel("Jump") + " jump · Esc pause");
             GUILayout.Label("Gamepad: sticks · L3 run · A jump · X sword · Y kick · LB block · Start pause");
@@ -142,35 +142,7 @@ namespace Xena.Assets
             GUILayout.Label("Hold " + input.BindingLabel("Chakram") + " / RB aim · sword button throws · release aim recalls");
             GUILayout.Label("Wheel zoom · " + input.BindingLabel("CenterCamera") + " / R3 center camera");
             if (combat != null) GUILayout.Label("Health: " + combat.Health + " | " + input.BindingLabel("Reset") + " resets you and the dummy");
-            if (input.Paused)
-            {
-                settingsScroll = GUILayout.BeginScrollView(settingsScroll);
-                GUILayout.Label("Mouse sensitivity: " + Sensitivity.ToString("0.00"));
-                GUILayout.Label("Camera distance: " + DesiredDistance.ToString("0.0"));
-                input.Preferences.Data.mouseSensitivity = GUILayout.HorizontalSlider(Sensitivity, 0.03f, 0.3f);
-                input.Preferences.Data.invertY = GUILayout.Toggle(InvertY, "Invert camera Y");
-                foreach (string key in PrototypeInput.BindingKeys)
-                {
-                    GUILayout.BeginHorizontal(); GUILayout.Label(key, GUILayout.Width(140));
-                    bool enabled = GUI.enabled; GUI.enabled = enabled && !input.IsRebinding;
-                    if (GUILayout.Button(input.BindingLabel(key), GUILayout.Width(260))) input.BeginRebind(key);
-                    GUI.enabled = enabled; GUILayout.EndHorizontal();
-                }
-                if (input.IsRebinding) { if (GUILayout.Button("Cancel binding")) input.CancelRebind(); }
-                else
-                {
-                    GUILayout.BeginHorizontal();
-                    if (GUILayout.Button("Save settings")) input.SaveSettings();
-                    if (GUILayout.Button("Restore defaults")) input.ResetPreferences();
-                    GUILayout.EndHorizontal();
-                }
-                GUILayout.Label(input.BindingStatus); GUILayout.Label(input.Preferences.Status);
-                if (combat != null && combat.Target != null)
-                    combat.Target.Retaliates = GUILayout.Toggle(combat.Target.Retaliates, "Practice dummy attacks nearby (temporary rules)");
-                GUILayout.Label("Practice reach/damage only; original hitboxes pending");
-                GUILayout.Label("Press Esc to resume");
-                GUILayout.EndScrollView();
-            }
+            // Settings moved to the pause menu (PrototypePauseMenu).
             GUILayout.EndArea();
         }
     }

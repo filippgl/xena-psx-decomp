@@ -53,7 +53,7 @@ namespace Xena.Assets
                 var current = Array.Find(sources, s => s.clip == tracks[playing]);
                 if (current != null && !current.isPlaying) { combatTrack = playing == 1 ? 2 : 1; playing = -1; Play(combat ? combatTrack : 0); }
             }
-            float target = Muted ? 0 : 0.8f;
+            float target = Muted ? 0 : 0.8f * PrototypePauseMenu.MusicVolume;
             foreach (var source in sources)
             {
                 bool active = playing >= 0 && source.clip == tracks[playing] && source.isPlaying;

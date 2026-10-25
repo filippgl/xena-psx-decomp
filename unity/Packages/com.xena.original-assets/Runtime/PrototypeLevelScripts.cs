@@ -45,6 +45,7 @@ namespace Xena.Assets
         public readonly List<int> MessageLog = new List<int>();
         public int Potions { get; private set; }
         public int SwordLevel { get; private set; }
+        public int ScrollsRead { get; private set; } // pause menu scroll count D_800F277A
         public bool LevelComplete { get; private set; }
         // Siras ending (func_8007E410, table 0x800C804C): camera keys relative to
         // Siras, linear per segment (a + f*(b-a)/frames); yaw = +0x2A term, pitch
@@ -174,7 +175,7 @@ namespace Xena.Assets
                     case "pickup":
                         if (!motor.Grounded || (combat != null && combat.Busy) || !Contact(at, PickupRadius, PickupHeight)) break;
                         trigger.done = true; if (trigger.visual != null) Destroy(trigger.visual);
-                        if (trigger.actor.name == "scroll") Show(Level * 2 + trigger.actor.@params[0]);
+                        if (trigger.actor.name == "scroll") { Show(Level * 2 + trigger.actor.@params[0]); ScrollsRead++; }
                         else
                         {
                             if (trigger.actor.name == "health2") { Potions++; GetComponent<PrototypeOriginalDamage>()?.OnPotionPicked(); }
