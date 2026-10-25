@@ -16,7 +16,7 @@ namespace Xena.Assets
         [Serializable] private sealed class Report
         {
             public string result = "FAIL", error; public List<string> checks = new List<string>();
-            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError, deathLensHeight, gameOverVideoSeconds; public int gameOverMenuStep; public string gameOverVideo; public int hitFlashLife, hitDiscs, hitTriangles, remasterDroplets, discFrames, discStalls; public List<string> discTrace = new List<string>(); public int menuBolts; public List<string> runTrace = new List<string>();
+            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError, deathLensHeight, gameOverVideoSeconds; public int gameOverMenuStep; public string gameOverVideo; public int hitFlashLife, hitDiscs, hitTriangles, remasterDroplets, discFrames, discStalls; public string strikeState; public List<string> discTrace = new List<string>(); public int menuBolts; public List<string> runTrace = new List<string>();
         }
         private readonly Report report = new Report();
         private string output; private bool finished;
@@ -245,6 +245,7 @@ namespace Xena.Assets
                 if (!shot && effects.SparkLog.Count > sparks && effects.ActiveDrops > 0) { shot = true; yield return new WaitForEndOfFrame(); Capture("hit-effects-remaster.png"); report.hitTriangles = effects.LastDrawnTriangles; report.remasterDroplets = effects.RemasterDroplets; }
             }
             report.firstHitDamage = before - foe.Health;
+            report.strikeState = "modal=" + scripts.Modal + " paused=" + input.Paused + " menuOwns=" + input.MenuOwnsInput + " grounded=" + motor.Grounded + " reacting=" + damage.Reacting + " chakram=" + motor.GetComponent<PrototypeChakram>().Active;
             Require(report.firstHitDamage == 30 + scripts.SwordLevel, "Sword 51 did not deal original 30 + sword level: " + report.firstHitDamage + " (Xena hit " + (damage.HitsTaken - hitsAtStrike) + "x, reactions " + (damage.Reactions - reactionsAtStrike) + ", live bandits " + bandits.Live() + ", Xena clips " + string.Join(",", slots.ConvertAll(x => x.ToString("X"))) + ", foe at " + Vector3.Distance(foe.transform.position, motor.transform.position).ToString("F2") + " m, angle " + Vector3.Angle(motor.transform.forward, foe.transform.position - motor.transform.position).ToString("F0") + ")");
             report.checks.Add("sword 51 deals the original 30 + sword level to a bandit");
             int d = report.firstHitDamage;

@@ -51,6 +51,14 @@ One issue per task. Nothing here is a claim without the command/measurement that
   tools/hunyuan_shape.py (2mini, ~50 s) -> tools/hunyuan_paint.py -> tools/install_generated_prop.py
   -> PrototypeRemasterProps (signpost over 3 Sign_pt, yaw -90). NEXT: more props via the same
   pipeline (gates, fence/railing, rocks), fine-tune signpost facing from the original mesh.
+- CLAUDE 2026-10-26 00:12 build (DLL 00:12:16), all 8 suites + aggregate PASS (claude-v115-*.txt):
+  chakram 300/contact (docs/xena-chakram-damage.md); guard+mouse turns Xena; Sign_pt facing fixed
+  (native capture build/signdir) + layout-locked Codex HD texture (Hunyuan signpost dropped: garbled
+  letters); grass strips = Codex atlas bleed + dissolve -> padded atlas + per-tuft dropout;
+  generated boulder (footprint +0 %, own Remaster collider), gate v2 REJECTED by the footprint rule
+  (+33 %, IoU 0.17: Hunyuan folded the leaves); river flat faces use the lake water; horizon water
+  (2554 tris) continues the lake into the haze. Bandit smoke sword strike flaky ~1/4 (strikeState
+  logged). IN PROGRESS (subagent): original gate fire + pause menu research.
 
 - CLAUDE SESSION 2026-10-24 22:20 (continued Codex level-presentation work).
   Build DLL build/unity-movement/.../Xena.Assets.dll 2026-10-24 22:19:51; all7

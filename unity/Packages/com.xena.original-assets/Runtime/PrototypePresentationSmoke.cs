@@ -98,6 +98,21 @@ namespace Xena.Assets
             report.checks.Add("Remaster grass: " + grass.Tufts + " tufts in " + grass.Chunks + " chunks on " + grass.GrassArea.ToString("F0") + " m2, " + grass.Ferns + " extra ferns");
             yield return VegetationViews(orbit, camera, level);
             yield return OrthoReferences(orbit, camera, level);
+            // Lake views (user: the water ends at the level edge; stream and lake looked different).
+            {
+                orbit.enabled = false; MeshRenderer lakeRenderer = null;
+                foreach (var r in level.GetComponentsInChildren<MeshRenderer>()) if (r.GetComponent<MeshFilter>().sharedMesh.name == "level-01-object-14") lakeRenderer = r;
+                var env = motor.GetComponent<PrototypeRemasterEnvironment>();
+                report.checks.Add("extra lake-look water triangles " + env.ExtraWaterTriangles + (lakeRenderer != null ? " lake bounds " + lakeRenderer.bounds.ToString("F1") : ""));
+                if (lakeRenderer != null)
+                    for (int k = 0; k < 4; k++)
+                    {
+                        Vector3 dir = Quaternion.Euler(0, k * 90, 0) * Vector3.forward;
+                        camera.transform.position = lakeRenderer.bounds.center + Vector3.up * 6 - dir * 6; camera.transform.rotation = Quaternion.LookRotation(dir + Vector3.down * 0.25f);
+                        yield return null; yield return new WaitForEndOfFrame(); Capture("lake-" + k * 90 + ".png");
+                    }
+                orbit.enabled = true;
+            }
             // Close-ups: grass at knee height and a signpost at 1.5 m (user reports).
             {
                 orbit.enabled = false; motor.ResetToSpawn(); Vector3 at = motor.transform.position + motor.transform.forward * 2;

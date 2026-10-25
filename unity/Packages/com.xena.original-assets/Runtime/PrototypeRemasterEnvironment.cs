@@ -60,10 +60,14 @@ namespace Xena.Assets
                             // Boxy falling faces are replaced by smooth curtains;
                             // the river faces above the lip keep this material.
                             int built = AddCurtains(filter, triangles, fall, WaterHeight); terrainFall = fall;
+                            // Flat river faces of this page are drawn with the lake water (user: stream and
+                            // lake looked different); the fall shader skips them.
+                            riverFaces.Add((filter, triangles)); fall.SetFloat("_HideFlat", 1);
                             if (built == 0) foreach (Bounds fallBounds in FallClusters(filter.sharedMesh, triangles, filter.transform)) mists.Add(CreateMist(fallBounds));
                         }
                     continue;
                 }
+                if (name == Stream) streamFilter = filter;
                 string resource = name == Stream ? "Remaster/Water" : name == Waterfall ? "Remaster/Waterfall" : name == Rainbow ? "Remaster/Rainbow" : null;
                 if (resource == null) continue;
                 Material material = Create(resource, filter.name);
@@ -71,6 +75,62 @@ namespace Xena.Assets
                 targets.Add(new Target { renderer = renderer, material = material });
                 if (name == Waterfall && AddCurtains(filter, filter.sharedMesh.triangles, material, WaterHeight, true) == 0) mists.Add(CreateMist(renderer.bounds));
             }
+        }
+        // Lake-look extras: flat river faces of the terrain fall page and a far water plane that continues
+        // the lake to the horizon where the level has no ground (cells without a height-query surface
+        // inside the level box, four large quads outside it). Same material instance as @_stream.
+        private readonly List<(MeshFilter filter, int[] triangles)> riverFaces = new List<(MeshFilter, int[])>();
+        private MeshFilter streamFilter; private Material extraMaterial; private readonly List<GameObject> extraWater = new List<GameObject>();
+        public int ExtraWaterTriangles { get; private set; }
+        private void Start()
+        {
+            var lake = targets.Find(t => t.renderer != null && streamFilter != null && t.renderer.gameObject == streamFilter.gameObject);
+            if (lake == null) return;
+            var mesh = new Mesh { name = "RemasterRiverSurface", indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
+            var v = new List<Vector3>(); var uv = new List<Vector2>(); var tri = new List<int>();
+            foreach (var (filter, triangles) in riverFaces)
+            {
+                Vector3[] src = filter.sharedMesh.vertices;
+                for (int i = 0; i < triangles.Length; i += 3)
+                {
+                    Vector3 a = filter.transform.TransformPoint(src[triangles[i]]), b = filter.transform.TransformPoint(src[triangles[i + 1]]), c = filter.transform.TransformPoint(src[triangles[i + 2]]);
+                    Vector3 n = Vector3.Cross(b - a, c - a).normalized; if (Mathf.Abs(n.y) < 0.75f) continue;
+                    foreach (var p in new[] { a, b, c }) { tri.Add(v.Count); v.Add(p + Vector3.up * 0.01f); uv.Add(new Vector2(p.x, p.z) / 8f); }
+                }
+            }
+            // Extras have no UVs into the stream's texture rect: same water, original detail off.
+            extraMaterial = new Material(lake.material) { name = "RemasterWater (extras)" }; extraMaterial.SetFloat("_Detail", 0);
+            AddWater("RemasterRiverSurface", mesh, v, uv, tri, extraMaterial);
+            // Horizon: lake level = lowest @_stream vertex.
+            float level = float.MaxValue; Bounds box = streamFilter.GetComponent<MeshRenderer>().bounds;
+            foreach (var p in streamFilter.sharedMesh.vertices) level = Mathf.Min(level, streamFilter.transform.TransformPoint(p).y);
+            var motor = FindFirstObjectByType<PrototypeMotor>(); GameObject levelRoot = GameObject.Find("OriginalLevel01");
+            Bounds area = box; if (levelRoot != null) foreach (var r in levelRoot.GetComponentsInChildren<MeshRenderer>()) area.Encapsulate(r.bounds);
+            v = new List<Vector3>(); uv = new List<Vector2>(); tri = new List<int>();
+            void Quad(float x0, float z0, float x1, float z1)
+            {
+                int i = v.Count; float y = level - 0.03f;
+                foreach (var p in new[] { new Vector3(x0, y, z0), new Vector3(x0, y, z1), new Vector3(x1, y, z1), new Vector3(x1, y, z0) }) { v.Add(p); uv.Add(new Vector2(p.x, p.z) / 8f); }
+                tri.AddRange(new[] { i, i + 1, i + 2, i, i + 2, i + 3 });
+            }
+            const float cell = 2, far = 800;
+            float ax0 = area.min.x, ax1 = area.max.x, az0 = area.min.z, az1 = area.max.z;
+            if (motor != null)
+                for (float x = ax0; x < ax1; x += cell) for (float z = az0; z < az1; z += cell)
+                {
+                    Vector3 c = new Vector3(x + cell / 2, level + 30, z + cell / 2);
+                    if (float.IsNegativeInfinity(motor.GroundHeight(c))) Quad(x, z, x + cell, z + cell);
+                }
+            Quad(ax0 - far, az0 - far, ax0, az1 + far); Quad(ax1, az0 - far, ax1 + far, az1 + far); Quad(ax0, az0 - far, ax1, az0); Quad(ax0, az1, ax1, az1 + far);
+            AddWater("RemasterHorizonWater", new Mesh { name = "RemasterHorizonWater", indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 }, v, uv, tri, extraMaterial);
+            ApplyVisualMode(AppliedMode);
+        }
+        private void AddWater(string name, Mesh mesh, List<Vector3> v, List<Vector2> uv, List<int> tri, Material material)
+        {
+            if (tri.Count == 0) return;
+            mesh.SetVertices(v); mesh.SetUVs(0, uv); mesh.SetTriangles(tri, 0); mesh.RecalculateNormals(); mesh.RecalculateBounds();
+            var go = new GameObject(name); go.AddComponent<MeshFilter>().sharedMesh = mesh; go.AddComponent<MeshRenderer>().sharedMaterial = material;
+            go.SetActive(false); extraWater.Add(go); ExtraWaterTriangles += tri.Count / 3;
         }
         private int AddCurtains(MeshFilter filter, int[] triangles, Material fall, System.Func<Vector3, float> waterHeight, bool freeStanding = false)
         {
@@ -241,6 +301,7 @@ namespace Xena.Assets
                     target.renderer.sharedMaterials = slots; RemasterSurfaces++;
                 }
             bool active = mode == XenaVisualMode.Remaster;
+            foreach (GameObject water in extraWater) water.SetActive(active);
             foreach (GameObject sheet in curtains)
             {
                 Material sheetMaterial = sheet.GetComponent<MeshRenderer>().sharedMaterial;

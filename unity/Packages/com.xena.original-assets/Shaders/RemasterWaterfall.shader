@@ -20,6 +20,7 @@ Shader "Xena/RemasterWaterfall"
         _HideFalling ("Hide falling faces (replaced by curtains)", Float) = 0
         _Across ("Across scale (m)", Float) = 6
         _BottomFade ("Dissolve into plunge foam", Float) = 0
+        _HideFlat ("Hide flat river faces (drawn by the lake water instead)", Float) = 0
     }
     SubShader
     {
@@ -39,7 +40,7 @@ Shader "Xena/RemasterWaterfall"
             TEXTURE2D(_MainTex); SAMPLER(sampler_MainTex);
             CBUFFER_START(UnityPerMaterial)
                 float4 _MainTex_ST, _UvRect, _DeepColor, _AeratedColor, _SkyColor, _SunDirection;
-                float _FlowSign, _Speed, _Opacity, _HideFalling, _Across, _BottomFade;
+                float _FlowSign, _Speed, _Opacity, _HideFalling, _Across, _BottomFade, _HideFlat;
             CBUFFER_END
             struct Attributes { float4 positionOS : POSITION; float3 normalOS : NORMAL; float2 uv : TEXCOORD0; };
             struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; float2 flow : TEXCOORD1; float3 positionWS : TEXCOORD2; float3 normalWS : TEXCOORD3; float fog : TEXCOORD4; };
@@ -85,6 +86,7 @@ Shader "Xena/RemasterWaterfall"
                 float across = f.x * _Across;
                 // 2: free-standing fall object (nothing to show behind it) -> drop faces.
                 clip(_HideFalling > 1.5 && abs(n.y) < 0.75 ? -1 : 1);
+                clip(_HideFlat > 0.5 && abs(n.y) >= 0.75 ? -1 : 1);
                 if (_HideFalling > 0.5 && abs(n.y) < 0.75)
                 {
                     // Wet cliff behind the curtain (the original falling faces):
