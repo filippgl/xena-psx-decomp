@@ -60,6 +60,7 @@ namespace Xena.Assets
             if (GetComponent<PrototypeRemasterVegetation>() == null) gameObject.AddComponent<PrototypeRemasterVegetation>();
             if (GetComponent<PrototypeRemasterTrees>() == null) gameObject.AddComponent<PrototypeRemasterTrees>();
             if (GetComponent<PrototypeRemasterGrass>() == null) gameObject.AddComponent<PrototypeRemasterGrass>();
+            if (GetComponent<PrototypeRemasterProps>() == null) gameObject.AddComponent<PrototypeRemasterProps>();
             if (GetComponent<PrototypeGameOver>() == null) gameObject.AddComponent<PrototypeGameOver>();
             if (GetComponent<PrototypeMainMenu>() == null) gameObject.AddComponent<PrototypeMainMenu>();
             if (GetComponent<PrototypeBootVideos>() == null) gameObject.AddComponent<PrototypeBootVideos>();

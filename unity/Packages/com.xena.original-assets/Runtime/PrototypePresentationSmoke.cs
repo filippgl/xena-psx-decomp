@@ -84,6 +84,9 @@ namespace Xena.Assets
             report.checks.Add("Remaster sky and far fog show the painted 360-degree landscape");
             yield return SkyViews(motor, orbit, camera, "presentation-sky-remaster.png");
             yield return WallCamera(motor, orbit, camera, level);
+            var generatedProps = motor.GetComponent<PrototypeRemasterProps>();
+            Require(generatedProps.Replaced >= 1 && generatedProps.RemasterShown, "Remaster did not place the generated signpost: " + generatedProps.Replaced);
+            report.checks.Add("Remaster places " + generatedProps.Replaced + " image-to-3D signposts over the original Sign_pt props: " + generatedProps.Describe());
             var vegetation = motor.GetComponent<PrototypeRemasterVegetation>();
             Require(vegetation.Replaced == 35 && vegetation.RemasterShown, "Remaster did not replace the 35 @pretty plants: " + vegetation.Replaced);
             report.checks.Add("Remaster replaces the 35 @pretty plant cards with CC0 Poly Haven plants");
@@ -273,7 +276,8 @@ namespace Xena.Assets
             // Props for the image-to-3D trial: first signpost and the bridge, both modes.
             foreach (string prop in new[] { "Sign_pt", "@u_brg" })
             {
-                Renderer target = null; foreach (var r in FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None)) if (r.name.Contains(prop) && r.enabled) { target = r; break; }
+                Renderer target = null; foreach (var r in FindObjectsByType<Renderer>(FindObjectsSortMode.None)) if ((r.name.Contains(prop) || r.transform.root.name.Contains(prop) || (r.transform.parent != null && r.transform.parent.name.Contains(prop))) && r.enabled) { target = r; break; }
+                if (target == null && prop == "Sign_pt") foreach (var body in FindObjectsByType<XenaAssetPreview>(FindObjectsSortMode.None)) if (body.name.StartsWith("Sign_pt")) { target = body.GetComponentInChildren<Renderer>(true); break; }
                 if (target == null) { report.checks.Add("prop " + prop + ": none"); continue; }
                 var pb = target.bounds; report.checks.Add("prop " + prop + " " + target.name + " size " + pb.size.ToString("F2") + " centre " + pb.center.ToString("F1"));
                 float ext = Mathf.Max(pb.size.x, Mathf.Max(pb.size.y, pb.size.z));

@@ -89,6 +89,33 @@ namespace Xena.Assets.Editor
         }
         [Serializable] private sealed class CollisionMesh { public int[] vertices; }
 
+        // Image-to-3D props (tools/install_generated_prop.py: Assets/Imported/Remaster/Generated/<name>/
+        // model.obj + texture) -> Resources/Remaster/Generated/<name>.prefab with Xena/RemasterLit.
+        private static void CreateGeneratedPrefabs()
+        {
+            const string source = "Assets/Imported/Remaster/Generated", target = "Assets/Imported/Resources/Remaster/Generated";
+            if (!Directory.Exists(source)) return;
+            Directory.CreateDirectory(target);
+            Shader lit = Shader.Find("Xena/RemasterLit"); if (lit == null) throw new InvalidDataException("Xena/RemasterLit unavailable");
+            foreach (string folder in Directory.GetDirectories(source))
+            {
+                string name = Path.GetFileName(folder), obj = Path.Combine(folder, "model.obj").Replace(Path.DirectorySeparatorChar, '/');
+                string texturePath = Path.Combine(folder, "texture.png"); if (!File.Exists(texturePath)) texturePath = null;
+                var model = AssetDatabase.LoadAssetAtPath<GameObject>(obj);
+                var texture = texturePath == null ? null : AssetDatabase.LoadAssetAtPath<Texture2D>(texturePath.Replace(Path.DirectorySeparatorChar, '/'));
+                if (model == null || texture == null) continue;
+                string materialPath = target + "/" + name + ".mat";
+                if (AssetDatabase.LoadAssetAtPath<Material>(materialPath) != null) AssetDatabase.DeleteAsset(materialPath);
+                var material = new Material(lit) { name = name };
+                material.SetTexture("_MainTex", texture); material.SetFloat("_Cutoff", 0); material.SetFloat("_Cull", 0);
+                material.SetFloat("_UseVertexLighting", 0); material.SetFloat("_RockDetail", 0); material.SetColor("_Color", new Color(0.8f, 0.8f, 0.78f, 1));
+                AssetDatabase.CreateAsset(material, materialPath);
+                var instance = (GameObject)PrefabUtility.InstantiatePrefab(model);
+                foreach (var renderer in instance.GetComponentsInChildren<Renderer>())
+                { var slots = renderer.sharedMaterials; for (int i = 0; i < slots.Length; i++) slots[i] = material; renderer.sharedMaterials = slots; }
+                PrefabUtility.SaveAsPrefabAsset(instance, target + "/" + name + ".prefab"); UnityEngine.Object.DestroyImmediate(instance);
+            }
+        }
         // CC0 Poly Haven plants (tools/fetch_polyhaven.py) -> Resources/Remaster/Vegetation/<asset>.prefab
         // with a cut-out, two-sided Xena/RemasterLit foliage material (fog, wind sway).
         private static void CreateVegetationPrefabs()
@@ -152,6 +179,7 @@ namespace Xena.Assets.Editor
                 AssetDatabase.CreateAsset(material, path);
             }
             CreateVegetationPrefabs();
+            CreateGeneratedPrefabs();
             const string puffPath = "Assets/Imported/Resources/Remaster/MistPuff.asset";
             var puff = AssetDatabase.LoadAssetAtPath<Texture2D>(puffPath);
             if (puff == null)

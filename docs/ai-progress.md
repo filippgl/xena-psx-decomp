@@ -42,6 +42,15 @@ One issue per task. Nothing here is a claim without the command/measurement that
   haze, only ~fully fogged take the painted landscape (user: see-through walls at 30 m).
   AI: crowd test before the <700 attack test (third bandit attacked; audit line 123).
   NEXT: user asks for less boxy environment models and SpeedTree-like trees in Remaster.
+- CLAUDE 2026-10-25 22:20 build (DLL 22:20:54), all 8 suites + aggregate PASS (claude-v86-*.txt):
+  relief/rounded boulders/tone blending, fog 37..85 m, light shaft, Poly Haven ground plants,
+  generated trees, ~7.8k grass tufts, boot videos EA_LOGO/UNILOGO/INTRO (HD in Remaster,
+  docs/xena-fmv.md: no video after New game), menu Space no longer jumps. IMAGE-TO-3D: Hunyuan3D-2
+  installed in ../_tools/Hunyuan3D-2 (transformers 4.57.1, diffusers 0.35.2, hub<1.0; texgen
+  extensions built by build_texgen.cmd with VS2022 + CUDA 12.8). Pipeline: Codex concept ->
+  tools/hunyuan_shape.py (2mini, ~50 s) -> tools/hunyuan_paint.py -> tools/install_generated_prop.py
+  -> PrototypeRemasterProps (signpost over 3 Sign_pt, yaw -90). NEXT: more props via the same
+  pipeline (gates, fence/railing, rocks), fine-tune signpost facing from the original mesh.
 
 - CLAUDE SESSION 2026-10-24 22:20 (continued Codex level-presentation work).
   Build DLL build/unity-movement/.../Xena.Assets.dll 2026-10-24 22:19:51; all7
