@@ -13,8 +13,7 @@ namespace Xena.Assets
     // contact = horizontal reach (sword 1.65 m / kick 1.25 m for Xena, 1.85 m for
     // bandits: their 700-unit attack range) in a +-60 deg front cone and |dy| < 750 units. Each attack hits a
     // target once (the original invulnerability timer D_800F0CC2 is UNKNOWN).
-    // NOT implemented: power-up doubling (kill meter), armour subtraction
-    // (up_armor absent on level 01), Xena hit-reaction clips, game-over flow.
+    // NOT implemented: armour subtraction (up_armor absent on level 01).
     // The practice dummy keeps its separate provisional damage.
     public sealed class PrototypeOriginalDamage : MonoBehaviour
     {
@@ -52,6 +51,7 @@ namespace Xena.Assets
         private static readonly int[] KarmaStates = { 0x61, 0x62, 0x5A, 0x60, 0x49, 0x55, 0x3F, 0x5C, 0x5F };
         public void SetKarmaForTest(int value) { Karma = Mathf.Clamp(value, 0, 96); }
         public bool Dead { get; private set; }
+        public int DeathFrame => deathFrame;
         // Xena hit reactions (docs/xena-hit-reactions.md, func_800367BC 0x80037E68..0x800383F8):
         // only when final damage >= 2; sector s = (atan2(Xena - attacker) - rotY + 0x200) & 0xFFF:
         // [0,0x400) front -> 0x66 (2/3) / 0x67 (1/3), or knockdown 0x7C when damage >= 30;
@@ -127,8 +127,9 @@ namespace Xena.Assets
         {
             if (Dead)
             {
-                // Original death clip 0x91 on the 30/s clock; the game-over flow is unknown.
-                visual.SampleSlotFrame(0x91, deathFrame); deathFrame++;
+                // Original death clip 0x91 (65 frames) on the 30/s clock, then held on its last
+                // frame; PrototypeGameOver opens the menu at DeathFrame >= MenuStep.
+                visual.SampleSlotFrame(0x91, Mathf.Min(deathFrame, 64)); deathFrame++;
                 return;
             }
             if (PowerUp > 0 && --PowerUp == 0) Karma = 0;

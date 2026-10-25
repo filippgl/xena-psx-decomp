@@ -1,0 +1,12 @@
+Use your built-in image_gen tool (imagegen skill, built-in mode, not the CLI) to remaster the attached game screen.
+The attached image is the 320x240 main-menu background of the PS1 game "Xena: Warrior Princess" (1999), enlarged.
+It shows Xena (black hair, bronze breastplate, brown leather armour, sword in her right hand) standing on a dark rocky crag,
+looking up to the right, under a stormy violet/purple night sky with glowing pink-lit clouds, a misty sea and distant mountains,
+and the "XENA WARRIOR PRINCESS" logo with the round chakram ring in the upper left.
+Create a modern high-resolution, detailed, cinematic painted version of exactly this scene:
+same composition, same pose, same camera angle, same colour palette and lighting, same logo shape and colours.
+REMOVE the four Russian menu lines in the lower left ("НОВАЯ ИГРА", "ЗАГРУЗКА ИГРЫ", "ТРЕНИРОВОЧНАЯ АРЕНА", "ОПЦИИ"):
+paint the rocks, sea and sky behind them instead (the game draws the menu text on top).
+Output 1536x1024 (landscape): keep the original 4:3 picture in the centre at full height and extend the sky, sea and rocks
+naturally to the left and right. No other text, no watermark, no border.
+Save the final selected image into this workspace as out/menu-main.png (copy it from CODEX_HOME/generated_images). Do nothing else.

@@ -75,6 +75,9 @@ namespace Xena.Assets
         // Integer tick count: one 30/s AI step every 2nd 60 Hz tick (float accumulation
         // occasionally slipped a step to the 3rd tick and broke the drawn rhythm).
         private int ticks, ticksSinceStep;
+        public float LastAlpha { get; private set; }
+        public float LastPhase { get; private set; }
+        public int LastTicksSinceStep { get; private set; }
         private float clock => ticksSinceStep * Time.fixedDeltaTime;
         // Render-only interpolation between the last two AI steps (30/s): the
         // drawn body glides, the root/actor state stays on the discrete step.
@@ -116,6 +119,7 @@ namespace Xena.Assets
             // The AI step runs inside the 60 Hz tick, so up to 1/60 s can pass beyond the
             // 1/30 s step before it fires: extrapolate (<= 1.5) instead of holding a frame.
             float alpha = Mathf.Clamp((clock + Mathf.Clamp(Time.time - Time.fixedTime, 0, Time.fixedDeltaTime)) * 30, 0, 1.5f);
+            LastAlpha = alpha; LastPhase = Time.time - Time.fixedTime; LastTicksSinceStep = ticksSinceStep;
             if (alpha > 1) { body.SetPositionAndRotation(Vector3.LerpUnclamped(previousPosition, currentPosition, alpha), Quaternion.SlerpUnclamped(previousRotation, currentRotation, alpha) * Quaternion.Euler(0, 180, 0)); return; }
             Quaternion rotation = Quaternion.Slerp(previousRotation, currentRotation, alpha);
             body.SetPositionAndRotation(Vector3.Lerp(previousPosition, currentPosition, alpha), rotation * Quaternion.Euler(0, 180, 0));

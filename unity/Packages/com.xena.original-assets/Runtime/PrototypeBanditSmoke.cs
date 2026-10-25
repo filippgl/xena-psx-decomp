@@ -16,7 +16,7 @@ namespace Xena.Assets
         [Serializable] private sealed class Report
         {
             public string result = "FAIL", error; public List<string> checks = new List<string>();
-            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError;
+            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError, deathLensHeight, gameOverVideoSeconds; public int gameOverMenuStep; public string gameOverVideo; public List<string> runTrace = new List<string>();
         }
         private readonly Report report = new Report();
         private string output; private bool finished;
@@ -72,7 +72,7 @@ namespace Xena.Assets
             bool noticed = false, inRange = false, attacked = false;
             // Drawn-body continuity while the first bandit runs in (120 FPS render).
             Transform drawn = chosen[0].GetComponentInChildren<XenaAssetPreview>().transform; Vector3 lastDrawn = drawn.position;
-            int movingFrames = 0, stalledFrames = 0; Vector3 rootTwoAgo = chosen[0].transform.position, rootOneAgo = rootTwoAgo;
+            int movingFrames = 0, stalledFrames = 0; float lastStepTravel = 0; Vector3 rootTwoAgo = chosen[0].transform.position, rootOneAgo = rootTwoAgo;
             for (int tick = 0; tick < 60 * 12; tick++)
             {
                 yield return new WaitForFixedUpdate();
@@ -96,8 +96,12 @@ namespace Xena.Assets
                     yield return new WaitForEndOfFrame();
                     // Stalled = the drawn body froze although the current AI step moves the
                     // actor (previous != current); a stop or a blocked bandit is not counted.
+                    // The first frame after a standstill is not counted either: at alpha ~0 the
+                    // body rightly starts from rest (captured: alpha 0.002, 0.1 mm, prior step 0).
                     float moved = Vector3.Distance(drawn.position, lastDrawn);
-                    bool rootMoved = chosen[0].StepTravel > 0.0005f;
+                    bool rootMoved = chosen[0].StepTravel > 0.0005f && lastStepTravel > 0.0005f; lastStepTravel = chosen[0].StepTravel;
+                    var b0 = chosen[0];
+                    report.runTrace.Add(string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0} a={1:F3} ph={2:F4} t={3} mv={4:F4} st={5:F4}", Time.frameCount, b0.LastAlpha, b0.LastPhase, b0.LastTicksSinceStep, moved, b0.StepTravel));
                     if (moved > 0.0005f) movingFrames++; else if (rootMoved) stalledFrames++;
                 }
                 lastDrawn = drawn.position; rootTwoAgo = rootOneAgo; rootOneAgo = chosen[0].transform.position;
@@ -117,7 +121,51 @@ namespace Xena.Assets
             foreach (var brain in chosen) { brain.Active = false; brain.gameObject.SetActive(false); }
             yield return Scripts(motor);
             yield return Damage(motor, bandits);
+            yield return GameOver(motor);
             report.result = "PASS"; Finish(null);
+        }
+        // Death -> menu -> exit confirm -> GAME OVER video -> level restart (native capture build/gameover).
+        private IEnumerator GameOver(PrototypeMotor motor)
+        {
+            DontDestroyOnLoad(gameObject);
+            var damage = motor.GetComponent<PrototypeOriginalDamage>(); var flow = motor.GetComponent<PrototypeGameOver>();
+            var camera = Camera.main.GetComponent<PrototypeCamera>(); camera.enabled = true; motor.enabled = true;
+            motor.ResetToSpawn(); Vector3 spawn = motor.transform.position; yield return new WaitForFixedUpdate();
+            for (int i = 0; i < 120 && damage.Reacting; i++) yield return new WaitForFixedUpdate();
+            damage.SetHealthForTest(1);
+            Require(damage.TakeHit(50, motor.transform.position + motor.transform.forward) && damage.Dead, "Xena did not die at 0 health");
+            int menuStep = -1; float lensHeight = 0;
+            for (int i = 0; i < 600 && flow.State == PrototypeGameOver.Phase.None; i++) yield return new WaitForFixedUpdate();
+            menuStep = damage.DeathFrame; lensHeight = camera.transform.position.y - motor.transform.position.y;
+            report.gameOverMenuStep = menuStep; report.deathLensHeight = lensHeight;
+            Require(flow.State == PrototypeGameOver.Phase.Menu && menuStep >= PrototypeGameOver.MenuStep && menuStep <= PrototypeGameOver.MenuStep + 1, "Death menu did not open at the original step: " + menuStep);
+            Require(camera.DeathCamera && lensHeight > 5 && Vector3.Angle(camera.transform.forward, Vector3.down) < 25, "Death camera is not above Xena: " + lensHeight);
+            report.checks.Add("death: clip 0x91, top-down death camera, menu after 65+45 steps");
+            yield return null; yield return new WaitForEndOfFrame(); Capture("game-over-menu.png");
+            Require(flow.Selected == 0, "Retry is not the default death-menu item");
+            flow.Move(1); flow.Confirm();
+            Require(flow.State == PrototypeGameOver.Phase.Confirm && flow.Selected == 1, "Exit did not ask to confirm with No selected");
+            yield return null; yield return new WaitForEndOfFrame(); Capture("game-over-confirm.png");
+            flow.Confirm(); Require(flow.State == PrototypeGameOver.Phase.Menu, "No did not return to the death menu");
+            flow.Confirm(); flow.Move(-1); flow.Confirm();
+            Require(flow.State == PrototypeGameOver.Phase.Video && flow.VideoStarted, "Yes did not start the GAME OVER video");
+            report.checks.Add("death menu: Повтор уровня / Выход -> Хочешь выйти? Да/Нет (default Нет)");
+            report.gameOverVideo = flow.VideoName;
+            Require(flow.VideoName == "chakdeth-hd" || PrototypeGraphics.Active.Mode == XenaVisualMode.Original, "Remaster did not play the upscaled GAME OVER video: " + flow.VideoName);
+            int restarts = PrototypeGameOver.Restarts; float start = Time.unscaledTime; bool shot = false;
+            while (PrototypeGameOver.Restarts == restarts && Time.unscaledTime - start < 12)
+            {
+                if (!shot && Time.unscaledTime - start > 4) { shot = true; Capture("game-over-video.png"); }
+                yield return null;
+            }
+            report.gameOverVideoSeconds = Time.unscaledTime - start;
+            Require(PrototypeGameOver.Restarts == restarts + 1 && report.gameOverVideoSeconds > 5, "GAME OVER video did not play to its end: " + report.gameOverVideoSeconds);
+            for (int i = 0; i < 20; i++) yield return null;
+            var fresh = FindFirstObjectByType<PrototypeMotor>(); var health = fresh.GetComponent<PrototypeOriginalDamage>();
+            Require(fresh != motor && !health.Dead && health.Health == PrototypeOriginalDamage.MaxHealth && Vector3.Distance(fresh.transform.position, spawn) < 0.5f,
+                "Level did not restart at its start with full health");
+            Require(fresh.GetComponent<PrototypeGameOver>().State == PrototypeGameOver.Phase.None, "Restarted level still shows the death menu");
+            report.checks.Add("GAME OVER video (CHAKDETH.STR) plays, then the level restarts at its start with 500 hp");
         }
         private IEnumerator Damage(PrototypeMotor motor, PrototypeBandits bandits)
         {

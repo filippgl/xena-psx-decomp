@@ -16,6 +16,9 @@ namespace Xena.Assets
         private PrototypeCombat combat;
         private PrototypeChakram chakram;
         private PrototypeMotor motor;
+        private PrototypeOriginalDamage vitality;
+        private Vector3 deathDestination; private bool deathCamera; private float deathClock;
+        public bool DeathCamera => deathCamera;
         private Camera view;
         private float playerFov, playerNearClip;
         public bool BehindCharacter { get; private set; }
@@ -70,6 +73,9 @@ namespace Xena.Assets
                 return;
             }
             view.fieldOfView = playerFov; view.nearClipPlane = playerNearClip;
+            if (vitality == null) vitality = target.GetComponent<PrototypeOriginalDamage>();
+            if (vitality != null && vitality.Dead) { DeathView(); return; }
+            deathCamera = false;
             Vector3 desiredFocus = (motor != null ? motor.PresentationPosition : target.position) + Vector3.up * 1.1f;
             if (!initialized || Vector3.Distance(smoothFocus, desiredFocus) > 8)
             { smoothFocus = desiredFocus; focusVelocity = Vector3.zero; initialized = true; }
@@ -84,6 +90,25 @@ namespace Xena.Assets
                 // Never pull the lens into Xena for this: 1.6 m minimum.
                 while (radius > 1.6f && OutsideLevel(focus + back * radius)) radius = Mathf.Max(1.6f, radius - 0.1f);
             transform.position = focus + back * radius; transform.LookAt(focus); DistanceToTarget = radius;
+        }
+        // Death camera func_80053380 (Xena: zero offset): destination = Xena + (Xena - camera)/100
+        // and 3000 units (7.5 m) above her; func_8004F088(.., 0x71) moves the lens there while it
+        // looks at Xena. Approach rate 0x71/4096 per 30/s step is INFERRED (native capture:
+        // overhead view about 2 s after the hit, build/gameover).
+        private void DeathView()
+        {
+            Vector3 xena = motor != null ? motor.PresentationPosition : target.position;
+            if (!deathCamera)
+            {
+                Vector3 away = xena - transform.position; away.y = 0;
+                deathDestination = new Vector3(away.x / 100, 7.5f, away.z / 100); deathCamera = true; deathClock = 0;
+            }
+            deathClock += Time.deltaTime;
+            float steps = deathClock * 30; deathClock -= Mathf.Floor(steps) / 30;
+            for (int i = 0; i < (int)steps; i++) transform.position += (xena + deathDestination - transform.position) * (0x71 / 4096f);
+            Vector3 look = xena + Vector3.up * 0.3f - transform.position;
+            if (look.sqrMagnitude > 0.0001f) transform.rotation = Quaternion.LookRotation(look, Mathf.Abs(look.normalized.y) > 0.99f ? Quaternion.Euler(0, yaw, 0) * Vector3.forward : Vector3.up);
+            DistanceToTarget = look.magnitude;
         }
         private bool OutsideLevel(Vector3 lens)
         {

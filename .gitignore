@@ -47,3 +47,6 @@ tools/UnityAssetCheck/obj/
 
 # Claude Code agent worktrees
 .claude/
+tools/codex-remaster/in/
+tools/codex-remaster/out/
+tools/codex-remaster/*.log

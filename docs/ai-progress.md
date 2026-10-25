@@ -5,6 +5,22 @@ One issue per task. Nothing here is a claim without the command/measurement that
 
 ## Current task — Unity combat and original collision audit (2026-10-24)
 
+- CLAUDE 2026-10-25 10:50 build (DLL 10:50:29), all 8 suites + aggregate PASS
+  (build/unity-import/claude-v32-*.txt), bandit 6/6 runs 0 stalled.
+  GAME OVER (native capture build/gameover, --poke 8700:0x8014E4F2:600:2 = Xena +0x12):
+  clip 0x91 -> state 0x11 ~230 native frames later; menu "Повтор уровня"/"Вых" over a
+  top-down death camera (func_80053380: 3000 u above Xena); Retry restarts the level;
+  Exit -> "Хочешь выйти?" Да/Не (default Нет) -> state 0x13 plays MEDIA/CHAKDETH.STR -> main
+  menu (state 2). Unity: PrototypeGameOver (menu at DeathFrame 110, level reload after the
+  video until the main menu is ported), death camera in PrototypeCamera, video exported by
+  tools/export_game_over_fmv.py; Remaster plays a Real-ESRGAN x4plus 1280x960 version
+  (../_tools/realesrgan, BSD-3). Bandit stall metric: the first frame after a standstill
+  (alpha~0, prior AI step 0) is no longer counted (captured 2/78 cases were exactly that).
+  MAIN MENU: decoded by a subagent (docs/xena-main-menu.md, tools/export_main_menu.mjs,
+  298/298 frames bit-exact vs native). Codex HD background tools/codex-remaster/out/menu-main.png
+  (1536x1024, menu text removed). NEXT: port the main menu to Unity (Original: exact
+  hair/lightning sprites; Remaster: HD background + animated hair), route GAME OVER to it.
+
 - CLAUDE SESSION 2026-10-24 22:20 (continued Codex level-presentation work).
   Build DLL build/unity-movement/.../Xena.Assets.dll 2026-10-24 22:19:51; all7
   suites + check_prototype_reports PASS sequentially (logs build/unity-import/claude-v3-*.txt).
