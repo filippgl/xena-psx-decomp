@@ -10,6 +10,25 @@ TEXTURE2D(_XenaSkyPanorama); SAMPLER(sampler_XenaSkyPanorama);
 float4 _XenaSkyFogParams;
 float4 _XenaHazeColor;
 float _XenaSkyFogEnabled;
+// Painted 360-degree landscape (Codex segments, tools/stitch_panorama.py), cylindrical:
+// u = azimuth, v from the top = horizon - tan(elevation) * aspect / 2pi.
+// _XenaLandscapeParams: x rotation (deg), y horizon row (0..1 from the top), z width/height, w enabled.
+TEXTURE2D(_XenaLandscape); SAMPLER(sampler_XenaLandscape);
+float4 _XenaLandscapeParams;
+
+float3 XenaWithLandscape(float3 direction, float3 sky)
+{
+    if (_XenaLandscapeParams.w < 0.5) return sky;
+    float3 d = normalize(direction);
+    float alpha = -_XenaLandscapeParams.x * PI / 180.0; float s, c; sincos(alpha, s, c);
+    float3 r = float3(c * d.x - s * d.z, d.y, s * d.x + c * d.z);
+    float elevation = clamp(r.y / max(length(r.xz), 1e-4), -40, 40);
+    float vTop = _XenaLandscapeParams.y - elevation * _XenaLandscapeParams.z / (2 * PI);
+    float2 uv = float2(0.5 - atan2(r.z, r.x) * 0.5 / PI, 1 - saturate(vTop));
+    float3 land = SAMPLE_TEXTURE2D_LOD(_XenaLandscape, sampler_XenaLandscape, uv, 0).rgb;
+    // The painted sky's top dissolves into the HDRI sky above it.
+    return lerp(sky, land, smoothstep(0.05, 0.18, vTop));
+}
 
 float3 XenaPanorama(float3 direction, float rotation, float exposure)
 {
@@ -27,7 +46,7 @@ float3 XenaHazedSky(float3 direction, float rotation, float exposure, float3 haz
 {
     float3 d = normalize(direction);
     float clear = smoothstep(0.05, 0.6, d.y);
-    return lerp(haze, XenaPanorama(d, rotation, exposure), clear);
+    return XenaWithLandscape(d, lerp(haze, XenaPanorama(d, rotation, exposure), clear));
 }
 
 float3 XenaSkyColor(float3 direction)

@@ -1,0 +1,11 @@
+Use your built-in image_gen tool (imagegen skill, built-in mode, not the CLI).
+Attached: out/label-ng.png and out/label-ng-sel.png, the finished HD menu labels "НОВАЯ ИГРА" (normal: peach/salmon letters with a subtle
+dark soft drop shadow; selected: white-pink letters with a glowing magenta/violet outer glow), transparent background, 1536x512.
+Make six more labels in EXACTLY the same font, letter height, colours, shadow/glow and transparent background (real alpha), each 1536x512,
+text centred; the letter height must equal the attached labels (do not enlarge short words; shrink letters only if a text would not fit
+in 90% of the width):
+- out/label-lg.png and out/label-lg-sel.png: ЗАГРУЗКА ИГРЫ
+- out/label-ta.png and out/label-ta-sel.png: ТРЕНИРОВОЧНАЯ АРЕНА
+- out/label-op.png and out/label-op-sel.png: ОПЦИИ
+(*-sel = selected glow style, the others = normal style). Spell the Cyrillic exactly, all capitals. No other text, no border, no box.
+Save all six final images into this workspace (copy them from CODEX_HOME/generated_images). Do nothing else.

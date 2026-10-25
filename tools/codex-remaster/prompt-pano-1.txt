@@ -1,0 +1,14 @@
+Use your built-in image_gen tool (imagegen skill, built-in mode, not the CLI).
+We are remastering level 1 of the PS1 game "Xena: Warrior Princess" (1999): a green Greek forest valley with a cobblestone path,
+grey rock walls, tall trees, a stream and waterfalls. Image 1 is the level as it looks now (daylight, pale sky).
+Image 2 is the game's main-menu art: its dramatic jagged dark crags, sea stacks and misty cliffs are the style we want for the distant landscape.
+Paint the FIRST of four 90-degree segments of a seamless 360-degree cylindrical background panorama that surrounds the level
+(it is shown far away, behind the level geometry, so no foreground objects, no characters, no path, no buildings):
+- horizon at 55% of the image height; below the horizon only a misty forested valley floor that fades into a soft pale
+  blue-grey haze (#A9B8C2) in the bottom 20% (it blends into the game fog);
+- distant layers: forested hills, then tall jagged grey-violet crags and spires like in image 2, partly hidden in drifting mist;
+- daytime sky like image 1: soft pale blue with light clouds, fading to the same haze near the horizon, gentle sunlight from the right;
+- painterly but realistic, modern AAA game matte-painting quality, the palette of the level (greens, grey stone, soft blue-violet distance).
+The left and right edges must be continuous landscape (no frame, no vignette), because neighbouring segments attach there.
+No text, no logo, no watermark, no border. Output 1536x1024.
+Save the final selected image into this workspace as out/pano-1.png (copy it from CODEX_HOME/generated_images). Do nothing else.

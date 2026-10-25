@@ -79,6 +79,9 @@ namespace Xena.Assets
             var sky = motor.GetComponent<PrototypeSky>();
             Require(sky.PostActive && sky.SkyFogActive && sky.SunActive && sky.RockActive && UnityEngine.Rendering.Universal.CameraExtensions.GetUniversalAdditionalCameraData(camera).renderPostProcessing, "Remaster post-processing/fog inactive");
             report.checks.Add("Remaster enables post volume, SMAA and sky-coloured aerial perspective");
+            Require(sky.LandscapeActive && Shader.GetGlobalVector("_XenaLandscapeParams").w > 0.5f, "Remaster painted 360-degree landscape inactive");
+            report.checks.Add("Remaster sky and far fog show the painted 360-degree landscape");
+            yield return SkyViews(motor, orbit, camera, "presentation-sky-remaster.png");
             var bandits = motor.GetComponent<PrototypeBandits>(); report.bandits = bandits.Bandits.Count;
             Require(bandits.GeneratorCount == 11 && bandits.Spawned + bandits.TotalRemaining == 12 && bandits.Live() <= bandits.MaxLiveEnemies, "Level01 bandit generators differ from the original records");
             report.checks.Add("11 original bandit generators hold 12 bandits, at most 3 alive");
@@ -117,6 +120,7 @@ namespace Xena.Assets
             Require(!sky.PostActive && !sky.SkyFogActive && !sky.SunActive && !UnityEngine.Rendering.Universal.CameraExtensions.GetUniversalAdditionalCameraData(camera).renderPostProcessing, "Original kept Remaster post/fog");
             report.checks.Add("Original disables post-processing and fog");
             yield return Gameplay(motor, orbit, "presentation-gameplay-original.png");
+            yield return SkyViews(motor, orbit, Camera.main, "presentation-sky-original.png");
             yield return View(camera, rock.bounds, new Vector3(-0.6f, 0.25f, -1), 1.3f, "presentation-geometry-original.png");
             yield return View(camera, water.bounds, new Vector3(0.2f, 0.45f, -1), 0.55f, "presentation-water-original.png");
             yield return Front(camera, environment.MainFall, environment.MainFallFacing, "presentation-bigfall-original.png");
@@ -158,6 +162,18 @@ namespace Xena.Assets
             camera.targetTexture = null; target.Release(); Destroy(target); Destroy(pixels); Destroy(diffuse); Destroy(stp); Destroy(material); Destroy(quad); Destroy(cameraObject);
         }
         // The ordinary follow camera behind Xena at the original spawn.
+        // Sky views: lens at Xena's eye height, 12 deg up, four headings (painted landscape check).
+        private IEnumerator SkyViews(PrototypeMotor motor, PrototypeCamera orbit, Camera camera, string name)
+        {
+            orbit.enabled = false; motor.ResetToSpawn();
+            for (int heading = 0; heading < 4; heading++)
+            {
+                camera.transform.SetPositionAndRotation(motor.transform.position + Vector3.up * 1.7f, Quaternion.Euler(-12, heading * 90, 0));
+                yield return null; yield return new WaitForEndOfFrame();
+                Capture(heading == 0 ? name : name.Replace(".png", "-" + heading * 90 + ".png"));
+            }
+            orbit.enabled = true;
+        }
         private IEnumerator Gameplay(PrototypeMotor motor, PrototypeCamera orbit, string name, Vector3? at = null)
         {
             orbit.enabled = true;

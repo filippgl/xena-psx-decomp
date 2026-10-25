@@ -16,7 +16,7 @@ namespace Xena.Assets
         [Serializable] private sealed class Report
         {
             public string result = "FAIL", error; public List<string> checks = new List<string>();
-            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError, deathLensHeight, gameOverVideoSeconds; public int gameOverMenuStep; public string gameOverVideo; public List<string> runTrace = new List<string>();
+            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError, deathLensHeight, gameOverVideoSeconds; public int gameOverMenuStep; public string gameOverVideo; public int menuBolts; public List<string> runTrace = new List<string>();
         }
         private readonly Report report = new Report();
         private string output; private bool finished;
@@ -124,6 +124,36 @@ namespace Xena.Assets
             yield return GameOver(motor);
             report.result = "PASS"; Finish(null);
         }
+        // Main menu after GAME OVER (docs/xena-main-menu.md): sequencing, input rules, render, New game.
+        private IEnumerator MainMenu(PrototypeMotor motor)
+        {
+            var menu = motor.GetComponent<PrototypeMainMenu>();
+            Require(menu != null && menu.Visible && Time.timeScale == 0, "GAME OVER did not return to the main menu");
+            report.checks.Add("GAME OVER returns to the main menu (game paused behind it)");
+            menu.Show(); menu.SeedForTest(0x1234567);
+            Require(menu.HairSeq[0] == 2 && menu.HairFrame[0] == 72 && menu.HairFrame[1] == 91 && menu.HairFrame[2] == 112, "Hair channels do not start at seq 2/3/4");
+            int cursor = PrototypeMainMenu.Cursor; menu.MoveCursor(-4); Require(PrototypeMainMenu.Cursor == 0, "Cursor wrapped or moved above New game");
+            menu.MoveCursor(9); Require(PrototypeMainMenu.Cursor == 3, "Cursor wrapped below Options"); menu.MoveCursor(-3);
+            menu.Select(); Require(menu.Visible, "Confirm was accepted during the 5-tick entry delay");
+            var ch1 = new List<int>(); var ch2 = new List<int>(); var ch0Seq = new List<int>(); int bolts = 0;
+            for (int i = 0; i < 700; i++) { menu.Tick(); ch1.Add(menu.HairFrame[1]); ch2.Add(menu.HairFrame[2]); ch0Seq.Add(menu.HairSeq[0]); bolts += menu.BoltsDrawn; }
+            // Channel 1 loops tiles 91..111 (21 ticks), channel 2 loops 112..133 (22 ticks).
+            Require(ch1[0] == 92 && ch1[20] == 91 && ch1[41] == 91 && ch2[0] == 113 && ch2[21] == 112 && ch2[43] == 112, "Hair channels 1/2 do not loop H2/H4");
+            // Channel 0: seq 2 (tiles 73..90) -> seq 0 at tick 18 (19 tiles), -> seq 1 12 ticks later.
+            Require(ch0Seq[17] == 2 && ch0Seq[18] == 0 && ch0Seq[29] == 0 && ch0Seq[30] == 1, "Hair channel 0 does not play seq 2 -> 0 -> 1");
+            Require(ch0Seq.Contains(2) && ch0Seq.LastIndexOf(2) > 30, "Hair seq 1 never chose seq 2 again (rand()&4)");
+            Require(bolts > 0, "No lightning bolt flashed in 700 ticks");
+            report.menuBolts = bolts;
+            report.checks.Add("main menu: hair seq 2->0->1 / H2 21-tick / H4 22-tick loops, lightning, no cursor wrap, 5-tick confirm delay");
+            Require(menu.ConfirmDelay == 0 && menu.HdReady, "Menu delay did not expire or the HD layers are missing");
+            PrototypeGraphics.Active.SetMode(XenaVisualMode.Original); yield return null; yield return new WaitForEndOfFrame(); Capture("menu-original.png");
+            PrototypeGraphics.Active.SetMode(XenaVisualMode.Remaster); yield return null; yield return new WaitForEndOfFrame(); Capture("menu-remaster.png");
+            menu.MoveCursor(1); yield return null; yield return new WaitForEndOfFrame(); Capture("menu-remaster-load.png");
+            menu.Select(); Require(menu.Visible && menu.Note != null, "Unported Load game did not stay in the menu with a note");
+            menu.MoveCursor(-1); int games = PrototypeMainMenu.NewGames; menu.Select();
+            Require(!menu.Visible && Time.timeScale == 1 && PrototypeMainMenu.NewGames == games + 1, "New game did not start the level");
+            report.checks.Add("main menu: New game starts level 01; unported items stay in the menu");
+        }
         // Death -> menu -> exit confirm -> GAME OVER video -> level restart (native capture build/gameover).
         private IEnumerator GameOver(PrototypeMotor motor)
         {
@@ -166,6 +196,7 @@ namespace Xena.Assets
                 "Level did not restart at its start with full health");
             Require(fresh.GetComponent<PrototypeGameOver>().State == PrototypeGameOver.Phase.None, "Restarted level still shows the death menu");
             report.checks.Add("GAME OVER video (CHAKDETH.STR) plays, then the level restarts at its start with 500 hp");
+            yield return MainMenu(fresh);
         }
         private IEnumerator Damage(PrototypeMotor motor, PrototypeBandits bandits)
         {

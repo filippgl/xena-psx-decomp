@@ -15,6 +15,8 @@ namespace Xena.Assets
         public const float FogStart = 22, FogEnd = 70;
         public bool SkyFogActive { get; private set; }
         private Material remasterSky;
+        private Texture2D landscape;
+        public bool LandscapeActive { get; private set; }
         private Volume post;
         private Light sun;
         private Texture2D rockAlbedo, rockNormal, rockOcclusion;
@@ -66,6 +68,7 @@ namespace Xena.Assets
             RockActive = remaster && rockAlbedo != null;
             if (!remaster)
             {
+                Shader.SetGlobalVector("_XenaLandscapeParams", Vector4.zero); LandscapeActive = false;
                 view.clearFlags = CameraClearFlags.SolidColor; view.backgroundColor = OriginalBackground;
                 return;
             }
@@ -76,6 +79,12 @@ namespace Xena.Assets
             Shader.SetGlobalTexture("_XenaSkyPanorama", remasterSky.GetTexture("_MainTex"));
             Shader.SetGlobalVector("_XenaSkyFogParams", new Vector4(remasterSky.GetFloat("_Rotation"), remasterSky.GetFloat("_Exposure"), FogStart, FogEnd));
             Shader.SetGlobalColor("_XenaHazeColor", remasterSky.GetColor("_HazeColor").linear);
+            // Painted 360-degree landscape (Codex, tools/stitch_panorama.py): horizon at 55% from
+            // the top as requested in the prompts; fogged far geometry dissolves into it too.
+            if (landscape == null) landscape = Resources.Load<Texture2D>("Remaster/Panorama");
+            LandscapeActive = landscape != null;
+            if (landscape != null) Shader.SetGlobalTexture("_XenaLandscape", landscape);
+            Shader.SetGlobalVector("_XenaLandscapeParams", landscape == null ? Vector4.zero : new Vector4(0, 0.55f, (float)landscape.width / landscape.height, 1));
         }
     }
 }

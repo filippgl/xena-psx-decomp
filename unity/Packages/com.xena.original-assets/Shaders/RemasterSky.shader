@@ -1,7 +1,8 @@
 Shader "Xena/RemasterSky"
 {
     // Remaster sky dome: CC0 HDRI panorama hazed towards the horizon colour
-    // (XenaSkyFog.hlsl), matching the aerial perspective on level surfaces.
+    // (XenaSkyFog.hlsl), matching the aerial perspective on level surfaces, with the
+    // painted 360-degree landscape (_XenaLandscape) over its lower part.
     Properties
     {
         _MainTex ("Panorama (HDR)", 2D) = "grey" {}
@@ -19,6 +20,7 @@ Shader "Xena/RemasterSky"
             #pragma vertex Vert
             #pragma fragment Frag
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "XenaSkyFog.hlsl"
             TEXTURE2D(_MainTex); SAMPLER(sampler_MainTex);
             CBUFFER_START(UnityPerMaterial)
                 float4 _MainTex_ST, _HazeColor;
@@ -40,7 +42,7 @@ Shader "Xena/RemasterSky"
                 float3 r = float3(c * d.x - s * d.z, d.y, s * d.x + c * d.z);
                 float2 uv = float2(0.5, 1.0) - float2(atan2(r.z, r.x) * 0.5 / PI, acos(clamp(r.y, -1, 1)) / PI);
                 float3 sky = SAMPLE_TEXTURE2D_LOD(_MainTex, sampler_MainTex, uv, 0).rgb * _Exposure;
-                return half4(lerp(_HazeColor.rgb, sky, smoothstep(0.05, 0.6, d.y)), 1);
+                return half4(XenaWithLandscape(d, lerp(_HazeColor.rgb, sky, smoothstep(0.05, 0.6, d.y))), 1);
             }
             ENDHLSL
         }

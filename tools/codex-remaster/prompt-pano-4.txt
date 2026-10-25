@@ -1,0 +1,7 @@
+Use your built-in image_gen tool (imagegen skill, built-in mode, not the CLI), editing mode with the attached image.
+The attached 1536x1024 image is the last segment of a seamless 360-degree landscape panorama (background of a game level):
+its LEFT 30% and RIGHT 30% are already painted, the grey band in the middle is empty.
+Keep both painted sides exactly as they are and paint the middle so that the left side flows continuously into the right
+side: same horizon height, same mist, forested hills, jagged grey crags in the distance, soft pale-blue daytime sky with light
+clouds, valley floor fading into the same pale blue-grey haze at the bottom. No text, no border, no foreground objects. 1536x1024.
+Save the final selected image into this workspace as out/pano-4.png (copy it from CODEX_HOME/generated_images). Do nothing else.

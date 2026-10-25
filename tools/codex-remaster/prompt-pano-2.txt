@@ -1,0 +1,8 @@
+Use your built-in image_gen tool (imagegen skill, built-in mode, not the CLI), editing mode with the attached image.
+The attached 1536x1024 image is the start of the next segment of a seamless 360-degree landscape panorama (background of a
+game level): its LEFT 40% (614 px) is already painted, the grey area on the right is empty.
+Keep the left 40% exactly as it is (same mountains, mist, sky, clouds, horizon height, colours and lighting) and paint the
+empty right part as a natural continuation of the same landscape: forested hills in drifting mist, tall jagged grey crags and
+spires in the distance, soft pale-blue daytime sky with light clouds, valley floor fading into the same pale blue-grey haze at
+the bottom. Vary the shapes (do not repeat the left side). No text, no border, no foreground objects. Output 1536x1024.
+Save the final selected image into this workspace as out/pano-2.png (copy it from CODEX_HOME/generated_images). Do nothing else.

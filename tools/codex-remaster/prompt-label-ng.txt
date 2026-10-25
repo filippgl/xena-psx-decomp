@@ -1,0 +1,10 @@
+Use your built-in image_gen tool (imagegen skill, built-in mode, not the CLI).
+Attached: two enlarged PS1 menu buttons from "Xena: Warrior Princess" (1999), Russian version. Image 1 is the normal state
+of the menu item "НОВАЯ ИГРА" (peach/salmon capital letters with a soft dark shadow, over rocks). Image 2 is the selected state
+(the same words in white-pink letters with a glowing magenta/violet aura).
+Create TWO modern high-resolution versions of just the lettering, each on a fully transparent background (real alpha, no rocks, no box):
+- out/label-ng.png: the text НОВАЯ ИГРА exactly (Cyrillic, all capitals, same thin elegant sans-serif letter shapes and proportions),
+  peach/salmon colour (#E8A07A to #F0B890 gradient) with a subtle dark soft drop shadow, 1536x512, the text centred filling ~85% of the width.
+- out/label-ng-sel.png: the same text, same size and position, white-pink letters with a glowing magenta/violet outer glow, 1536x512.
+Spell the Cyrillic text exactly: Н О В А Я  И Г Р А. No other text, no border.
+Save both final images into this workspace (copy them from CODEX_HOME/generated_images). Do nothing else.

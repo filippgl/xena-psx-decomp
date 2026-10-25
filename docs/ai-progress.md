@@ -20,6 +20,16 @@ One issue per task. Nothing here is a claim without the command/measurement that
   298/298 frames bit-exact vs native). Codex HD background tools/codex-remaster/out/menu-main.png
   (1536x1024, menu text removed). NEXT: port the main menu to Unity (Original: exact
   hair/lightning sprites; Remaster: HD background + animated hair), route GAME OVER to it.
+- CLAUDE 2026-10-25 19:05 build: MAIN MENU in Unity (PrototypeMainMenu; tools/install_main_menu.py):
+  Original = CPU composite per 30 Hz tick (bg, bolts, hair ch0..2, highlight, prompt abr1);
+  Remaster = Codex HD bg + Codex HD labels (tools/codex-remaster/prompt-label*.txt), Real-ESRGAN
+  lightning (alpha = brightness gain over main.tim: LTNG tiles are opaque) and prompt, CPU hair
+  wind warp. GAME OVER -> video -> menu. PAINTED 360 LANDSCAPE: 4 Codex segments
+  (pano_next.sh / pano_close.sh) stitched by tools/stitch_panorama.py (wrap crossfades,
+  Real-ESRGAN 4x then Lanczos 2x: x4plus with -s 2 produces a tile mosaic), sampled in
+  XenaWithLandscape (sky + far fog), horizon 0.55. All 8 suites + aggregate PASS
+  (claude-v43-*.txt). User feedback pending: hair warp moves shoulder/sky, Google Fonts for
+  menu/exit screen, enemy blood, walls see-through when close, Codex repaint of level textures.
 
 - CLAUDE SESSION 2026-10-24 22:20 (continued Codex level-presentation work).
   Build DLL build/unity-movement/.../Xena.Assets.dll 2026-10-24 22:19:51; all7

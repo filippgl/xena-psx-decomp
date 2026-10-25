@@ -15,7 +15,7 @@ namespace Xena.Assets
     //   the death view. Retry: the level restarts at its start, 500 hp (native: state 0xC,
     //   level start view). Exit: "Хочешь выйти?" Да / Не(т), default Нет; Да -> state 0x13
     //   plays MEDIA/CHAKDETH.STR (GAME OVER, 5.8 s) and returns to the main menu (state 2).
-    //   The main menu is not ported yet, so the level restarts after the video.
+    //   After the video the level reloads behind the main menu (PrototypeMainMenu).
     // Remaster plays the Real-ESRGAN 4x video chakdeth-hd when present.
     // Menu text uses the GUI font (xenafont.tim is not exported yet).
     public sealed class PrototypeGameOver : MonoBehaviour
@@ -44,7 +44,7 @@ namespace Xena.Assets
             if (State == Phase.Video)
             {
                 // VideoPlayer.isPlaying is false before the first frame is prepared.
-                if (player == null || (Time.unscaledTime - videoStart > 1 && !player.isPlaying) || Pressed(Key.Escape)) Retry();
+                if (player == null || (Time.unscaledTime - videoStart > 1 && !player.isPlaying) || Pressed(Key.Escape)) { PrototypeMainMenu.PendingShow = true; Retry(); }
                 return;
             }
             if (Pressed(Key.UpArrow) || Pressed(Key.W) || Gamepad.current?.dpad.up.wasPressedThisFrame == true) Move(-1);

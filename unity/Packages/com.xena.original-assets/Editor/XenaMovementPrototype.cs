@@ -131,6 +131,24 @@ namespace Xena.Assets.Editor
                     hudImporter.textureCompression = TextureImporterCompression.Uncompressed; hudImporter.mipmapEnabled = false;
                     hudImporter.filterMode = FilterMode.Point; hudImporter.npotScale = TextureImporterNPOTScale.None; hudImporter.alphaIsTransparency = true; hudImporter.SaveAndReimport();
                 }
+            // Painted landscape (tools/stitch_panorama.py): wraps in u, clamped in v.
+            if (AssetImporter.GetAtPath("Assets/Imported/Resources/Remaster/Panorama.png") is TextureImporter panoramaImporter)
+            {
+                panoramaImporter.wrapModeU = TextureWrapMode.Repeat; panoramaImporter.wrapModeV = TextureWrapMode.Clamp; panoramaImporter.mipmapEnabled = false;
+                panoramaImporter.maxTextureSize = 8192; panoramaImporter.textureCompression = TextureImporterCompression.CompressedHQ; panoramaImporter.npotScale = TextureImporterNPOTScale.None;
+                panoramaImporter.SaveAndReimport();
+            }
+            // Main menu (tools/install_main_menu.py): readable for the CPU compositor,
+            // uncompressed, no mips; Original tiles point-sampled, HD layers bilinear.
+            if (Directory.Exists("Assets/Imported/Resources/Menu"))
+                foreach (string menuPath in Directory.GetFiles("Assets/Imported/Resources/Menu", "*.png", SearchOption.AllDirectories))
+                    if (AssetImporter.GetAtPath(menuPath.Replace(Path.DirectorySeparatorChar, '/')) is TextureImporter menuImporter)
+                    {
+                        bool hdLayer = menuPath.Replace(Path.DirectorySeparatorChar, '/').Contains("/Menu/HD/");
+                        menuImporter.textureCompression = TextureImporterCompression.Uncompressed; menuImporter.mipmapEnabled = false; menuImporter.isReadable = true;
+                        menuImporter.filterMode = hdLayer ? FilterMode.Bilinear : FilterMode.Point; menuImporter.npotScale = TextureImporterNPOTScale.None;
+                        menuImporter.alphaIsTransparency = true; menuImporter.maxTextureSize = 2048; menuImporter.SaveAndReimport();
+                    }
             const string streakPath = "Assets/Imported/Resources/Remaster/FallStreak.asset";
             var streak = AssetDatabase.LoadAssetAtPath<Texture2D>(streakPath);
             if (streak == null)
