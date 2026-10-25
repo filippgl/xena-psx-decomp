@@ -129,15 +129,19 @@ namespace Xena.Assets
             foe.transform.rotation = Quaternion.LookRotation(-motor.transform.forward); foe.Configure(foe.GetComponentInChildren<XenaAssetPreview>(), motor, Motion(foe), 75, 0, 7);
             foe.Active = false; // stand still while Xena strikes
             int before = foe.Health;
-            InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 1 }); for (int i = 0; i < 3; i++) yield return new WaitForFixedUpdate();
+            // Hold the press for real frames: after the 4x ending, fixed-step catch-up
+            // could otherwise deliver press and release to Input System in one update.
+            yield return null; yield return null;
+            InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 1 }); for (int i = 0; i < 4; i++) yield return null;
             InputSystem.QueueStateEvent(mouse, new MouseState()); for (int i = 0; i < 30; i++) yield return new WaitForFixedUpdate();
             report.firstHitDamage = before - foe.Health;
             Require(report.firstHitDamage == 30 + scripts.SwordLevel, "Sword 51 did not deal original 30 + sword level: " + report.firstHitDamage);
             report.checks.Add("sword 51 deals the original 30 + sword level to a bandit");
+            Require(motor.GetComponent<PrototypeHud>().VisibleEnemyBars >= 1, "Enemy dagger bar not shown after the hit"); report.checks.Add("HUD shows the enemy dagger bar for 60 frames after its health changes");
             foe.Active = true;
             for (int press = 0; press < 30 && !foe.Dying; press++)
             {
-                InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 1 }); for (int i = 0; i < 3; i++) yield return new WaitForFixedUpdate();
+                InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 1 }); for (int i = 0; i < 4; i++) yield return null;
                 InputSystem.QueueStateEvent(mouse, new MouseState()); for (int i = 0; i < 40; i++) yield return new WaitForFixedUpdate();
                 Vector3 to = foe.transform.position - motor.transform.position; to.y = 0; if (to.sqrMagnitude > 0.01f) motor.transform.rotation = Quaternion.LookRotation(to);
             }
@@ -161,6 +165,13 @@ namespace Xena.Assets
             report.firstIntake = damage.LastIntake;
             Require(report.firstIntake == 15 || report.firstIntake == 25 || report.firstIntake == 30, "Bandit hit did not use an original window damage: " + report.firstIntake);
             report.checks.Add("bandit attack damages Xena by its original window value");
+            var hud = motor.GetComponent<PrototypeHud>(); for (int i = 0; i < 10; i++) yield return new WaitForFixedUpdate();
+            Require(hud.Loaded && hud.TargetLength == PrototypeHud.HealthLength(damage.Health, 500) && hud.ShownLength == hud.TargetLength,
+                "HUD did not follow the original health mapping: " + hud.ShownLength + "/" + hud.TargetLength + " bars " + hud.VisibleEnemyBars);
+            report.checks.Add("HUD sword length = clamp(109*hp/500,3,109)");
+            yield return new WaitForEndOfFrame(); Capture("hud-remaster.png");
+            PrototypeGraphics.Active.SetMode(XenaVisualMode.Original); for (int i = 0; i < 3; i++) yield return null; yield return new WaitForEndOfFrame(); Capture("hud-original.png");
+            PrototypeGraphics.Active.SetMode(XenaVisualMode.Remaster);
             int health = damage.Health, blocked = damage.BlockedHits;
             Vector3 at = attacker.transform.position - motor.transform.position; at.y = 0; motor.transform.rotation = Quaternion.LookRotation(at);
             InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 2 });

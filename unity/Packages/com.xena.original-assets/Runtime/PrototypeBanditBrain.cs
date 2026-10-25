@@ -28,6 +28,7 @@ namespace Xena.Assets
         public int Slot { get; private set; } = PrototypeBandits.IdleSlot;
         public int Frame { get; private set; }
         public int Health { get; private set; }
+        public int MaxHealth { get; private set; }
         public int Cooldown { get; private set; }
         public int AttacksStarted { get; private set; }
         public int Steps { get; private set; }
@@ -80,7 +81,7 @@ namespace Xena.Assets
 
         public void Configure(XenaAssetPreview model, PrototypeMotor player, Dictionary<int, MotionClip> clips, int maxHealth, int aggressionPercent, int seed)
         {
-            pose = model; target = player; motion = clips; Health = maxHealth; aggression = Mathf.Clamp(aggressionPercent, 0, 99);
+            pose = model; target = player; motion = clips; Health = maxHealth; MaxHealth = maxHealth; aggression = Mathf.Clamp(aggressionPercent, 0, 99);
             random = new System.Random(seed); heading = Mathf.RoundToInt(transform.eulerAngles.y / 360f * 4096) & 4095;
             pose.enabled = false; Play(PrototypeBandits.IdleSlot);
         }

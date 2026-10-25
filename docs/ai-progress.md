@@ -112,6 +112,12 @@ One issue per task. Nothing here is a claim without the command/measurement that
   docs/xena-ambient-audit.md merged. Potions now used at once when health+150<500 (user
   report confirmed by jtbl_80017594). HUD research agent running; user wants HD HUD via Codex.
   Remaster keeps bandit corpses (removed from live count, last death pose); Original hides them.
+  HUD (07:xx): docs/xena-hud-audit.md + tools/export_hud.mjs merged; PrototypeHud draws
+  original hilt/sword/blood (len=clamp(109hp/500,3,109), +1px/frame), 4 dagger enemy bars
+  (60 frames after change, 4000 range), karma ring (meter not ported -> unlit), potion icon.
+  Remaster anchors to screen edges and loads Resources/HUD/<name>-4x.png when present;
+  originals to upscale in build/hud-for-upscale/. Bandit smoke press held over real frames
+  (fixed catch-up after the 4x ending lost presses 1/3 -> 4/4 pass). Xena hit-reaction RE running.
   Unverified/next: original Xena radius obj+0x28=150u (.375m) vs capsule .28m;
   normal-Y<3200 slope block not implemented (query has no normal); narrowphase
   800A129C slide math. Next: cartwheel/backflip continuity measurement; then F10

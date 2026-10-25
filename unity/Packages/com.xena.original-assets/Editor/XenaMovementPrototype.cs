@@ -124,6 +124,13 @@ namespace Xena.Assets.Editor
                 rockImporter.sRGBTexture = file == "RockColor"; rockImporter.wrapMode = TextureWrapMode.Repeat; rockImporter.mipmapEnabled = true;
                 rockImporter.maxTextureSize = 2048; rockImporter.SaveAndReimport();
             }
+            // Original HUD pixels (tools/export_hud.mjs): uncompressed, point, no mips.
+            foreach (string hudPath in Directory.GetFiles("Assets/Imported/Resources/HUD", "*.png"))
+                if (AssetImporter.GetAtPath(hudPath.Replace(Path.DirectorySeparatorChar, '/')) is TextureImporter hudImporter)
+                {
+                    hudImporter.textureCompression = TextureImporterCompression.Uncompressed; hudImporter.mipmapEnabled = false;
+                    hudImporter.filterMode = FilterMode.Point; hudImporter.npotScale = TextureImporterNPOTScale.None; hudImporter.alphaIsTransparency = true; hudImporter.SaveAndReimport();
+                }
             const string streakPath = "Assets/Imported/Resources/Remaster/FallStreak.asset";
             var streak = AssetDatabase.LoadAssetAtPath<Texture2D>(streakPath);
             if (streak == null)

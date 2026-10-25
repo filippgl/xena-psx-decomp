@@ -112,12 +112,5 @@ namespace Xena.Assets
             return true;
         }
 
-        private GUIStyle style;
-        private void OnGUI()
-        {
-            if (style == null) style = new GUIStyle(GUI.skin.box) { fontSize = 16, alignment = TextAnchor.MiddleCenter };
-            string text = "Xena " + Health + "/" + MaxHealth + (scripts != null ? "  potions " + scripts.Potions + "  sword " + scripts.SwordLevel : "");
-            GUI.Box(new Rect(Screen.width - 330, 16, 314, 30), Dead ? "Xena fell (" + Health + "/" + MaxHealth + ")" : text, style);
-        }
     }
 }
