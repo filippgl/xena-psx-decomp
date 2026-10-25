@@ -81,7 +81,8 @@ namespace Xena.Assets
             // Stay inside the level: the original height query must find ground
             // under the lens and the lens must stay above it, else move closer.
             if (motor != null)
-                while (radius > 0.35f && OutsideLevel(focus + back * radius)) radius = Mathf.Max(0.35f, radius - 0.1f);
+                // Never pull the lens into Xena for this: 1.6 m minimum.
+                while (radius > 1.6f && OutsideLevel(focus + back * radius)) radius = Mathf.Max(1.6f, radius - 0.1f);
             transform.position = focus + back * radius; transform.LookAt(focus); DistanceToTarget = radius;
         }
         private bool OutsideLevel(Vector3 lens)

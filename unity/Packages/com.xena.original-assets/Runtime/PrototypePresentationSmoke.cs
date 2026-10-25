@@ -88,6 +88,10 @@ namespace Xena.Assets
             yield return Gameplay(motor, orbit, "presentation-gameplay-remaster.png");
             var scripts = motor.GetComponent<PrototypeLevelScripts>(); var firstSign = new List<Vector3>(scripts.TriggerPositions("sign"))[0];
             yield return Gameplay(motor, orbit, "presentation-sign0-remaster.png", firstSign + new Vector3(2.5f, 0, 2.5f));
+            // The user's view: level end near Siras, looking back towards the start.
+            var sirasAt = new List<Vector3>(scripts.TriggerPositions("levelEndNpc"))[0];
+            Vector3 back = motor.transform.position - sirasAt; back.y = 0;
+            yield return Gameplay(motor, orbit, "presentation-levelend-remaster.png", sirasAt + back.normalized * 8);
             var geometry = motor.GetComponent<PrototypeRemasterGeometry>(); MeshFilter terrain = null; MeshRenderer rock = null;
             foreach (var item in level.GetComponentsInChildren<MeshFilter>())
             { if (item.sharedMesh.name == "level-01-object-1") terrain = item; else if (item.sharedMesh.name == "level-01-object-66") rock = item.GetComponent<MeshRenderer>(); }
