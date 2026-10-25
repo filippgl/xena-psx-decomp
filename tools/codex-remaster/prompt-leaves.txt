@@ -1,0 +1,7 @@
+Use your built-in image_gen tool (imagegen skill, built-in mode, not the CLI). The attached image is the remastered tree texture page
+of level 1 (a green Greek forest) of "Xena: Warrior Princess" - use its leaf colours as the palette reference.
+Create a foliage texture atlas for a game tree: a 2x2 grid of four different leaf clusters (each cell 512x512), each cluster a dense,
+roughly round bunch of broad deciduous leaves (like a plane tree / oak) on thin twigs, seen from the side, photoreal, sharp,
+natural dark-to-mid forest greens matching the reference, slight light from above. Each cluster fills about 90% of its cell
+and must not touch the cell borders. Fully transparent background (real alpha), no ground, no sky, no text. Output 1024x1024.
+Save the final selected image into this workspace as out/leaves.png (copy it from CODEX_HOME/generated_images). Do nothing else.

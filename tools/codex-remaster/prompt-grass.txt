@@ -1,0 +1,8 @@
+Use your built-in image_gen tool (imagegen skill, built-in mode, not the CLI). The attached image is the remastered ground texture page
+of level 1 (a green Greek forest) of "Xena: Warrior Princess" - match its grass greens.
+Create a grass texture atlas for a game: a 2x2 grid (each cell 512x512) of four different upright tufts seen from the side:
+(1) dense meadow grass tuft, (2) taller wild grass with a few seed heads, (3) short clover and grass mix, (4) a small fern sprout.
+Photoreal, sharp individual blades, dark-to-mid forest greens with slightly yellow tips, light from above. Each tuft stands on the
+bottom edge of its cell (the base touches the bottom), fills about 85% of the cell width and height, and does not touch the other
+borders. Fully transparent background (real alpha), no soil, no sky, no text. Output 1024x1024.
+Save the final selected image into this workspace as out/grass.png (copy it from CODEX_HOME/generated_images). Do nothing else.

@@ -87,6 +87,12 @@ namespace Xena.Assets
             var vegetation = motor.GetComponent<PrototypeRemasterVegetation>();
             Require(vegetation.Replaced == 35 && vegetation.RemasterShown, "Remaster did not replace the 35 @pretty plants: " + vegetation.Replaced);
             report.checks.Add("Remaster replaces the 35 @pretty plant cards with CC0 Poly Haven plants");
+            var trees = motor.GetComponent<PrototypeRemasterTrees>();
+            Require(trees.Replaced >= 20 && trees.RemasterShown, "Remaster did not replace the original trees: " + trees.Replaced);
+            report.checks.Add("Remaster replaces " + trees.Replaced + " original trees with generated trees (" + trees.Triangles + " triangles)");
+            var grass = motor.GetComponent<PrototypeRemasterGrass>();
+            Require(grass.Tufts > 1000 && grass.Chunks > 0 && grass.RemasterShown, "Remaster grass missing: " + grass.Tufts);
+            report.checks.Add("Remaster grass: " + grass.Tufts + " tufts in " + grass.Chunks + " chunks on " + grass.GrassArea.ToString("F0") + " m2, " + grass.Ferns + " extra ferns");
             yield return VegetationViews(orbit, camera, level);
             var shafts = motor.GetComponent<PrototypeLightShafts>(); Renderer sunbeam = null;
             foreach (var r in level.GetComponentsInChildren<MeshRenderer>()) if (r.name.Contains("@sunbm")) sunbeam = r;

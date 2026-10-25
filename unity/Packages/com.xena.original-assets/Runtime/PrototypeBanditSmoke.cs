@@ -16,7 +16,7 @@ namespace Xena.Assets
         [Serializable] private sealed class Report
         {
             public string result = "FAIL", error; public List<string> checks = new List<string>();
-            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError, deathLensHeight, gameOverVideoSeconds; public int gameOverMenuStep; public string gameOverVideo; public int hitFlashLife, hitDiscs, hitTriangles, remasterDroplets, discFrames, discStalls; public int menuBolts; public List<string> runTrace = new List<string>();
+            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError, deathLensHeight, gameOverVideoSeconds; public int gameOverMenuStep; public string gameOverVideo; public int hitFlashLife, hitDiscs, hitTriangles, remasterDroplets, discFrames, discStalls; public List<string> discTrace = new List<string>(); public int menuBolts; public List<string> runTrace = new List<string>();
         }
         private readonly Report report = new Report();
         private string output; private bool finished;
@@ -243,7 +243,7 @@ namespace Xena.Assets
             {
                 yield return null;
                 if (!effects.MovingDisc(out Vector3 disc)) { haveLast = false; continue; }
-                if (haveLast) { discFrames++; if (Vector3.Distance(disc, lastDisc) < 1e-5f) discStalls++; }
+                if (haveLast) { discFrames++; if (Vector3.Distance(disc, lastDisc) < 1e-5f) { discStalls++; report.discTrace.Add("STALL " + effects.DebugClock); } else report.discTrace.Add(effects.DebugClock); }
                 lastDisc = disc; haveLast = true;
             }
             report.discFrames = discFrames; report.discStalls = discStalls;

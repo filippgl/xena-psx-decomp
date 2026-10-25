@@ -31,11 +31,14 @@ namespace Xena.Assets
         private readonly List<Vector3> vertices = new List<Vector3>(); private readonly List<Color> colors = new List<Color>(); private readonly List<int> indices = new List<int>();
         public int LastDrawnTriangles { get; private set; }
         // Drawn (interpolated) position of the first moving spark disc, for the continuity check.
+        // Only discs that already took a step: before its first step a new disc is rightly drawn
+        // at its birth point (rendering trails the simulation by one step).
         public bool MovingDisc(out Vector3 drawn)
         {
-            foreach (var b in pool) if (b != null && b.life > 0 && b.kind == 2 && b.vel.sqrMagnitude > 1e-8f) { drawn = Vector3.Lerp(b.prev, b.pos, Alpha()); return true; }
+            foreach (var b in pool) if (b != null && b.life > 0 && b.kind == 2 && b.vel.sqrMagnitude > 1e-8f && b.prev != b.pos) { drawn = Vector3.Lerp(b.prev, b.pos, Alpha()); return true; }
             drawn = default; return false;
         }
+        public string DebugClock => string.Format(System.Globalization.CultureInfo.InvariantCulture, "a={0:F3} tick={1} ph={2:F4} dt={3:F4}", Alpha(), ticks, Time.time - Time.fixedTime, Time.deltaTime);
         private int frame, ticks;
         public int ActiveBursts { get { int n = 0; foreach (var b in pool) if (b != null && b.life > 0) n++; return n; } }
         public int ActiveDrops { get { int n = 0; foreach (var e in emitters.Values) n += e.drops.Count; return n; } }

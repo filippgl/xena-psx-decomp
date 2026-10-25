@@ -94,6 +94,14 @@ namespace Xena.Assets.Editor
         private static void CreateVegetationPrefabs()
         {
             const string source = "Assets/Imported/Remaster/Vegetation", target = "Assets/Imported/Resources/Remaster/Vegetation";
+            // Generated-tree textures: Codex leaf atlas (cut-out, coverage-preserving mips) and CC0 bark.
+            foreach (string texture in new[] { target + "/TreeLeaves.png", target + "/Grass.png", target + "/TreeBark.jpg" })
+                if (AssetImporter.GetAtPath(texture) is TextureImporter treeImporter)
+                {
+                    bool leaf = texture.EndsWith(".png"); treeImporter.alphaIsTransparency = leaf; treeImporter.mipmapEnabled = true;
+                    treeImporter.mipMapsPreserveCoverage = leaf; treeImporter.alphaTestReferenceValue = 0.45f; treeImporter.wrapMode = leaf ? TextureWrapMode.Clamp : TextureWrapMode.Repeat;
+                    treeImporter.maxTextureSize = 2048; treeImporter.SaveAndReimport();
+                }
             if (!Directory.Exists(source)) return;
             Directory.CreateDirectory(target);
             Shader lit = Shader.Find("Xena/RemasterLit"); if (lit == null) throw new InvalidDataException("Xena/RemasterLit unavailable");
@@ -125,7 +133,7 @@ namespace Xena.Assets.Editor
         private static void CreateRemasterResources()
         {
             Directory.CreateDirectory("Assets/Imported/Resources/Remaster");
-            foreach (var (file, shaderName) in new[] { ("Water", "Xena/RemasterWater"), ("Waterfall", "Xena/RemasterWaterfall"), ("Rainbow", "Xena/RemasterRainbow"), ("LevelLit", "Xena/RemasterLit"), ("Foam", "Xena/RemasterFoam"), ("LightShaft", "Xena/RemasterLightShaft") })
+            foreach (var (file, shaderName) in new[] { ("Water", "Xena/RemasterWater"), ("Waterfall", "Xena/RemasterWaterfall"), ("Rainbow", "Xena/RemasterRainbow"), ("LevelLit", "Xena/RemasterLit"), ("Foam", "Xena/RemasterFoam"), ("LightShaft", "Xena/RemasterLightShaft"), ("Grass", "Xena/RemasterGrass") })
             {
                 string path = "Assets/Imported/Resources/Remaster/" + file + ".mat";
                 Shader shader = Shader.Find(shaderName); if (shader == null) throw new InvalidDataException(shaderName + " unavailable");
