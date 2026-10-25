@@ -114,7 +114,10 @@ namespace Xena.Assets
             if (props == null) props = new GameObject("Level01Props").transform;
             var root = new GameObject(actor.name + " #" + actor.index); root.transform.SetParent(props, false);
             root.transform.SetPositionAndRotation(Unity(actor.position), Quaternion.Euler(0, (actor.yaw & 4095) * 360f / 4096, 0));
-            var body = Instantiate(prefab, root.transform, false); body.transform.localRotation = Quaternion.Euler(0, 180, 0);
+            // Character models face -Z after the Z reflection and turn 180; the signpost board does not:
+            // native capture of sign #0 (build/signdir/native_sign.png) shows the arrow pointing along the
+            // path, which the 180 turn reversed. Siras keeps the character convention (not re-verified).
+            var body = Instantiate(prefab, root.transform, false); body.transform.localRotation = Quaternion.Euler(0, model == "Sign_pt" ? 0 : 180, 0);
             var pose = body.GetComponent<XenaAssetPreview>(); pose.ShowControls = false; pose.SampleSlot(0, 0); pose.enabled = animate;
             PlacedModels++;
         }

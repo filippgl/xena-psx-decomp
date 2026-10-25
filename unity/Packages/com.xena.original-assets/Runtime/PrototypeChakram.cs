@@ -157,6 +157,38 @@ namespace Xena.Assets
                 }
             }
             projectile.transform.position += step; trail.Add(projectile.transform.position);
+            HitBandits(projectile.transform.position);
+        }
+        // Original chakram vs enemies (docs/xena-chakram-damage.md, func_8003DDEC / func_80070BD4):
+        // body test max+3/8min < 100 + target radius (horizontal) and [y-20, y] overlapping the target's
+        // [y-h, y] (h = 750); flat 300 damage per contact on the way out and back (no sword level, no
+        // power-up, no karma); repeats are absorbed by the target's own hit timer; red spark + blood.
+        // After a hit the disc returns at once while aiming (R1 held), otherwise it bounces off.
+        public const int Damage = 300;
+        public int EnemyHits { get; private set; }
+        public void HitBanditsForTest(Vector3 at) => HitBandits(at);
+        private void HitBandits(Vector3 at)
+        {
+            var bandits = GetComponent<PrototypeBandits>(); if (bandits == null) return;
+            foreach (var bandit in bandits.Brains)
+            {
+                if (bandit == null || bandit.Removed || bandit.Health <= 0 || bandit.Dying) continue;
+                Vector3 d = (bandit.transform.position - at) * 400; int dx = Mathf.Abs(Mathf.RoundToInt(d.x)), dz = Mathf.Abs(Mathf.RoundToInt(d.z));
+                if (Mathf.Max(dx, dz) + 3 * Mathf.Min(dx, dz) / 8 >= 100 + PrototypeBanditBrain.Radius) continue;
+                float y = at.y * 400, top = bandit.transform.position.y * 400 + 750, bottom = bandit.transform.position.y * 400;
+                if (y < bottom || y - 20 > top) continue;
+                bool killed = false;
+                if (bandit.TakeHit(Damage, at, false))
+                {
+                    EnemyHits++; killed = bandit.Health == 0;
+                    var effects = GetComponent<PrototypeHitEffects>();
+                    if (effects != null) { effects.Spark(at, Damage, PrototypeHitEffects.Type.Hit); effects.Bleed(bandit.transform, at, killed ? 20 : 10, killed ? 170 : 80); }
+                }
+                Vector3 away = at - bandit.transform.position; away.y = 0;
+                if (input.Chakram || away.sqrMagnitude < 1e-6f) BeginReturn();
+                else direction = Vector3.Reflect(direction, away.normalized);
+                return;
+            }
         }
         public string LastImpactCollider { get; private set; } = "";
         private void BeginReturn() { Returning = true; returnIndex = trail.Count - 1; }

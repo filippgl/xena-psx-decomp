@@ -23,8 +23,12 @@ def main():
         out = os.path.join(project, "Assets", "Imported", "Remaster", "Generated", name)
         shutil.rmtree(out, ignore_errors=True); os.makedirs(out)
         texture.convert("RGB").save(os.path.join(out, "texture.png"))
+        # Unity's OBJ importer mirrors X (right- to left-handed): pre-mirror X and reverse the
+        # winding so the imported model has the source handedness (text not mirrored, faces out).
+        fixed = mesh.copy()  # no fix_normals: on these open multi-part meshes it flips parts inward
+        fixed.vertices[:, 0] *= -1; fixed.faces = fixed.faces[:, ::-1]
         # OBJ with UVs (+ the exporter's own .mtl/texture); the editor assigns texture.png.
-        mesh.export(os.path.join(out, "model.obj"))
+        fixed.export(os.path.join(out, "model.obj"))
         assert any(line.startswith("vt ") for line in open(os.path.join(out, "model.obj"))), "OBJ lost its UVs"
         print("installed", out, len(mesh.faces), "faces", texture.size)
 

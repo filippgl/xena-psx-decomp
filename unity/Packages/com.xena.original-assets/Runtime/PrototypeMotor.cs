@@ -109,6 +109,7 @@ namespace Xena.Assets
             float dt = Time.fixedDeltaTime;
             bool wasGrounded = Grounded;
             orbit.SynchronizeGuardCamera();
+            if (orbit.GuardTurning && Grounded) transform.rotation = Quaternion.Euler(0, orbit.Yaw, 0); // guard turn follows the mouse
             chakram.Tick(dt, Grounded, orbit.Yaw, orbit.Pitch);
             var hurt = GetComponent<PrototypeOriginalDamage>(); bool reacting = hurt != null && hurt.Reacting;
             if (!chakram.Active && !reacting) combat.Tick(dt, Grounded, orbit.Yaw);

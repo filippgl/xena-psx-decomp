@@ -31,7 +31,7 @@ namespace Xena.Assets
             Vector3[] vertices = mesh.vertices; Vector2[] uvs = mesh.uv; Color[] colors = mesh.colors; bool lit = colors.Length == vertices.Length;
             var pages = renderer != null ? renderer.sharedMaterials : new Material[0];
             var random = new System.Random(1999);
-            var chunks = new Dictionary<Vector2Int, (List<Vector3> v, List<Vector2> uv, List<Color> c, List<int> tri)>();
+            var chunks = new Dictionary<Vector2Int, (List<Vector3> v, List<Vector2> uv, List<Color> c, List<int> tri, List<Vector2> h)>();
             var fernSpots = new List<Vector3>();
             root = new GameObject("RemasterGrass");
             for (int s = 0; s < mesh.subMeshCount; s++)
@@ -59,11 +59,11 @@ namespace Xena.Assets
                         Vector3 p = a + (b - a) * u + (c - a) * v;
                         Color light = lit ? colors[i0] * (1 - u - v) + colors[i1] * u + colors[i2] * v : new Color(0.5f, 0.5f, 0.5f);
                         var key = new Vector2Int(Mathf.FloorToInt(p.x / Chunk), Mathf.FloorToInt(p.z / Chunk));
-                        if (!chunks.TryGetValue(key, out var chunk)) chunks[key] = chunk = (new List<Vector3>(), new List<Vector2>(), new List<Color>(), new List<int>());
+                        if (!chunks.TryGetValue(key, out var chunk)) chunks[key] = chunk = (new List<Vector3>(), new List<Vector2>(), new List<Color>(), new List<int>(), new List<Vector2>());
                         int cell = random.Next(10) < 9 ? new[] { 0, 2, 3 }[random.Next(3)] : 1; // atlas: v=0 row = clover (0), fern sprout (1, rarer); top row = meadow (2), seed heads (3)
                         float height = 0.3f + 0.45f * (float)random.NextDouble(), width = height * (0.9f + 0.4f * (float)random.NextDouble());
                         float turn = (float)random.NextDouble() * 180;
-                        Tuft(chunk, p - new Vector3(key.x * Chunk, 0, key.y * Chunk), height, width, turn, cell, light);
+                        Tuft(chunk, p - new Vector3(key.x * Chunk, 0, key.y * Chunk), height, width, turn, cell, light, 0.02f + 0.98f * (float)random.NextDouble());
                         Tufts++;
                     }
                     int ferns = (int)(area * FernsPerSquareMetre + random.NextDouble());
@@ -79,7 +79,7 @@ namespace Xena.Assets
                 var go = new GameObject("GrassChunk_" + pair.Key.x + "_" + pair.Key.y); go.transform.SetParent(root.transform, false);
                 go.transform.position = new Vector3(pair.Key.x * Chunk, 0, pair.Key.y * Chunk);
                 var m = new Mesh { name = go.name, indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
-                m.SetVertices(pair.Value.v); m.SetUVs(0, pair.Value.uv); m.SetColors(pair.Value.c); m.SetTriangles(pair.Value.tri, 0); m.RecalculateBounds();
+                m.SetVertices(pair.Value.v); m.SetUVs(0, pair.Value.uv); m.SetUVs(1, pair.Value.h); m.SetColors(pair.Value.c); m.SetTriangles(pair.Value.tri, 0); m.RecalculateBounds();
                 go.AddComponent<MeshFilter>().sharedMesh = m;
                 var mr = go.AddComponent<MeshRenderer>(); mr.sharedMaterial = material; mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 Chunks++;
@@ -98,16 +98,19 @@ namespace Xena.Assets
             ApplyVisualMode(PrototypeGraphics.Active == null ? XenaVisualMode.Remaster : PrototypeGraphics.Active.Mode);
         }
         // Two crossed quads; base alpha 0, tip alpha 1 (wind weight).
-        private static void Tuft((List<Vector3> v, List<Vector2> uv, List<Color> c, List<int> tri) chunk, Vector3 at, float height, float width, float turn, int cell, Color light)
+        private static void Tuft((List<Vector3> v, List<Vector2> uv, List<Color> c, List<int> tri, List<Vector2> h) chunk, Vector3 at, float height, float width, float turn, int cell, Color light, float keep)
         {
-            Vector2 uv0 = new Vector2((cell % 2) * 0.5f, (cell / 2) * 0.5f);
+            // Atlas padded by tools/clean_grass_atlas.py: each tuft fills the bottom-centred 72 % of its cell.
+            const float content = 0.72f;
+            Vector2 uv0 = new Vector2((cell % 2) * 0.5f + 0.25f * (1 - content), (cell / 2) * 0.5f + 0.001f), span = new Vector2(0.5f * content, 0.5f * content - 0.002f);
             for (int q = 0; q < 2; q++)
             {
                 Vector3 right = Quaternion.Euler(0, turn + q * 90, 0) * Vector3.right * width * 0.5f; int i = chunk.v.Count;
                 chunk.v.Add(at - right); chunk.v.Add(at + right); chunk.v.Add(at + right + Vector3.up * height); chunk.v.Add(at - right + Vector3.up * height);
-                chunk.uv.Add(uv0); chunk.uv.Add(uv0 + new Vector2(0.5f, 0)); chunk.uv.Add(uv0 + new Vector2(0.5f, 0.5f)); chunk.uv.Add(uv0 + new Vector2(0, 0.5f));
+                chunk.uv.Add(uv0); chunk.uv.Add(uv0 + new Vector2(span.x, 0)); chunk.uv.Add(uv0 + span); chunk.uv.Add(uv0 + new Vector2(0, span.y));
                 Color b = new Color(light.r, light.g, light.b, 0), top = new Color(light.r, light.g, light.b, 1);
                 chunk.c.Add(b); chunk.c.Add(b); chunk.c.Add(top); chunk.c.Add(top);
+                chunk.h.Add(new Vector2(0, keep)); chunk.h.Add(new Vector2(0, keep)); chunk.h.Add(new Vector2(height, keep)); chunk.h.Add(new Vector2(height, keep));
                 chunk.tri.AddRange(new[] { i, i + 1, i + 2, i, i + 2, i + 3 });
             }
         }

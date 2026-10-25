@@ -92,11 +92,40 @@ namespace Xena.Assets
             report.checks.Add("Remaster replaces the 35 @pretty plant cards with CC0 Poly Haven plants");
             var trees = motor.GetComponent<PrototypeRemasterTrees>();
             Require(trees.Replaced >= 20 && trees.RemasterShown, "Remaster did not replace the original trees: " + trees.Replaced);
-            report.checks.Add("Remaster replaces " + trees.Replaced + " original trees with generated trees (" + trees.Triangles + " triangles)");
+            report.checks.Add("Remaster replaces " + trees.Replaced + " original trees with generated trees (" + trees.Triangles + " triangles), " + trees.MatchedTrunks + " trunks sized to their original collision");
             var grass = motor.GetComponent<PrototypeRemasterGrass>();
             Require(grass.Tufts > 1000 && grass.Chunks > 0 && grass.RemasterShown, "Remaster grass missing: " + grass.Tufts);
             report.checks.Add("Remaster grass: " + grass.Tufts + " tufts in " + grass.Chunks + " chunks on " + grass.GrassArea.ToString("F0") + " m2, " + grass.Ferns + " extra ferns");
             yield return VegetationViews(orbit, camera, level);
+            yield return OrthoReferences(orbit, camera, level);
+            // Close-ups: grass at knee height and a signpost at 1.5 m (user reports).
+            {
+                orbit.enabled = false; motor.ResetToSpawn(); Vector3 at = motor.transform.position + motor.transform.forward * 2;
+                camera.transform.position = at + Vector3.up * 0.45f - motor.transform.forward * 1.2f; camera.transform.LookAt(at + Vector3.up * 0.25f);
+                yield return null; yield return new WaitForEndOfFrame(); Capture("closeup-grass.png");
+                foreach (string layer in new[] { "RemasterGrass", "RemasterVegetation", "RemasterTrees" })
+                {
+                    var go = GameObject.Find(layer); if (go == null) continue; go.SetActive(false);
+                    yield return null; yield return new WaitForEndOfFrame(); Capture("closeup-grass-no-" + layer + ".png"); go.SetActive(true);
+                }
+                Vector3 sign = new Vector3(-5283, 1900, -9432) / 400f; float g = motor.GroundHeight(sign + Vector3.up * 2); if (!float.IsNegativeInfinity(g)) sign.y = g;
+                foreach (var dir in new[] { Vector3.forward, Vector3.back, Vector3.left, Vector3.right })
+                {
+                    camera.transform.position = sign + Vector3.up * 1.2f + dir * 1.6f; camera.transform.LookAt(sign + Vector3.up * 1.1f);
+                    yield return null; yield return new WaitForEndOfFrame(); Capture("closeup-sign-" + (dir == Vector3.forward ? "n" : dir == Vector3.back ? "s" : dir == Vector3.left ? "w" : "e") + ".png");
+                }
+                orbit.enabled = true;
+            }
+            // Native-port reference view of sign #0 (build/signdir/native_sign.png): Xena at PS1
+            // (-5283,-1900,-10400), camera behind her looking along +Z.
+            orbit.enabled = false;
+            foreach (var mode in new[] { XenaVisualMode.Original, XenaVisualMode.Remaster })
+            {
+                PrototypeGraphics.Active.SetMode(mode);
+                camera.transform.position = new Vector3(-5283, 1900, -10400) / 400f + new Vector3(0, 1.9f, -3.2f); camera.transform.LookAt(new Vector3(-5283, 1900, -10400) / 400f + new Vector3(0, 1.0f, 2.5f));
+                yield return null; yield return new WaitForEndOfFrame(); Capture("signview-" + mode.ToString().ToLowerInvariant() + ".png");
+            }
+            orbit.enabled = true;
             var shafts = motor.GetComponent<PrototypeLightShafts>(); Renderer sunbeam = null;
             foreach (var r in level.GetComponentsInChildren<MeshRenderer>()) if (r.name.Contains("@sunbm")) sunbeam = r;
             Require(shafts.Shafts == 1 && shafts.RemasterShown && sunbeam != null && !sunbeam.enabled, "Remaster did not replace the @sunbm beam with a light shaft");
@@ -235,6 +264,56 @@ namespace Xena.Assets
             Require(spots >= 4, "Too few wall spots found: " + spots);
             Require(behind == 0, "Camera lens ends up behind the visible wall at " + behind + "/" + spots + " spots");
             report.checks.Add("camera stays in front of the visible (Remaster) wall surface at " + spots + " wall spots");
+        }
+        // Shape-locked references for image-to-3D props (tools/silhouette_check.py): each object alone,
+        // orthographic along its thinnest horizontal axis (corner view for blocky objects), white
+        // background, no post. ortho-<name>-original.png = the original model (Original mode),
+        // ortho-<name>-remaster.png = what Remaster draws there (the generated model when mapped).
+        private IEnumerator OrthoReferences(PrototypeCamera orbit, Camera camera, GameObject level)
+        {
+            orbit.enabled = false;
+            var data = UnityEngine.Rendering.Universal.CameraExtensions.GetUniversalAdditionalCameraData(camera);
+            bool post = data.renderPostProcessing; var flags = camera.clearFlags; var background = camera.backgroundColor; int mask = camera.cullingMask;
+            var hud = FindFirstObjectByType<PrototypeHud>(); if (hud != null) hud.enabled = false; // HUD must not enter the masks
+            foreach (string name in new[] { "Sign_pt", "@2doors", "@rck_cx" })
+            {
+                Bounds frame = default; bool framed = false; // the ORIGINAL object's bounds frame both shots
+                foreach (var mode in new[] { XenaVisualMode.Original, XenaVisualMode.Remaster })
+                {
+                    PrototypeGraphics.Active.SetMode(mode); yield return null;
+                    // The visible object: original renderers in Original, the generated stand-in (or original) in Remaster.
+                    var shown = new List<Renderer>();
+                    foreach (var r in FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+                    {
+                        if (!r.enabled || !r.gameObject.activeInHierarchy) continue;
+                        Transform t = r.transform; bool match = false;
+                        // The original object or its generated stand-in (PrototypeRemasterProps names).
+                        string standIn = name == "Sign_pt" ? "signpost" : name == "@2doors" ? "gate_" : "boulder_";
+                        for (int depth = 0; t != null && depth < 4; depth++, t = t.parent) if (t.name.Contains(name) || t.name.StartsWith(standIn)) match = true;
+                        if (match) shown.Add(r);
+                    }
+                    if (shown.Count == 0) continue;
+                    // One object only: the renderers nearest to the first match.
+                    // The same instance in both modes: the Remaster pass keeps what is near the original's frame.
+                    Vector3 anchor = framed ? frame.center : shown[0].bounds.center; shown.RemoveAll(r => Vector3.Distance(r.bounds.center, anchor) > 3);
+                    if (shown.Count == 0) continue;
+                    Bounds b = shown[0].bounds; foreach (var r in shown) b.Encapsulate(r.bounds);
+                    if (!framed) { frame = b; framed = true; } else b = frame;
+                    var layers = new List<int>(); foreach (var r in shown) { layers.Add(r.gameObject.layer); r.gameObject.layer = 30; }
+                    Vector3 thin = b.size.x < b.size.z * 0.6f ? Vector3.right : b.size.z < b.size.x * 0.6f ? Vector3.forward : new Vector3(1, 0, 1).normalized;
+                    float width = thin == Vector3.right ? b.size.z : thin == Vector3.forward ? b.size.x : (b.size.x + b.size.z) * 0.72f;
+                    camera.transform.position = b.center - thin * 20; camera.transform.rotation = Quaternion.LookRotation(thin, Vector3.up);
+                    camera.orthographic = true; camera.orthographicSize = Mathf.Max(b.size.y * 0.55f, width * 0.55f / camera.aspect);
+                    camera.clearFlags = CameraClearFlags.SolidColor; camera.backgroundColor = Color.white; camera.cullingMask = 1 << 30; data.renderPostProcessing = false;
+                    yield return null; yield return new WaitForEndOfFrame();
+                    Capture("ortho-" + name.Trim('@') + "-" + mode.ToString().ToLowerInvariant() + ".png");
+                    for (int i = 0; i < shown.Count; i++) shown[i].gameObject.layer = layers[i];
+                    camera.orthographic = false; camera.clearFlags = flags; camera.backgroundColor = background; camera.cullingMask = mask; data.renderPostProcessing = post;
+                }
+            }
+            PrototypeGraphics.Active.SetMode(XenaVisualMode.Remaster); yield return null;
+            if (hud != null) hud.enabled = true;
+            orbit.enabled = true;
         }
         // Reference shots of each vegetation kind (first instance), with bounds in the report.
         private IEnumerator VegetationViews(PrototypeCamera orbit, Camera camera, GameObject level)

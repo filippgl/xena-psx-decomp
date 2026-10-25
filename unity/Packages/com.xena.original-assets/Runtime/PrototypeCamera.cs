@@ -22,6 +22,10 @@ namespace Xena.Assets
         private Camera view;
         private float playerFov, playerNearClip;
         public bool BehindCharacter { get; private set; }
+        // Holding block (no evade/backflip running): the mouse turns the camera and Xena turns with it,
+        // so cartwheels / handsprings follow the mouse (user request; the PS1 had no free camera).
+        public bool GuardTurning { get; private set; }
+        private bool wasTurning; private int guardEntryFrame = -1;
         public float Yaw => yaw;
         public float Pitch => pitch;
         public float DistanceToTarget { get; private set; }
@@ -36,7 +40,13 @@ namespace Xena.Assets
             if (chakram == null) chakram = target.GetComponent<PrototypeChakram>();
             BehindCharacter = (chakram == null || !chakram.Active) &&
                 (input.Block || (combat != null && combat.IsEvading) || (motor != null && motor.Backflipping));
-            if (BehindCharacter) yaw = target.eulerAngles.y;
+            bool turning = BehindCharacter && input.Block && (combat == null || !combat.IsEvading) && (motor == null || !motor.Backflipping);
+            // Entering guard: the camera goes behind Xena first (as before) and mouse input of the entry
+            // frame is ignored; only mouse deltas of later frames turn camera and Xena together.
+            if (turning && !wasTurning) guardEntryFrame = Time.frameCount;
+            wasTurning = turning;
+            GuardTurning = turning && Time.frameCount > guardEntryFrame;
+            if (BehindCharacter && !GuardTurning) yaw = target.eulerAngles.y;
         }
         private void LateUpdate()
         {
@@ -44,7 +54,7 @@ namespace Xena.Assets
             if (!input.Paused)
             {
                 Vector2 look = input.MouseLook * Sensitivity + input.StickLook * (120 * Time.deltaTime);
-                if (!BehindCharacter) yaw += look.x;
+                if (!BehindCharacter || GuardTurning) yaw += look.x;
                 pitch = Mathf.Clamp(pitch + look.y * (InvertY ? 1 : -1), -30, 70);
                 if (input.CenterCameraPressed) yaw = target.eulerAngles.y;
                 input.Preferences.Data.cameraDistance = Mathf.Clamp(DesiredDistance - input.Zoom * 0.01f, 2, 7);

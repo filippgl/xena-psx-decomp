@@ -271,6 +271,16 @@ namespace Xena.Assets
             report.hitFlashLife = effects.LastFlashLife; report.hitDiscs = effects.LastDiscs;
             report.checks.Add("sword hit: red flash life min(d/4+4,12), ring for d >= 26, clamp(d/4-1,0,6) discs, bandit bleeds");
             Require(motor.GetComponent<PrototypeHud>().VisibleEnemyBars >= 1, "Enemy dagger bar not shown after the hit"); report.checks.Add("HUD shows the enemy dagger bar for 60 frames after its health changes");
+            // Chakram (docs/xena-chakram-damage.md): flat 300 at a body contact, independent of sword level.
+            // The bandit's 8-step hit timer only runs while its AI steps: let it run out first.
+            foe.Active = true; for (int i = 0; i < 24 && foe.Invulnerable > 0; i++) yield return new WaitForFixedUpdate();
+            foe.Configure(foe.GetComponentInChildren<XenaAssetPreview>(), motor, Motion(foe), 2000, 0, 7); foe.Active = false;
+            var thrown = motor.GetComponent<PrototypeChakram>(); int discHits = thrown.EnemyHits;
+            thrown.HitBanditsForTest(foe.transform.position + Vector3.up * 1.0f);
+            Require(thrown.EnemyHits == discHits + 1 && foe.Health == 2000 - PrototypeChakram.Damage, "Chakram contact did not deal the original 300: 2000 -> " + foe.Health);
+            report.checks.Add("chakram contact deals the original flat 300 damage");
+            for (int i = 0; i < 12; i++) yield return new WaitForFixedUpdate();
+            foe.Configure(foe.GetComponentInChildren<XenaAssetPreview>(), motor, Motion(foe), 75, 0, 7);
             foe.Active = true;
             for (int press = 0; press < 30 && !foe.Dying; press++)
             {

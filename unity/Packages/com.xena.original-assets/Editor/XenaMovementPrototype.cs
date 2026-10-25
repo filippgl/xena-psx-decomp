@@ -101,13 +101,15 @@ namespace Xena.Assets.Editor
             {
                 string name = Path.GetFileName(folder), obj = Path.Combine(folder, "model.obj").Replace(Path.DirectorySeparatorChar, '/');
                 string texturePath = Path.Combine(folder, "texture.png"); if (!File.Exists(texturePath)) texturePath = null;
+                // Readable meshes: PrototypeRemasterProps measures footprints and builds Remaster colliders.
+                if (AssetImporter.GetAtPath(obj) is ModelImporter modelImporter && !modelImporter.isReadable) { modelImporter.isReadable = true; modelImporter.SaveAndReimport(); }
                 var model = AssetDatabase.LoadAssetAtPath<GameObject>(obj);
                 var texture = texturePath == null ? null : AssetDatabase.LoadAssetAtPath<Texture2D>(texturePath.Replace(Path.DirectorySeparatorChar, '/'));
                 if (model == null || texture == null) continue;
                 string materialPath = target + "/" + name + ".mat";
                 if (AssetDatabase.LoadAssetAtPath<Material>(materialPath) != null) AssetDatabase.DeleteAsset(materialPath);
                 var material = new Material(lit) { name = name };
-                material.SetTexture("_MainTex", texture); material.SetFloat("_Cutoff", 0); material.SetFloat("_Cull", 0);
+                material.SetTexture("_MainTex", texture); material.SetFloat("_Cutoff", 0); material.SetFloat("_Cull", 2); // closed generated meshes: back faces culled (two-sided lighting turned them inside out)
                 material.SetFloat("_UseVertexLighting", 0); material.SetFloat("_RockDetail", 0);
                 // No baked level light on generated props: shade them like the scene around (style check).
                 material.SetColor("_Color", new Color(0.6f, 0.62f, 0.58f, 1));

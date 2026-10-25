@@ -1,0 +1,10 @@
+Use your built-in image_gen tool (imagegen skill, built-in mode, not the CLI), EDITING the attached image.
+The attached image is an orthographic render of the ORIGINAL low-poly 3D model of a large mossy grey stone from the PS1 game
+"Xena: Warrior Princess" (a sloped, wedge-like boulder with one long inclined face), on a white background.
+Turn it into a natural, modern, painterly-realistic boulder of the same stone: KEEP the overall outline, proportions, size and
+position in the frame (the same wedge with the long inclined face on the left, the same peak, the same width and height), but
+replace the flat polygon facets and straight hard edges with natural rock: rounded, chipped, irregular edges, uneven bulging
+faces, cracks and ledges, weathered grey granite with green moss and lichen in the same places and colours as the original.
+The outline may deviate only a little (a few percent of the size) to look natural; it must not become boxy, square, round or
+change its proportions. Soft even light, white background, no shadow, no ground, no text. Output the same size as the input.
+Save the final selected image into this workspace as out/boulder-natural.png (copy it from CODEX_HOME/generated_images). Do nothing else.

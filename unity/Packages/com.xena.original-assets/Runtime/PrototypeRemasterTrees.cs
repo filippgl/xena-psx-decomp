@@ -17,6 +17,7 @@ namespace Xena.Assets
         private readonly List<(Renderer original, GameObject tree)> trees = new List<(Renderer, GameObject)>();
         public int Replaced => trees.Count;
         public int Triangles { get; private set; }
+        public int MatchedTrunks { get; private set; }
         public bool RemasterShown { get; private set; }
         public GameObject FirstTree => trees.Count > 0 ? trees[0].tree : null;
 
@@ -34,6 +35,10 @@ namespace Xena.Assets
             leaves.SetFloat("_Cull", 0); leaves.SetFloat("_Wind", 0.004f); leaves.SetColor("_Color", new Color(0.62f, 0.68f, 0.56f, 1));
             var motor = GetComponent<PrototypeMotor>();
             var root = new GameObject("RemasterTrees");
+            // Original trunk collision (CLS prisms, OriginalCLSWalls): the generated trunk takes the radius
+            // of the collision prism around its axis, so what Xena bumps into is what is drawn.
+            var cls = GameObject.Find("OriginalCLSWalls"); var clsPoints = new List<Vector3>();
+            if (cls != null && cls.GetComponent<MeshCollider>() != null) foreach (var v in cls.GetComponent<MeshCollider>().sharedMesh.vertices) clsPoints.Add(cls.transform.TransformPoint(v));
             foreach (var renderer in FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None))
             {
                 bool match = false; foreach (string kind in Kinds) if (renderer.name.Contains(kind)) match = true;
@@ -49,7 +54,9 @@ namespace Xena.Assets
                 int seed = Mathf.Abs(Mathf.RoundToInt(trunk.x * 131 + trunk.z * 197));
                 var go = new GameObject("Tree_" + renderer.name); go.transform.SetParent(root.transform, false);
                 go.transform.position = new Vector3(trunk.x, ground - 0.05f, trunk.z);
-                var mesh = Build(height + (b.min.y - ground), width, seed);
+                float trunkRadius = 0;
+                { float sum = 0; int count = 0; foreach (var p in clsPoints) { float d = new Vector2(p.x - trunk.x, p.z - trunk.z).magnitude; if (d < 1.2f && p.y > ground - 1 && p.y < ground + height) { sum += d; count++; } } if (count >= 3) { trunkRadius = sum / count; MatchedTrunks++; } }
+                var mesh = Build(height + (b.min.y - ground), width, seed, trunkRadius);
                 go.AddComponent<MeshFilter>().sharedMesh = mesh;
                 go.AddComponent<MeshRenderer>().sharedMaterials = new[] { bark, leaves };
                 Triangles += mesh.triangles.Length / 3;
@@ -108,16 +115,16 @@ namespace Xena.Assets
             }
         }
 
-        private static Mesh Build(float height, float width, int seed)
+        private static Mesh Build(float height, float width, int seed, float collisionRadius)
         {
             var state = Random.state; Random.InitState(seed);
             var b = new Builder();
-            float trunkTop = height * Random.Range(0.42f, 0.52f), radius = 0.1f + 0.022f * height;
+            float trunkTop = height * Random.Range(0.42f, 0.52f), radius = collisionRadius > 0 ? collisionRadius : 0.1f + 0.022f * height;
             Vector3 lean = new Vector3(Random.Range(-0.25f, 0.25f), 0, Random.Range(-0.25f, 0.25f));
             var trunk = new Vector3[7];
             for (int i = 0; i < trunk.Length; i++) { float t = (float)i / (trunk.Length - 1); trunk[i] = new Vector3(0, t * trunkTop, 0) + lean * t * t + new Vector3(Mathf.Sin(t * 5 + seed) * 0.05f, 0, Mathf.Cos(t * 4 + seed) * 0.05f); }
             // Root flare: a short wider ring at the base.
-            b.Tube(new[] { new Vector3(0, -0.1f, 0), new Vector3(0, 0.35f, 0) }, radius * 1.7f, radius * 1.05f, 10);
+            b.Tube(new[] { new Vector3(0, -0.1f, 0), new Vector3(0, 0.35f, 0) }, radius * (collisionRadius > 0 ? 1.15f : 1.7f), radius * 1.02f, 10);
             b.Tube(trunk, radius, radius * 0.55f, 10);
             Vector3 crown = new Vector3(lean.x, height * 0.68f, lean.z); float crownR = width * 0.5f, crownH = height * 0.34f;
             int branches = Random.Range(5, 8); var tips = new List<Vector3>();

@@ -1,0 +1,8 @@
+Use your built-in image_gen tool (imagegen skill, built-in mode, not the CLI), EDITING the attached image.
+The attached image is an orthographic render of the ORIGINAL 3D model of a wooden signpost: a post with an arrow-shaped plank board (pointed end) carrying carved Greek-style letters from the PS1 game "Xena: Warrior Princess",
+on a white background. Repaint ONLY its surface - the surface MUST visibly change - as a higher-detail, painterly-realistic modern remaster (real wood grain, cracks, carved letters with depth, natural weathered
+materials, the same colours and brightness, soft even light). STRICT SHAPE LOCK: keep the outline pixel-for-pixel identical:
+same silhouette, same proportions, same position and size in the frame, same view; do not add, remove, round or straighten any
+part (keep pointed ends, slopes and corners exactly where they are). Keep the white background, no shadow, no ground, no text
+other than what is on the object. Output the same size as the input.
+Save the final selected image into this workspace as out/sign-locked2.png (copy it from CODEX_HOME/generated_images). Do nothing else.

@@ -177,12 +177,16 @@ namespace Xena.Assets
             Reset(); yield return Ticks(3);
             InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 2 }); yield return Slot(0x80);
             float lockedYaw = orbit.Yaw;
-            InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 2, delta = new Vector2(400, 0) }); yield return null; yield return null;
-            Require(Mathf.Abs(Mathf.DeltaAngle(lockedYaw, orbit.Yaw)) < 0.1f, "Mouse moved guarded camera");
+            // User request 2026-10-25: holding guard, the mouse turns camera and Xena together.
+            InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 2, delta = new Vector2(400, 0) }); yield return null; yield return null; yield return Ticks(2);
+            Require(Mathf.Abs(Mathf.DeltaAngle(lockedYaw, orbit.Yaw)) > 10 && Mathf.Abs(Mathf.DeltaAngle(orbit.Yaw, motor.transform.eulerAngles.y)) < 0.5f && combat.IsBlocking,
+                "Mouse did not turn guarded Xena with the camera");
             Release(); yield return Ticks(3); yield return null;
+            float releasedYaw = orbit.Yaw, bodyYaw = motor.transform.eulerAngles.y;
             InputSystem.QueueStateEvent(mouse, new MouseState { delta = new Vector2(150, 0) }); yield return null; yield return null;
-            Require(!orbit.BehindCharacter && Mathf.Abs(Mathf.DeltaAngle(lockedYaw, orbit.Yaw)) > 10, "Free orbit did not return after guard"); Release();
-            report.checks.Add("guard locks horizontal orbit and releasing guard restores free mouse look");
+            Require(!orbit.BehindCharacter && Mathf.Abs(Mathf.DeltaAngle(releasedYaw, orbit.Yaw)) > 10 && Mathf.Abs(Mathf.DeltaAngle(bodyYaw, motor.transform.eulerAngles.y)) < 0.5f,
+                "Free orbit did not return after guard (or still turned Xena)"); Release();
+            report.checks.Add("guard: the mouse turns camera and Xena together; releasing guard restores free mouse look");
             Reset(); yield return Ticks(3);
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.S, Key.Space)); yield return Ticks(4); Release();
             InputSystem.QueueStateEvent(mouse, new MouseState { delta = new Vector2(350, 0) }); yield return null; yield return null;

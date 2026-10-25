@@ -30,13 +30,18 @@ Shader "Xena/RemasterGrass"
             CBUFFER_START(UnityPerMaterial)
                 float4 _MainTex_ST, _Color; float _Cutoff, _Wind, _FadeStart, _FadeEnd;
             CBUFFER_END
-            struct Attributes { float4 positionOS : POSITION; float2 uv : TEXCOORD0; float4 color : COLOR; };
-            struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; float3 light : TEXCOORD1; float3 positionWS : TEXCOORD2; };
+            struct Attributes { float4 positionOS : POSITION; float2 uv : TEXCOORD0; float2 height : TEXCOORD1; float4 color : COLOR; };
+            struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; float3 light : TEXCOORD1; float3 positionWS : TEXCOORD2; float keep : TEXCOORD3; };
             Varyings Vert(Attributes input)
             {
                 Varyings o;
                 float3 p = TransformObjectToWorld(input.positionOS.xyz);
                 float tip = input.color.a; // 0 at the blade base, 1 at the tip
+                // Distance fade: whole tufts drop out by a per-tuft random threshold (density thins out).
+                // An alpha dissolve or a height squash both left the tuft texture as floating strips.
+                float3 root = p - float3(0, input.height.x, 0);
+                float rnd = input.height.y; // per-tuft random, identical on all its vertices
+                o.keep = rnd - smoothstep(_FadeStart, _FadeEnd, distance(GetCameraPositionWS(), root));
                 float t = _Time.y * 1.7 + p.x * 0.45 + p.z * 0.33;
                 p.xz += float2(sin(t) + 0.5 * sin(t * 2.3 + p.z), cos(t * 0.9) * 0.7) * _Wind * tip * tip;
                 o.positionWS = p; o.positionCS = TransformWorldToHClip(p);
@@ -48,7 +53,7 @@ Shader "Xena/RemasterGrass"
             {
                 half4 c = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.uv) * _Color;
                 float d = distance(GetCameraPositionWS(), input.positionWS);
-                clip(c.a - lerp(_Cutoff, 1.01, smoothstep(_FadeStart, _FadeEnd, d)));
+                clip(c.a - _Cutoff); clip(input.keep);
                 #if defined(UNITY_COLORSPACE_GAMMA)
                 c.rgb = saturate(c.rgb * input.light);
                 #else
