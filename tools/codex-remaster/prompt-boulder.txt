@@ -1,0 +1,7 @@
+Use your built-in image_gen tool (imagegen skill, built-in mode, not the CLI). Attached: a large grey boulder from level 1 of the PS1
+game "Xena: Warrior Princess" (a blocky, roughly cubic grey stone about 4 m wide and 3 m tall in a green forest).
+Create a single modern, photoreal, highly detailed game prop of this boulder alone: the same blocky, chunky overall silhouette
+(do not make it round or flat), weathered light-grey granite with natural cracks, edges worn and slightly rounded, patches of green
+moss and lichen on the top and on the shaded side. Three-quarter view from slightly above, whole object visible with margin, soft even
+studio light, plain pure white background, no shadow, no ground, no grass, no text. Output 1024x1024.
+Save the final selected image into this workspace as out/boulder-concept.png (copy it from CODEX_HOME/generated_images). Do nothing else.

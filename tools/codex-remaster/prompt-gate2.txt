@@ -1,0 +1,9 @@
+Use your built-in image_gen tool (imagegen skill, built-in mode, not the CLI). The attached image is the ORIGINAL gate of level 1 of
+the PS1 game "Xena: Warrior Princess" as it appears in game: a crude, rustic gate of rough, gnarled, dark weathered wooden planks
+and branches with gaps between them, a rounded top, one ring at the centre, set in a dark rock arch, dim forest light.
+Repaint exactly this gate as a higher-detail game prop that still belongs in the same game: the same crude, uneven, hand-made
+look, the same silhouette, the same dark brown weathered wood and gaps, the same single ring - do NOT add iron straps, studs,
+handles or decorations, do NOT make it clean, red or new. Painterly-realistic like a modern remaster of a 1999 game, not a
+product photo: soft, slightly dim natural light. Only the gate (no rock arch, no ground), front view, whole gate visible with
+margin, plain pure white background, no shadow, no text. Output 1024x1024.
+Save the final selected image into this workspace as out/gate2-concept.png (copy it from CODEX_HOME/generated_images). Do nothing else.

@@ -274,16 +274,22 @@ namespace Xena.Assets
                 yield return null; yield return new WaitForEndOfFrame(); Capture("veg-" + kind.Trim('@') + ".png");
             }
             // Props for the image-to-3D trial: first signpost and the bridge, both modes.
-            foreach (string prop in new[] { "Sign_pt", "@u_brg" })
+            foreach (string prop in new[] { "Sign_pt", "@u_brg", "@2doors", "@rck_cx" })
             {
                 Renderer target = null; foreach (var r in FindObjectsByType<Renderer>(FindObjectsSortMode.None)) if ((r.name.Contains(prop) || r.transform.root.name.Contains(prop) || (r.transform.parent != null && r.transform.parent.name.Contains(prop))) && r.enabled) { target = r; break; }
                 if (target == null && prop == "Sign_pt") foreach (var body in FindObjectsByType<XenaAssetPreview>(FindObjectsSortMode.None)) if (body.name.StartsWith("Sign_pt")) { target = body.GetComponentInChildren<Renderer>(true); break; }
                 if (target == null) { report.checks.Add("prop " + prop + ": none"); continue; }
                 var pb = target.bounds; report.checks.Add("prop " + prop + " " + target.name + " size " + pb.size.ToString("F2") + " centre " + pb.center.ToString("F1"));
                 float ext = Mathf.Max(pb.size.x, Mathf.Max(pb.size.y, pb.size.z));
-                camera.transform.position = pb.center + new Vector3(0.8f, 0.3f, 0.6f).normalized * (ext * 1.4f + 0.6f); camera.transform.LookAt(pb.center);
-                foreach (var m in new[] { XenaVisualMode.Original, XenaVisualMode.Remaster })
-                { PrototypeGraphics.Active.SetMode(m); yield return null; yield return new WaitForEndOfFrame(); Capture("prop-" + prop.Trim('@') + "-" + m.ToString().ToLowerInvariant() + ".png"); }
+                // Thin objects (doors): look along the thin axis from both sides; others from a corner.
+                Vector3 thin = pb.size.x < pb.size.z * 0.4f ? Vector3.right : pb.size.z < pb.size.x * 0.4f ? Vector3.forward : Vector3.zero;
+                var views = thin == Vector3.zero ? new[] { new Vector3(0.8f, 0.3f, 0.6f).normalized * (ext * 1.4f + 0.6f) } : new[] { thin * (ext * 1.2f) + Vector3.up * 0.3f, -thin * (ext * 1.2f) + Vector3.up * 0.3f };
+                for (int v = 0; v < views.Length; v++)
+                {
+                    camera.transform.position = pb.center + views[v]; camera.transform.LookAt(pb.center);
+                    foreach (var m in new[] { XenaVisualMode.Original, XenaVisualMode.Remaster })
+                    { PrototypeGraphics.Active.SetMode(m); yield return null; yield return new WaitForEndOfFrame(); Capture("prop-" + prop.Trim('@') + (v > 0 ? "-b" : "") + "-" + m.ToString().ToLowerInvariant() + ".png"); }
+                }
             }
             orbit.enabled = true;
         }

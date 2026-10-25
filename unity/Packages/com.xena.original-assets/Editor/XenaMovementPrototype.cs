@@ -108,7 +108,9 @@ namespace Xena.Assets.Editor
                 if (AssetDatabase.LoadAssetAtPath<Material>(materialPath) != null) AssetDatabase.DeleteAsset(materialPath);
                 var material = new Material(lit) { name = name };
                 material.SetTexture("_MainTex", texture); material.SetFloat("_Cutoff", 0); material.SetFloat("_Cull", 0);
-                material.SetFloat("_UseVertexLighting", 0); material.SetFloat("_RockDetail", 0); material.SetColor("_Color", new Color(0.8f, 0.8f, 0.78f, 1));
+                material.SetFloat("_UseVertexLighting", 0); material.SetFloat("_RockDetail", 0);
+                // No baked level light on generated props: shade them like the scene around (style check).
+                material.SetColor("_Color", new Color(0.6f, 0.62f, 0.58f, 1));
                 AssetDatabase.CreateAsset(material, materialPath);
                 var instance = (GameObject)PrefabUtility.InstantiatePrefab(model);
                 foreach (var renderer in instance.GetComponentsInChildren<Renderer>())
