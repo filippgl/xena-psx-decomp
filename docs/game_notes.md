@@ -48,6 +48,20 @@ don't build on it as if it were.
 - Camera yaw copy: `0x800F0F28` (camera object +0x1A); a camera behind her has yaw =
   rotY + 2048. *Measured.*
 
+## Frame pacing
+
+- The play loop (`0x80040AF0`) swaps the display buffers (`func_800A5AC8`: exchanges the two
+  env bytes at `+0x100/+0x101`, writes the display env to `0x1F802014`, `0x1F802028`,
+  `0x1F80202C`), then waits for **one** vsync: `VSync(0)` (`0x80090FEC`, called at
+  `0x80040CF4`). That vsync is the only gate on the loop. *Code read in the recompiled output.*
+- With no pacing in the port, pictures on level 1 lasted 1 vblank every fourth time and 2
+  otherwise (33 pictures in the 61 vblanks sampled at frames 8700-8760): ~32 logic steps/s,
+  uneven. Making the swap wait for 2 vblanks while the mode is `0x0C` gives exactly 2 for every
+  sampled picture (option `frame_lock`, default on). *Measured by hashing screenshots taken at
+  every vblank (`md5sum | uniq -c`); `bash build/pacing_run.sh 0 1`.*
+- **Open:** whether the console ever spent 3 or more vblanks on one picture in the heaviest
+  scenes; the port currently puts a floor of 2 vblanks per swap, not a cost for the drawing.
+
 ## Video
 
 - MDEC output matches ffmpeg's decoder: UNILOGO 160/160 non-black frames at ~50 dB PSNR

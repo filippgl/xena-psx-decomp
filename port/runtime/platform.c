@@ -22,6 +22,7 @@ enum {
 };
 
 u16 g_script_buttons; /* buttons forced by the test script */
+float g_script_mouse; /* mouse counts queued by the test script, used once */
 
 s64 platform_ticks_us(void) {
     static u64 freq;
@@ -47,6 +48,7 @@ static u16 wheel_pulse;        /* wheel presses are held for a few frames */
 static int wheel_frames;
 static float mouse_acc;        /* horizontal motion waiting to become turn presses */
 static int mouse_captured;
+static long script_mouse_frame = -100; /* frame a scripted MOUSE= step fired (test hook) */
 
 #define MAX_PADS 4
 static SDL_GameController* pads[MAX_PADS];
@@ -378,23 +380,48 @@ extern long g_frame_no;
 static int wrap12(int a) { return ((a + 2048) & 4095) - 2048; }
 
 static int modern_active; /* directions were translated this frame */
+int g_dir_pressed;        /* a direction is held, whatever we make of it (diagnostic) */
 
 /* States (obj+0xD0) where the game moves her only while Up is held: standing, running
  * (14-17), pivoting (2B/2C), jumping (2F), leaping (1A/1E). Attacks already turn her to
- * the pressed direction relative to the camera; those and everything else (hits, falls,
- * ledges, special moves) keep the original buttons. */
+ * the pressed direction relative to the camera; those and everything else (hits, ledges,
+ * special moves) keep the original buttons. */
 static int run_state(u32 st) {
-    return st == 0x00 || (st >= 0x14 && st <= 0x17) || st == 0x2B || st == 0x2C || st == 0x2F || st == 0x1A || st == 0x1E;
+    return st == 0x00 || (st >= 0x14 && st <= 0x17) || st == 0x2B || st == 0x2C ||
+           st == 0x2F || st == 0x1A || st == 0x1E;
 }
+
+/* States where she is off the ground and the game turns her with the pad along the level
+ * instead of along the pressed direction: 35 (the leap after a running jump, its heading
+ * lost in 28 of 29 hook frames) and 2A (falling, 68 of 114 in the seeded fuzz run). The
+ * turn is set to the requested heading there as well; Up is not pressed, that would only
+ * interrupt the leap or the fall. */
+static int air_state(u32 st) { return st == 0x35 || st == 0x2A; }
 
 static u16 modern_controls(u16 b) {
     static int latched, ref_cam, last_in;
+    static int aimed; /* the heading was set by a mouse flick, not by the camera */
     extern int g_steer_active, g_steer_target;
     extern long g_steer_frame;
     extern u32 g_player_state;
     g_steer_active = modern_active = 0;
-    if (!g_cfg.modern_controls || g_frame_no - g_steer_frame > 3 || !run_state(g_player_state)) { latched = 0; return b; }
+    g_dir_pressed = (b & (B_UP | B_DOWN | B_LEFT | B_RIGHT)) ||
+                    (stick_x * stick_x + stick_y * stick_y > 0);
+    int run = run_state(g_player_state), air = air_state(g_player_state);
+    if (!g_cfg.modern_controls || (!run && !air) || g_frame_no - g_steer_frame > 3) {
+        latched = 0;
+        return b;
+    }
     modern_active = 1;
+    /* mouse turning in modern mode: the motion rotates the requested heading itself
+     * (like a modern third-person game) instead of pressing Left/Right, which here
+     * means running sideways. It also works alone: a flick with no direction held
+     * turns her, the game picking run or pivot from the turn. */
+    int mturn = 0;
+    if (g_cfg.mouse_turn && (mouse_captured || script_mouse_frame == g_frame_no)) {
+        mturn = (int)lrintf(mouse_acc);
+        mouse_acc -= mturn;
+    }
     /* screen-space direction: right = +x, forward (away from the camera) = +y */
     float ix, iy;
     if (stick_x * stick_x + stick_y * stick_y > 0) { ix = stick_x; iy = -stick_y; }
@@ -402,17 +429,24 @@ static u16 modern_controls(u16 b) {
         ix = (b & B_RIGHT ? 1.f : 0.f) - (b & B_LEFT ? 1.f : 0.f);
         iy = (b & B_UP ? 1.f : 0.f) - (b & B_DOWN ? 1.f : 0.f);
     }
-    if (ix == 0 && iy == 0) { latched = 0; return b; }
+    int aiming = ix == 0 && iy == 0;
+    if (aiming && !mturn) { latched = 0; return b; }
     int cam = mem_r16(CAM_YAW) & 4095;
-    int in = (int)lrintf(atan2f(ix, iy) * (2048.0f / 3.14159265f));
+    int in = aiming ? 0 : (int)lrintf(atan2f(ix, iy) * (2048.0f / 3.14159265f));
     /* the camera swings round after her: keep the yaw it had when this direction was
-     * chosen, otherwise holding Right would run in circles */
-    if (!latched || abs(wrap12(in - last_in)) > 400) { ref_cam = cam; latched = 1; }
+     * chosen, otherwise holding Right would run in circles; a mouse flick turns about
+     * that latched reference */
+    if (!latched || (!aiming && abs(wrap12(in - last_in)) > 400)) { ref_cam = cam; latched = 1; aimed = 0; }
     last_in = in;
-    /* running forward follows the camera (scripted camera turns, corners) */
-    if (abs(in) < 512) ref_cam = (ref_cam + wrap12(cam - ref_cam) / 32) & 4095;
+    if (mturn) { ref_cam = (ref_cam + mturn) & 4095; aimed = 1; }
+    /* running forward follows the camera (scripted camera turns, corners), but not while
+     * a mouse flick holds the heading: this camera never swings round behind a flicked
+     * turn, and the pull would eat the aim off */
+    if (abs(in) < 512 && !aimed)
+        ref_cam = (ref_cam + wrap12(cam - ref_cam) / 32) & 4095;
     g_steer_target = (ref_cam + in + 2048) & 4095; /* rotY that runs along ref_cam + in */
     g_steer_active = 1;
+    if (!run || aiming) return b; /* in the leap or mouse-only aim the buttons stay as pressed */
     return (u16)((b & ~(B_UP | B_DOWN | B_LEFT | B_RIGHT)) | B_UP);
 }
 
@@ -429,12 +463,16 @@ u16 pad_buttons(int port) {
         }
         stick_x = stick_y = 0;
         turn_bits = 0;
-        if (mouse_captured && g_cfg.mouse_turn) turn_bits |= mouse_turn_buttons();
         for (int i = 0; i < MAX_PADS; i++)
             if (pads[i]) b |= pad_state(pads[i]);
-        /* tank-style turning only makes sense with the original controls */
+        if (g_script_mouse) { mouse_acc += g_script_mouse; g_script_mouse = 0; script_mouse_frame = g_frame_no; }
         frame_buttons = modern_controls(b);
-        if (!modern_active) frame_buttons |= turn_bits;
+        /* pulse turning is tank-style: only where modern headings are not steering.
+         * In modern mode the mouse feeds the requested heading instead (above). */
+        if (!modern_active) {
+            if (mouse_captured && g_cfg.mouse_turn) turn_bits |= mouse_turn_buttons();
+            frame_buttons |= turn_bits;
+        }
     }
     return frame_buttons;
 }

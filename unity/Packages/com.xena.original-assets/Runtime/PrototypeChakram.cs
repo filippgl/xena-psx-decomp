@@ -150,7 +150,7 @@ namespace Xena.Assets
                 else if (!hit.collider.isTrigger)
                 {
                     projectile.transform.position = start + step.normalized * Mathf.Max(0, hit.distance - 0.03f);
-                    trail.Add(projectile.transform.position); WallContacts++;
+                    trail.Add(projectile.transform.position); WallContacts++; LastImpactCollider = hit.collider.name;
                     EmitImpactSparks(hit.point, hit.normal);
                     BeginReturn(); reboundTime = 0.12f; direction = -step.normalized;
                     return;
@@ -158,6 +158,7 @@ namespace Xena.Assets
             }
             projectile.transform.position += step; trail.Add(projectile.transform.position);
         }
+        public string LastImpactCollider { get; private set; } = "";
         private void BeginReturn() { Returning = true; returnIndex = trail.Count - 1; }
         private void EmitImpactSparks(Vector3 point, Vector3 normal)
         {

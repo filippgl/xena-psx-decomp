@@ -26,7 +26,8 @@ namespace Xena.Assets
             public List<int> jumpFrames = new List<int>();
             public List<int> locomotionFrames = new List<int>();
             public List<int> sprintFrames = new List<int>();
-            public float walkDistance, runDistance, diagonalDistance, gamepadDistance, jumpHeight, yawChange, cameraObstructedDistance, wallDistance, lowFpsDistance, highFpsDistance, fixedStep;
+            public string rockResult = "";
+            public float walkDistance, runDistance, diagonalDistance, gamepadDistance, jumpHeight, yawChange, cameraObstructedDistance, wallDistance, treeAxisDistance, treeProgress, treeMinAxis, treeContactTicks, strafeStalledFrames, strafeScreenJitter, strafeFrames, rockClosest, rockHoleTicks, lowFpsDistance, highFpsDistance, fixedStep;
         }
         private Report report;
         private void Awake() { Application.logMessageReceived += OnLog; }
@@ -99,7 +100,7 @@ namespace Xena.Assets
             report.checks.Add("native walk start once then complete 25-frame walk loop");
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.W, Key.LeftShift)); yield return null; yield return null; yield return new WaitForFixedUpdate();
             Require(visual.CurrentSlot == 0x1a, "Shift still uses walking animation15 instead of run1A");
-            previousRunFrame = -1; wrapped = false;
+            previousRunFrame = -1; wrapped = false; bool capturedSprint = false;
             for (int i = 0; i < 62; i++)
             {
                 InputSystem.QueueStateEvent(keyboard, new KeyboardState(square[(i / 16) % 4], Key.LeftShift));
@@ -107,7 +108,7 @@ namespace Xena.Assets
                 Require(visual.CurrentSlot == 0x1a, "Sprint left original run1A");
                 int frame = visual.CurrentFrame; if (frame < previousRunFrame) wrapped = true;
                 previousRunFrame = frame; if (!report.sprintFrames.Contains(frame)) report.sprintFrames.Add(frame);
-                if (frame == 10) { yield return new WaitForEndOfFrame(); Capture("movement-run-cycle.png"); }
+                if (frame == 10 && !capturedSprint) { capturedSprint = true; yield return new WaitForEndOfFrame(); Capture("movement-run-cycle.png"); }
             }
             Require(wrapped && report.sprintFrames.Count == 20, "Incomplete distinct 20-frame sprint cycle");
             report.checks.Add("Shift uses distinct complete20-frame native run1A loop");
@@ -217,6 +218,20 @@ namespace Xena.Assets
             yield return Segment(new[] { Key.W, Key.LeftShift }, 20, value => report.wallDistance = value);
             Require(report.wallDistance < 0.8f, "Capsule crossed a known wall"); report.checks.Add("capsule wall blocking"); Destroy(wall);
 
+            // Original CLS group3 is the six-triangle trunk prism of tree node5.
+            Mesh cls = GameObject.Find("OriginalCLSWalls").GetComponent<MeshCollider>().sharedMesh;
+            Vector3 trunk = Vector3.zero; float trunkBase = float.PositiveInfinity;
+            for (int i = 54; i < 72; i++) { trunk += cls.vertices[i] / 18; trunkBase = Mathf.Min(trunkBase, cls.vertices[i].y); }
+            yield return TreeApproach(trunk, trunkBase, forward);
+            yield return RockApproach();
+            Require(report.rockHoleTicks == 0, "Capsule entered original terrain hole under @rck_cx"); report.checks.Add("no-surface terrain hole under original rock blocks movement");
+            yield return StrafeContinuity();
+            Require(report.strafeStalledFrames == 0 && report.strafeScreenJitter < 6, "Drawn model steps with the 60Hz tick under a faster render clock");
+            report.checks.Add("render-interpolated model and camera focus stay continuous at 120 FPS");
+            // Sliding around the prism is allowed (the original also slides along the
+            // hit normal); entering it is not. Inradius .18m + capsule .28m.
+            Require(report.treeMinAxis > 0.4f && report.treeContactTicks > 0, "Capsule entered original CLS tree trunk"); report.checks.Add("original CLS tree trunk prism stops capsule penetration");
+
             // A temporary known obstacle tests camera sweep and capsule blocking;
             // it is never saved into the user's scene or the ordinary build state.
             motor.enabled = false; motor.transform.position += Vector3.up * 20;
@@ -235,6 +250,89 @@ namespace Xena.Assets
             yield return new WaitForEndOfFrame();
             Capture("movement-player.png");
             Finish(null);
+        }
+        // @rck_cx has no CLS: the original height query returns no surface
+        // inside its footprint, and the shared mover rejects such moves.
+        private IEnumerator RockApproach()
+        {
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState()); yield return null; yield return null;
+            Bounds rock = default; foreach (MeshFilter filter in FindObjectsByType<MeshFilter>(FindObjectsSortMode.None))
+                if (filter.sharedMesh != null && filter.sharedMesh.name == "level-01-object-65") rock = filter.GetComponent<Renderer>().bounds;
+            Require(rock.size.x > 1, "Original rock mesh unavailable");
+            Vector3 edge = Vector3.zero; bool found = false; Vector3 direction = Vector3.zero; Key travel = Key.W;
+            Vector3 cameraForward = Quaternion.Euler(0, orbit.Yaw, 0) * Vector3.forward, cameraRight = Quaternion.Euler(0, orbit.Yaw, 0) * Vector3.right;
+            // Approach along a camera-relative key direction: axis points from the rock to Xena.
+            var approaches = new[] { (-cameraForward, Key.W), (cameraForward, Key.S), (-cameraRight, Key.D), (cameraRight, Key.A) };
+            foreach (var (axis, key) in approaches)
+            {
+                for (float d = 0.2f; d < 8 && !found; d += 0.1f)
+                {
+                    Vector3 p = rock.center + axis * d; p.y = rock.max.y + 2; float floor = motor.GroundHeight(p);
+                    if (float.IsNegativeInfinity(floor)) continue;
+                    bool open = true; for (float k = 0.1f; k <= 2.5f; k += 0.1f) { Vector3 q = p + axis * k; q.y = floor + 0.5f; if (float.IsNegativeInfinity(motor.GroundHeight(q))) open = false; }
+                    if (open) { edge = new Vector3(p.x, floor, p.z); direction = -axis; travel = key; found = true; }
+                }
+                if (found) break;
+            }
+            Require(found, "No open terrain beside original rock");
+            var controller = motor.GetComponent<CharacterController>(); controller.enabled = false;
+            motor.transform.position = edge - direction * 2f + Vector3.up * 0.3f; controller.enabled = true; Physics.SyncTransforms();
+            for (int i = 0; i < 30; i++) yield return new WaitForFixedUpdate();
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(travel, Key.LeftShift)); yield return null; yield return null;
+            int ticks = motor.Ticks; report.rockClosest = float.PositiveInfinity;
+            while (motor.Ticks < ticks + 90)
+            {
+                yield return new WaitForFixedUpdate();
+                Vector3 position = motor.transform.position;
+                if (float.IsNegativeInfinity(motor.GroundHeight(position + Vector3.up * 0.5f))) report.rockHoleTicks++;
+                report.rockClosest = Mathf.Min(report.rockClosest, Vector3.Dot(position - edge, direction) * -1);
+            }
+            report.rockResult = "edge " + edge + " dir " + direction + " end " + motor.transform.position;
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState()); yield return null; yield return null;
+        }
+        // Presentation continuity while the 60Hz simulation runs under a faster
+        // render clock: stalled frames and mean frame-to-frame change of screen motion (px).
+        private IEnumerator StrafeContinuity()
+        {
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState()); motor.ResetToSpawn();
+            yield return null; yield return null;
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.D, Key.LeftShift));
+            for (int i = 0; i < 20; i++) yield return new WaitForEndOfFrame();
+            Camera view = Camera.main; Transform drawn = visual.transform;
+            var world = new List<float>(); var screen = new List<float>();
+            Vector3 lastWorld = drawn.position; Vector3 lastScreen = view.WorldToScreenPoint(drawn.position + Vector3.up);
+            for (int i = 0; i < 90; i++)
+            {
+                yield return new WaitForEndOfFrame();
+                Vector3 s = view.WorldToScreenPoint(drawn.position + Vector3.up);
+                world.Add(Vector3.Distance(drawn.position, lastWorld)); screen.Add(s.x - lastScreen.x);
+                lastWorld = drawn.position; lastScreen = s;
+            }
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState()); yield return null; yield return null;
+            var sorted = new List<float>(world); sorted.Sort(); float median = sorted[sorted.Count / 2];
+            int stalled = 0; foreach (float d in world) if (d < median * 0.25f) stalled++;
+            float jerk = 0; for (int i = 1; i < screen.Count; i++) jerk += Mathf.Abs(screen[i] - screen[i - 1]) / (screen.Count - 1);
+            report.strafeFrames = world.Count; report.strafeStalledFrames = stalled; report.strafeScreenJitter = jerk;
+        }
+        private IEnumerator TreeApproach(Vector3 trunk, float trunkBase, Vector3 forward)
+        {
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState()); yield return null; yield return null;
+            var controller = motor.GetComponent<CharacterController>(); controller.enabled = false;
+            motor.transform.position = new Vector3(trunk.x, trunkBase + 0.6f, trunk.z) - forward * 1.6f;
+            controller.enabled = true; Physics.SyncTransforms();
+            for (int i = 0; i < 30; i++) yield return new WaitForFixedUpdate();
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.W, Key.LeftShift)); yield return null; yield return null;
+            int ticks = motor.Ticks; report.treeMinAxis = float.PositiveInfinity;
+            while (motor.Ticks < ticks + 60)
+            {
+                yield return new WaitForFixedUpdate();
+                Vector3 o = motor.transform.position - trunk; o.y = 0;
+                report.treeMinAxis = Mathf.Min(report.treeMinAxis, o.magnitude);
+                if (o.magnitude < 0.6f) report.treeContactTicks++;
+            }
+            Vector3 offset = motor.transform.position - trunk; offset.y = 0;
+            report.treeAxisDistance = offset.magnitude; report.treeProgress = Vector3.Dot(offset, forward);
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState()); yield return null; yield return null;
         }
         private IEnumerator Segment(Key[] keys, int count, Action<float> record)
         {

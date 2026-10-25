@@ -61,9 +61,9 @@ namespace Xena.Assets
             {
                 Require(texture != null, "Null texture");
                 Require(!string.IsNullOrEmpty(texture.original), "Missing original texture");
-                foreach (string file in new[] { texture.original, texture.upscaled })
+                foreach (string file in new[] { texture.original, texture.upscaled, texture.semiTransparentMask })
                 {
-                    if (file == texture.upscaled && string.IsNullOrEmpty(file)) continue;
+                    if (string.IsNullOrEmpty(file) && file != texture.original) continue;
                     Require(!string.IsNullOrEmpty(file) && Path.GetFileName(file) == file && file.EndsWith(".png", StringComparison.OrdinalIgnoreCase), "Unsafe texture filename");
                     Require(file.IndexOfAny(new[] { '/', '\\', ':' }) < 0, "Unsafe texture path");
                 }
@@ -71,6 +71,8 @@ namespace Xena.Assets
             foreach (XenaMaterial material in document.materials)
             {
                 Require(material != null && material.texture >= -1 && material.texture < document.textures.Length, "Invalid material texture");
+                Require(material.blendMode >= 0 && material.blendMode <= 3, "Invalid original blend mode");
+                if (material.semiTransparent) Require(material.texture >= 0 && !string.IsNullOrEmpty(document.textures[material.texture].semiTransparentMask), "Semi-transparent material has no original STP mask");
                 Floats(material.color, 4, "Material colour");
             }
             foreach (XenaMesh mesh in document.meshes)

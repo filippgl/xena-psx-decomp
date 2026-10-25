@@ -22,6 +22,7 @@ Config g_cfg = {
     .mouse_enabled = 1,
     .mouse_turn = 0,
     .modern_controls = 1,
+    .frame_lock = 1,
     .mouse_sensitivity = 1.0f,
     .rumble = 1,
     .stick_deadzone = 0.35f,
@@ -63,6 +64,9 @@ static const char* default_ini =
     "; 1 = directions are relative to the camera (Xena turns and runs where you push),\n"
     "; 0 = original tank controls (Up runs forward, Left/Right turn)\n"
     "modern = 1\n"
+    "; 1 = in play the picture changes once per two screen frames, as on the PlayStation,\n"
+    "; so the game keeps its original speed; 0 = no waiting (up to twice as fast)\n"
+    "frame_lock = 1\n"
     "\n"
     "[keyboard]\n"
     "; key names as SDL names them: W, Up, Space, Return, Escape, Left Shift, Keypad 8...\n"
@@ -70,11 +74,13 @@ static const char* default_ini =
     "Down = S, Down\n"
     "Left = A, Left\n"
     "Right = D, Right\n"
-    "Cross = Space, K\n"
-    "Square = J\n"
-    "Circle = L\n"
-    "Triangle = I\n"
-    "L1 = Q\n"
+    "; sword slash (state 0x51, travels forward): left mouse button or K; Space is the jump button\n"
+    "Cross = K\n"
+    "; kick (state 0x61, stationary): F or J\n"
+    "Square = J, F\n"
+    "Circle = L, Left Ctrl\n"
+    "Triangle = Space, I\n"
+    "L1 = Q, Left Shift, Right Shift\n"
     "R1 = E\n"
     "L2 = Z\n"
     "R2 = C\n"
@@ -84,7 +90,9 @@ static const char* default_ini =
     "\n"
     "[mouse]\n"
     "enabled = 1\n"
-    "Left = Square\n"
+    "; left mouse button = the sword slash (Cross, state 0x51)\n"
+    "Left = Cross\n"
+    "; right button (held) = block (Circle, state 0x80); the kick moved to keyboard F\n"
     "Right = Circle\n"
     "Middle = Triangle\n"
     "X1 = L2\n"
@@ -184,7 +192,10 @@ void config_set_video(const char* key, const char* val) {
     else if (!strcmp(key, "dump_textures")) g_cfg.dump_textures = atoi(val);
     else if (!strcmp(key, "fast_cd")) g_cfg.fast_cd = atoi(val);
     else if (!strcmp(key, "modern_controls")) g_cfg.modern_controls = atoi(val);
+    else if (!strcmp(key, "mouse_turn")) g_cfg.mouse_turn = atoi(val);
+    else if (!strcmp(key, "mouse_sensitivity")) g_cfg.mouse_sensitivity = (float)atof(val);
     else if (!strcmp(key, "force_hd")) g_cfg.force_hd = atoi(val);
+    else if (!strcmp(key, "frame_lock")) g_cfg.frame_lock = atoi(val);
 }
 
 static void parse(char* text) {
@@ -205,19 +216,9 @@ static void parse(char* text) {
         char* val = trim(eq + 1);
         if (!strcmp(section, "video")) {
             config_set_video(key, val);
-        } else if (0) {
-            if (!strcmp(key, "window_height")) g_cfg.window_height = atoi(val);
-            else if (!strcmp(key, "render_scale")) g_cfg.render_scale = atoi(val);
-            else if (!strcmp(key, "aspect")) g_cfg.aspect = !strcmp(val, "21:9") ? ASPECT_21_9 : !strcmp(val, "16:9") ? ASPECT_16_9 : ASPECT_4_3;
-            else if (!strcmp(key, "fullscreen")) g_cfg.fullscreen = atoi(val);
-            else if (!strcmp(key, "vsync")) g_cfg.vsync = atoi(val);
-            else if (!strcmp(key, "linear_filter")) g_cfg.linear_filter = atoi(val);
-            else if (!strcmp(key, "subpixel")) g_cfg.subpixel = atoi(val);
-            else if (!strcmp(key, "perspective")) g_cfg.perspective = atoi(val);
-            else if (!strcmp(key, "texture_filter")) g_cfg.texture_filter = atoi(val);
-            else if (!strcmp(key, "ssaa")) g_cfg.ssaa = atoi(val);
         } else if (!strcmp(section, "controls")) {
             if (!strcmp(key, "modern")) g_cfg.modern_controls = atoi(val);
+            else if (!strcmp(key, "frame_lock")) g_cfg.frame_lock = atoi(val);
         } else if (!strcmp(section, "keyboard")) {
             /* rescanned in a second pass (strtok is not reentrant) */
         } else if (!strcmp(section, "mouse")) {
@@ -396,6 +397,7 @@ void config_save(void) {
     SETI("video", "dump_textures", g_cfg.dump_textures);
     SETI("video", "fast_cd", g_cfg.fast_cd);
     SETI("controls", "modern", g_cfg.modern_controls);
+    SETI("controls", "frame_lock", g_cfg.frame_lock);
     SETI("mouse", "turn", g_cfg.mouse_turn);
     snprintf(v, sizeof(v), "%.2f", g_cfg.mouse_sensitivity);
     text = ini_set(text, "mouse", "sensitivity", v);

@@ -22,7 +22,15 @@ namespace Xena.Assets
         // Zero-based SMA frames measured against native RAM by inspect_xena_jump.mjs.
         private const int JumpSlot = 0x2f, TakeoffFrame = 6, ApexFrame = 17, TouchdownFrame = 29, LastJumpFrame = 43;
         private int airSlot = JumpSlot, airTakeoff = TakeoffFrame, airApex = ApexFrame, airTouchdown = TouchdownFrame, airLast = LastJumpFrame;
+        // Render-only interpolation between the last two 60Hz ticks; the
+        // controller, combat and collision state stay on the discrete tick.
+        private Vector3 previousPosition, currentPosition;
+        private Quaternion previousRotation = Quaternion.identity, currentRotation = Quaternion.identity;
+        private Vector3 restoreModelPosition; private Quaternion restoreModelRotation; private bool presentationApplied;
         public int Ticks { get; private set; }
+        // A transform moved outside the tick (reset, disabled motor, tests) is shown as is.
+        public Vector3 PresentationPosition => transform.position != currentPosition ? transform.position : Vector3.Lerp(previousPosition, currentPosition, PresentationBlend);
+        private float PresentationBlend => input.Paused ? 1 : Mathf.Clamp01((Time.time - Time.fixedTime) / Time.fixedDeltaTime);
         public bool Grounded { get; private set; }
         public bool Backflipping => backwardsJump;
         public float VerticalSpeed => vertical;
@@ -38,12 +46,36 @@ namespace Xena.Assets
             visual.SetUpscale(true); visual.enabled = false;
             combat = GetComponent<PrototypeCombat>(); if (combat == null) combat = gameObject.AddComponent<PrototypeCombat>();
             chakram = GetComponent<PrototypeChakram>(); if (chakram == null) chakram = gameObject.AddComponent<PrototypeChakram>();
+            if (GetComponent<PrototypeRemasterEnvironment>() == null) gameObject.AddComponent<PrototypeRemasterEnvironment>();
+            if (GetComponent<PrototypeRemasterGeometry>() == null) gameObject.AddComponent<PrototypeRemasterGeometry>();
+            if (GetComponent<PrototypeSky>() == null) gameObject.AddComponent<PrototypeSky>();
+            if (GetComponent<PrototypeBandits>() == null) gameObject.AddComponent<PrototypeBandits>();
+            if (GetComponent<PrototypeLevelScripts>() == null) gameObject.AddComponent<PrototypeLevelScripts>();
+            if (GetComponent<PrototypeOriginalDamage>() == null) gameObject.AddComponent<PrototypeOriginalDamage>();
+            if (GetComponent<PrototypeMusic>() == null) gameObject.AddComponent<PrototypeMusic>();
             if (GetComponent<PrototypeGraphics>() == null) gameObject.AddComponent<PrototypeGraphics>();
+            AddHoleSolidColliders();
+        }
+        // @rck_cx/@plr_cx1/@plr_cx2 have no CLS: the original keeps Xena out
+        // through terrain holes in their footprint. Their visible meshes become
+        // colliders so projectiles and the camera sweep also stop at the stone.
+        private static readonly string[] HoleSolids = { "level-01-object-65", "level-01-object-66", "level-01-object-67" };
+        public static int HoleSolidColliders { get; private set; }
+        private static void AddHoleSolidColliders()
+        {
+            HoleSolidColliders = 0;
+            foreach (MeshFilter filter in FindObjectsByType<MeshFilter>(FindObjectsSortMode.None))
+            {
+                if (filter.sharedMesh == null || System.Array.IndexOf(HoleSolids, filter.sharedMesh.name) < 0) continue;
+                if (filter.GetComponent<MeshCollider>() == null) filter.gameObject.AddComponent<MeshCollider>().sharedMesh = filter.sharedMesh;
+                HoleSolidColliders++;
+            }
         }
         private void Start() { ResetToSpawn(); }
         public void ResetToSpawn()
         {
             controller.enabled = false; transform.position = spawn; controller.enabled = true;
+            SnapPresentation();
             vertical = 0; Grounded = true; groundSlot = 0; groundTime = 0;
             landingTime = -1; visual.SampleSlotFrame(0, 0);
             backwardsJump = false; backwardsVelocity = Vector3.zero;
@@ -59,7 +91,10 @@ namespace Xena.Assets
         public float GroundHeight(Vector3 position) => Floor(position);
         private void FixedUpdate()
         {
+            RestorePresentation();
             if (input.Paused) return;
+            if (transform.position != currentPosition || transform.rotation != currentRotation) SnapPresentation();
+            previousPosition = currentPosition; previousRotation = currentRotation;
             float dt = Time.fixedDeltaTime;
             bool wasGrounded = Grounded;
             orbit.SynchronizeGuardCamera();
@@ -80,6 +115,7 @@ namespace Xena.Assets
             vertical -= gravity * dt;
             Vector3 horizontal = combat.DrivesMotion ? combat.ActionVelocity : motion * (input.Sprint ? runSpeed : walkSpeed);
             if (backwardsJump) horizontal = backwardsVelocity;
+            if (Grounded) horizontal = OriginalTerrainLimit(horizontal, dt);
             CollisionFlags collision = controller.Move((horizontal + Vector3.up * vertical) * dt);
             if ((collision & CollisionFlags.Above) != 0 && vertical > 0) vertical = 0;
             float floor = Floor(transform.position);
@@ -95,6 +131,7 @@ namespace Xena.Assets
             else { groundSlot = 0; groundTime = 0; landingTime = -1; }
             // These are externally driven sampled clips, not animation root motion.
             if (transform.position.y < spawn.y - 30) ResetToSpawn();
+            currentPosition = transform.position; currentRotation = transform.rotation;
             Ticks++;
         }
 
@@ -153,8 +190,53 @@ namespace Xena.Assets
             groundTime += dt;
         }
         private void SetGroundSlot(int slot) { groundSlot = slot; groundTime = 0; }
+        // Original shared mover 8006E78C: ground probes at heading +-45deg, 150
+        // units (Xena radius) beyond the step, and the end point reject terrain
+        // with no surface or a step up above 300 units. Rocks/cliffs without CLS
+        // are holes in the height grid. The original slides along the probed
+        // surface normal; the probe direction stands in for it (approximation).
+        private Vector3 OriginalTerrainLimit(Vector3 horizontal, float dt)
+        {
+            if (horizontal.sqrMagnitude < 0.000001f) return horizontal;
+            Vector3 heading = horizontal.normalized;
+            foreach (float angle in new[] { 45f, -45f })
+            {
+                Vector3 probe = Quaternion.Euler(0, angle, 0) * heading;
+                if (TerrainBlocks(transform.position + horizontal * dt + probe * 0.375f))
+                    horizontal -= probe * Mathf.Max(0, Vector3.Dot(horizontal, probe));
+            }
+            return TerrainBlocks(transform.position + horizontal * dt) ? Vector3.zero : horizontal;
+        }
+        private bool TerrainBlocks(Vector3 point)
+        {
+            float floor = Floor(new Vector3(point.x, transform.position.y, point.z));
+            return float.IsNegativeInfinity(floor) || floor - transform.position.y > 0.75f;
+        }
+        private void SnapPresentation()
+        {
+            previousPosition = currentPosition = transform.position;
+            previousRotation = currentRotation = transform.rotation;
+        }
+        private void RestorePresentation()
+        {
+            if (!presentationApplied) return;
+            Transform model = visual.transform;
+            model.localPosition = restoreModelPosition; model.localRotation = restoreModelRotation; presentationApplied = false;
+        }
+        private void ApplyPresentation()
+        {
+            RestorePresentation();
+            // Teleports between ticks (reset/tests) are shown immediately.
+            if (transform.position != currentPosition || transform.rotation != currentRotation) SnapPresentation();
+            Transform model = visual.transform;
+            restoreModelPosition = model.localPosition; restoreModelRotation = model.localRotation; presentationApplied = true;
+            float blend = PresentationBlend;
+            Quaternion delta = Quaternion.Slerp(previousRotation, currentRotation, blend) * Quaternion.Inverse(transform.rotation);
+            model.SetPositionAndRotation(PresentationPosition + delta * (model.position - transform.position), delta * model.rotation);
+        }
         private void LateUpdate()
         {
+            ApplyPresentation();
             if (input.Paused || chakram.Active) return;
             float renderStep = Mathf.Clamp(Time.time - Time.fixedTime, 0, Time.fixedDeltaTime);
             if (combat.IsEvading)

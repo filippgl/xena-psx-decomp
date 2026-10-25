@@ -61,6 +61,62 @@ Shader "Xena/OriginalUnlit"
             }
             ENDHLSL
         }
+        // Remaster sun shadows (only a Remaster light casts them); alpha-tested
+        // like the colour pass so leaves cast leaf-shaped shadows.
+        Pass
+        {
+            Name "ShadowCaster"
+            Tags { "LightMode"="ShadowCaster" }
+            ZWrite On
+            ZTest LEqual
+            ColorMask 0
+            Cull [_Cull]
+            HLSLPROGRAM
+            #pragma vertex ShadowVert
+            #pragma fragment ShadowFrag
+            #pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
+            TEXTURE2D(_MainTex);
+            SAMPLER(sampler_MainTex);
+            CBUFFER_START(UnityPerMaterial)
+                float4 _MainTex_ST;
+                float4 _Color;
+                float _Cutoff;
+                float _Cull;
+                float _UseVertexLighting;
+                float _LightBias;
+            CBUFFER_END
+            float3 _LightDirection;
+            float3 _LightPosition;
+            struct ShadowAttributes { float4 positionOS : POSITION; float3 normalOS : NORMAL; float2 uv : TEXCOORD0; };
+            struct ShadowVaryings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; };
+            ShadowVaryings ShadowVert(ShadowAttributes input)
+            {
+                ShadowVaryings output;
+                float3 positionWS = TransformObjectToWorld(input.positionOS.xyz);
+                float3 normalWS = TransformObjectToWorldNormal(input.normalOS);
+                #if _CASTING_PUNCTUAL_LIGHT_SHADOW
+                float3 lightDirection = normalize(_LightPosition - positionWS);
+                #else
+                float3 lightDirection = _LightDirection;
+                #endif
+                output.positionCS = TransformWorldToHClip(ApplyShadowBias(positionWS, normalWS, lightDirection));
+                #if UNITY_REVERSED_Z
+                output.positionCS.z = min(output.positionCS.z, UNITY_NEAR_CLIP_VALUE);
+                #else
+                output.positionCS.z = max(output.positionCS.z, UNITY_NEAR_CLIP_VALUE);
+                #endif
+                output.uv = TRANSFORM_TEX(input.uv, _MainTex);
+                return output;
+            }
+            half4 ShadowFrag(ShadowVaryings input) : SV_Target
+            {
+                clip(SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.uv).a * _Color.a - _Cutoff);
+                return 0;
+            }
+            ENDHLSL
+        }
     }
     Fallback Off
 }

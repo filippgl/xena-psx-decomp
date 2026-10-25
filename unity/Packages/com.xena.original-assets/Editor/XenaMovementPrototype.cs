@@ -1,3 +1,5 @@
+using UnityEngine.Rendering.Universal;
+using UnityEngine.Rendering;
 using System;
 using System.IO;
 using System.Linq;
@@ -87,6 +89,125 @@ namespace Xena.Assets.Editor
         }
         [Serializable] private sealed class CollisionMesh { public int[] vertices; }
 
+        // Resources materials keep the Remaster shaders in standalone builds.
+        private static void CreateRemasterResources()
+        {
+            Directory.CreateDirectory("Assets/Imported/Resources/Remaster");
+            foreach (var (file, shaderName) in new[] { ("Water", "Xena/RemasterWater"), ("Waterfall", "Xena/RemasterWaterfall"), ("Rainbow", "Xena/RemasterRainbow"), ("LevelLit", "Xena/RemasterLit"), ("Foam", "Xena/RemasterFoam") })
+            {
+                string path = "Assets/Imported/Resources/Remaster/" + file + ".mat";
+                Shader shader = Shader.Find(shaderName); if (shader == null) throw new InvalidDataException(shaderName + " unavailable");
+                Material existing = AssetDatabase.LoadAssetAtPath<Material>(path);
+                // Recreate so tuned shader defaults reach the standalone material.
+                if (existing != null) AssetDatabase.DeleteAsset(path);
+                AssetDatabase.CreateAsset(new Material(shader), path);
+            }
+            const string puffPath = "Assets/Imported/Resources/Remaster/MistPuff.asset";
+            var puff = AssetDatabase.LoadAssetAtPath<Texture2D>(puffPath);
+            if (puff == null)
+            {
+                puff = new Texture2D(64, 64, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Clamp, name = "MistPuff" };
+                for (int y = 0; y < 64; y++) for (int x = 0; x < 64; x++)
+                {
+                    float d = Vector2.Distance(new Vector2(x + 0.5f, y + 0.5f), new Vector2(32, 32)) / 32;
+                    float a = Mathf.Pow(Mathf.Clamp01(1 - d), 2.2f);
+                    puff.SetPixel(x, y, new Color(1, 1, 1, a));
+                }
+                puff.Apply(true); AssetDatabase.CreateAsset(puff, puffPath);
+            }
+            // CC0 ambientCG Rock051 (staged from build/remaster-sources/rock051).
+            foreach (var (file, normal) in new[] { ("RockColor", false), ("RockNormal", true), ("RockAO", false) })
+            {
+                string texturePath = "Assets/Imported/Resources/Remaster/" + file + ".jpg";
+                if (!(AssetImporter.GetAtPath(texturePath) is TextureImporter rockImporter)) throw new InvalidDataException("Remaster rock texture missing: " + texturePath);
+                rockImporter.textureType = normal ? TextureImporterType.NormalMap : TextureImporterType.Default;
+                rockImporter.sRGBTexture = file == "RockColor"; rockImporter.wrapMode = TextureWrapMode.Repeat; rockImporter.mipmapEnabled = true;
+                rockImporter.maxTextureSize = 2048; rockImporter.SaveAndReimport();
+            }
+            const string streakPath = "Assets/Imported/Resources/Remaster/FallStreak.asset";
+            var streak = AssetDatabase.LoadAssetAtPath<Texture2D>(streakPath);
+            if (streak == null)
+            {
+                // Soft water streak: bright core, frayed sides, tapered ends.
+                streak = new Texture2D(32, 128, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Clamp, name = "FallStreak" };
+                for (int y = 0; y < 128; y++) for (int x = 0; x < 32; x++)
+                {
+                    float u = (x + 0.5f) / 32 * 2 - 1, v = (y + 0.5f) / 128 * 2 - 1;
+                    float fray = 0.75f + 0.25f * Mathf.PerlinNoise(x * 0.4f, y * 0.08f);
+                    float a = Mathf.Exp(-u * u * 5f / fray) * Mathf.Pow(Mathf.Clamp01(1 - v * v), 0.6f);
+                    streak.SetPixel(x, y, new Color(1, 1, 1, Mathf.Clamp01(a)));
+                }
+                streak.Apply(true); AssetDatabase.CreateAsset(streak, streakPath);
+            }
+            const string fallMaterialPath = "Assets/Imported/Resources/Remaster/FallStreak.mat";
+            if (AssetDatabase.LoadAssetAtPath<Material>(fallMaterialPath) == null)
+            {
+                Shader particles = Shader.Find("Universal Render Pipeline/Particles/Unlit");
+                var fallMaterial = new Material(particles); fallMaterial.SetTexture("_BaseMap", streak);
+                fallMaterial.SetFloat("_Surface", 1); fallMaterial.SetFloat("_Blend", 0); fallMaterial.SetOverrideTag("RenderType", "Transparent");
+                fallMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha); fallMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                fallMaterial.SetInt("_ZWrite", 0); fallMaterial.EnableKeyword("_SURFACE_TYPE_TRANSPARENT"); fallMaterial.renderQueue = 3150;
+                AssetDatabase.CreateAsset(fallMaterial, fallMaterialPath);
+            }
+            const string mistPath = "Assets/Imported/Resources/Remaster/Mist.mat";
+            if (AssetDatabase.LoadAssetAtPath<Material>(mistPath) == null)
+            {
+                Shader particles = Shader.Find("Universal Render Pipeline/Particles/Unlit");
+                if (particles == null) throw new InvalidDataException("URP particle shader unavailable");
+                var mist = new Material(particles); mist.SetTexture("_BaseMap", puff);
+                mist.SetFloat("_Surface", 1); mist.SetFloat("_Blend", 0); mist.SetOverrideTag("RenderType", "Transparent");
+                mist.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha); mist.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                mist.SetInt("_ZWrite", 0); mist.EnableKeyword("_SURFACE_TYPE_TRANSPARENT"); mist.renderQueue = 3000;
+                AssetDatabase.CreateAsset(mist, mistPath);
+            }
+            // CC0 Poly Haven HDRI (kloofendal_48d_partly_cloudy_puresky, 4k),
+            // staged from build/remaster-sources/sky; Remaster sky only.
+            const string skyTexturePath = "Assets/Imported/Remaster/Sky/Sky.hdr";
+            if (AssetImporter.GetAtPath(skyTexturePath) is TextureImporter skyImporter)
+            {
+                skyImporter.mipmapEnabled = false; skyImporter.wrapModeU = TextureWrapMode.Repeat; skyImporter.wrapModeV = TextureWrapMode.Clamp;
+                skyImporter.maxTextureSize = 4096; skyImporter.textureCompression = TextureImporterCompression.CompressedHQ; skyImporter.SaveAndReimport();
+            }
+            var skyTexture = AssetDatabase.LoadAssetAtPath<Texture2D>(skyTexturePath);
+            if (skyTexture == null) throw new InvalidDataException("Remaster sky HDRI missing: " + skyTexturePath);
+            const string skyPath = "Assets/Imported/Resources/Remaster/Sky.mat";
+            if (AssetDatabase.LoadAssetAtPath<Material>(skyPath) != null) AssetDatabase.DeleteAsset(skyPath);
+            Shader panoramic = Shader.Find("Xena/RemasterSky"); if (panoramic == null) throw new InvalidDataException("Remaster sky shader unavailable");
+            var sky = new Material(panoramic); sky.SetTexture("_MainTex", skyTexture); sky.SetFloat("_Exposure", 1.05f); sky.SetFloat("_Rotation", 40);
+            AssetDatabase.CreateAsset(sky, skyPath);
+            // Remaster post: HDR buffer, bloom, ACES, grading, light vignette.
+            var pipeline = AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>("Assets/Generated/XenaURP.asset");
+            if (pipeline != null && !pipeline.supportsHDR) { pipeline.supportsHDR = true; EditorUtility.SetDirty(pipeline); }
+            if (pipeline != null)
+            {
+                // Remaster sun: 4 cascades over 70m, 4096 map, soft filtering.
+                var settings = new SerializedObject(pipeline);
+                settings.FindProperty("m_MainLightShadowsSupported").boolValue = true;
+                settings.FindProperty("m_MainLightShadowmapResolution").intValue = 4096;
+                settings.FindProperty("m_ShadowDistance").floatValue = 70;
+                settings.FindProperty("m_ShadowCascadeCount").intValue = 4;
+                settings.FindProperty("m_SoftShadowsSupported").boolValue = true;
+                settings.ApplyModifiedPropertiesWithoutUndo(); EditorUtility.SetDirty(pipeline);
+            }
+            // The generated renderer had no PostProcessData, which silently disables post.
+            var rendererData = AssetDatabase.LoadAssetAtPath<UniversalRendererData>("Assets/Generated/XenaRenderer.asset");
+            if (rendererData != null && rendererData.postProcessData == null)
+            {
+                rendererData.postProcessData = AssetDatabase.LoadAssetAtPath<PostProcessData>("Packages/com.unity.render-pipelines.universal/Runtime/Data/PostProcessData.asset");
+                if (rendererData.postProcessData == null) throw new InvalidDataException("URP PostProcessData unavailable");
+                EditorUtility.SetDirty(rendererData);
+            }
+            const string postPath = "Assets/Imported/Resources/Remaster/Post.asset";
+            if (AssetDatabase.LoadAssetAtPath<VolumeProfile>(postPath) != null) AssetDatabase.DeleteAsset(postPath);
+            var post = ScriptableObject.CreateInstance<VolumeProfile>(); AssetDatabase.CreateAsset(post, postPath);
+            var bloom = post.Add<Bloom>(true); bloom.threshold.value = 0.92f; bloom.intensity.value = 0.55f; bloom.scatter.value = 0.65f;
+            var tone = post.Add<Tonemapping>(true); tone.mode.value = TonemappingMode.Neutral; // keeps the original palette
+            var grade = post.Add<ColorAdjustments>(true); grade.postExposure.value = 0.5f; grade.contrast.value = 9; grade.saturation.value = 8;
+            var vignette = post.Add<Vignette>(true); vignette.intensity.value = 0.12f; vignette.smoothness.value = 0.45f;
+            foreach (var component in post.components) { component.hideFlags = HideFlags.HideInInspector | HideFlags.HideInHierarchy; AssetDatabase.AddObjectToAsset(component, post); }
+            EditorUtility.SetDirty(post);
+            AssetDatabase.SaveAssets();
+        }
         public static void RunBatch()
         {
             var report = new Report { unityVersion = Application.unityVersion, scene = ScenePath };
@@ -101,6 +222,7 @@ namespace Xena.Assets.Editor
                     AssetDatabase.CreateAsset(new Material(trailShader), trailPath);
                     AssetDatabase.SaveAssets();
                 }
+                CreateRemasterResources();
                 AssetDatabase.ImportAsset(XenaImportVerification.ModelPath, ImportAssetOptions.ForceSynchronousImport);
                 AssetDatabase.ImportAsset("Assets/Imported/Level01/Level01.xenamodel", ImportAssetOptions.ForceSynchronousImport);
                 const string chakramPath = "Assets/Imported/Resources/Chakram/Chakram.xenamodel";

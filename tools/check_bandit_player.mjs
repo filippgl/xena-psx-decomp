@@ -1,0 +1,16 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import {spawn} from 'node:child_process';
+import crypto from 'node:crypto';
+const gameCode=path.resolve('build/unity-movement/XenaMovementPrototype_Data/Managed/Xena.Assets.dll');
+const hash=()=>crypto.createHash('sha256').update(fs.readFileSync(gameCode)).digest('hex');
+const testedBuild={executable:path.resolve('build/unity-movement/XenaMovementPrototype.exe'),gameCode,modified:fs.statSync(gameCode).mtime.toISOString(),sha256:hash()};
+const out=path.resolve('build/unity-import'),file=path.join(out,'bandit-player-verification.json');
+if(fs.existsSync(file))fs.unlinkSync(file);
+const child=spawn(testedBuild.executable,['-screen-fullscreen','0','-screen-width','1280','-screen-height','720','-logFile',path.join(out,'bandit-player.log'),'--no-settings','--bandit-smoke',out],{windowsHide:false,stdio:'ignore'});
+const code=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>{child.kill();reject(Error('Presentation smoke timed out; inspect bandit-player.log'));},60000);child.once('error',e=>{clearTimeout(timer);reject(e);});child.once('exit',c=>{clearTimeout(timer);resolve(c);});});
+const report=fs.existsSync(file)?JSON.parse(fs.readFileSync(file)):null;
+if(code!==0||report?.result!=='PASS')console.log(JSON.stringify(report,null,2));
+assert.equal(code,0,'Bandit player failed');assert.equal(report?.result,'PASS');assert.equal(hash(),testedBuild.sha256,'Build changed during check');
+report.testedBuild=testedBuild;fs.writeFileSync(file,JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report,null,2));

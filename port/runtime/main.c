@@ -6,6 +6,7 @@
 
 Cpu cpu;
 extern u16 g_script_buttons;
+extern float g_script_mouse;
 
 static const char* disc_path;
 static int opt_scale = 3;
@@ -15,7 +16,7 @@ static long menu_shot_frame = -1;
 static const char* opt_textures;
 static const char* opt_selftest;
 static const char* opt_memcard;
-static long ramdump_frames[32];
+static long ramdump_frames[256];
 static int nramdumps;
 static const char* ramdump_dir;
 /* --poke frame:addr:value[:size] (testing: write guest memory at a frame) */
@@ -27,6 +28,7 @@ static const char* menu_shot_file;
 static int nopts;
 static long opt_frames = -1;      /* exit after N frames (testing) */
 static long opt_shot_every = 0;   /* dump a screenshot every N frames */
+static long opt_shot_from = 0;    /* ... but not before this frame */
 static const char* opt_shot_dir = "shots";
 long g_frame_no;
 #define frame_no g_frame_no
@@ -34,8 +36,9 @@ static u32 watch_addr[16];
 static int nwatch;
 static void pace_frame(void);
 
-/* scripted input: "frame:BUTTON[+BUTTON]:len,..." */
-typedef struct { long frame, len; u16 buttons; } ScriptStep;
+/* scripted input: "frame:BUTTON[+BUTTON][:len]" and "frame:MOUSE=dx" (mouse counts,
+ * fed to mouse turning exactly as a real motion would - only meaningful with mouse_turn) */
+typedef struct { long frame, len; u16 buttons; int mouse_dx; } ScriptStep;
 static ScriptStep script[256];
 static int nscript;
 
@@ -52,13 +55,14 @@ static u16 button_from_name(const char* s, int n) {
 
 static void parse_script(const char* s) {
     while (*s && nscript < 256) {
-        ScriptStep st = {0, 6, 0};
+        ScriptStep st = {0, 6, 0, 0};
         st.frame = strtol(s, (char**)&s, 10);
         if (*s == ':') s++;
         while (*s && *s != ',' && *s != ':') {
             const char* b = s;
             while (*s && *s != '+' && *s != ',' && *s != ':') s++;
-            st.buttons |= button_from_name(b, (int)(s - b));
+            if (s - b > 6 && !strncmp(b, "MOUSE=", 6)) st.mouse_dx = atoi(b + 6);
+            else st.buttons |= button_from_name(b, (int)(s - b));
             if (*s == '+') s++;
         }
         if (*s == ':') { s++; st.len = strtol(s, (char**)&s, 10); }
@@ -205,7 +209,7 @@ void host_frame(void) {
     const u32* shown = NULL;
     int ss = 1;
     unsigned gltex = gpu_hd_frame_gl(&w, &h, &ss);
-    int want_shot = opt_shot_every && frame_no % opt_shot_every == 0;
+    int want_shot = opt_shot_every && frame_no >= opt_shot_from && frame_no % opt_shot_every == 0;
     if (gltex) {
         platform_present_gl(gltex, w, h, config_aspect_ratio(), ss);
         if (want_shot) shown = gpu_hd_snapshot(&w, &h);
@@ -242,11 +246,13 @@ void host_frame(void) {
     if (frame_no % 120 == 0) { extern void texdump_write(void); texdump_write(); }
 
     g_script_buttons = 0;
-    for (int i = 0; i < nscript; i++)
+    for (int i = 0; i < nscript; i++) {
+        if (frame_no == script[i].frame) g_script_mouse += script[i].mouse_dx;
         if (frame_no >= script[i].frame && frame_no < script[i].frame + script[i].len)
             g_script_buttons |= script[i].buttons;
+    }
 
-    if (opt_shot_every && frame_no % opt_shot_every == 0) {
+    if (want_shot) {
         char path[300];
         SDL_snprintf(path, sizeof(path), "%s/frame_%06ld.bmp", opt_shot_dir, frame_no);
         if (shown) write_bmp(path, shown, w, h);
@@ -263,6 +269,7 @@ void host_frame(void) {
     if (opt_frames >= 0 && frame_no >= opt_frames) {
         log_msg("reached frame %ld, exiting", frame_no);
         { extern void texdump_write(void); texdump_write(); }
+        { extern void dump_steer_diag(void); dump_steer_diag(); }
         dump_call_counts();
         exit(0);
     }
@@ -366,6 +373,7 @@ static void usage(void) {
             "  --headless             no window\n"
             "  --frames N             exit after N frames\n"
             "  --shots N DIR          save a screenshot every N frames into DIR\n"
+            "  --shots-from N         only dump screenshots from frame N on\n"
             "  --menu-shot N FILE     screenshot of the settings menu at frame N\n"
             "  --script S             scripted input, e.g. 300:START,420:CROSS:10,500:UP+RIGHT:60\n"
             "  --poke F:ADDR:VAL[:SZ] write guest memory at frame F\n"
@@ -402,7 +410,7 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--ramdump") && i + 2 < argc) { /* --ramdump DIR f1,f2,... */
             ramdump_dir = argv[++i];
             char* p = argv[++i];
-            while (*p && nramdumps < 32) { ramdump_frames[nramdumps++] = strtol(p, &p, 10); if (*p == ',') p++; }
+            while (*p && nramdumps < 256) { ramdump_frames[nramdumps++] = strtol(p, &p, 10); if (*p == ',') p++; }
         }
         else if (!strcmp(argv[i], "--poke") && i + 1 < argc && npokes < 16) {
             Poke* pk = &pokes[npokes++];
@@ -423,6 +431,7 @@ int main(int argc, char** argv) {
         }
         else if (!strcmp(argv[i], "--frames") && i + 1 < argc) opt_frames = atol(argv[++i]);
         else if (!strcmp(argv[i], "--shots") && i + 2 < argc) { opt_shot_every = atol(argv[++i]); opt_shot_dir = argv[++i]; }
+        else if (!strcmp(argv[i], "--shots-from") && i + 1 < argc) opt_shot_from = atol(argv[++i]);
         else if (!strcmp(argv[i], "--script") && i + 1 < argc) parse_script(argv[++i]);
         else if (!strcmp(argv[i], "--verbose")) g_verbose = 1;
         else if (!strcmp(argv[i], "--trace")) g_trace = 1;

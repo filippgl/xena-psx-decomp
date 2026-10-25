@@ -10,7 +10,8 @@ namespace Xena.Assets
 {
     internal sealed class PrototypeChakramSmoke : MonoBehaviour
     {
-        [Serializable] private sealed class Report { public string result = "FAIL", error; public float discScreenWidth, flightCameraDistance; public List<string> checks = new List<string>(); }
+        [Serializable] private sealed class Report { public string result = "FAIL", error; public float discScreenWidth, flightCameraDistance; public List<string> checks = new List<string>();
+            public int pillarContacts; public bool pillarEntered; public float openFlightRange; }
         private Report report = new Report();
         private string output;
         private bool finished;
@@ -68,6 +69,19 @@ namespace Xena.Assets
             keyboard = InputSystem.AddDevice<Keyboard>(); mouse = InputSystem.AddDevice<Mouse>(); pad = InputSystem.AddDevice<Gamepad>();
             input.UseDevices(keyboard, mouse, pad); for (int i = 0; i < 10; i++) yield return null;
             Require(chakram != null, "Chakram component missing"); motor.ResetToSpawn();
+            // Original solids (e.g. @rck_cx 5.7m ahead of spawn) now stop the disc:
+            // face the longest open flight line from spawn before the flight checks.
+            float bestYaw = 0, bestRange = -1;
+            for (int step = 0; step < 24; step++)
+            {
+                float yaw = step * 15; Vector3 line = Quaternion.Euler(0, yaw, 0) * Vector3.forward;
+                float range = Physics.SphereCast(motor.transform.position + Vector3.up * 1.1f, 0.15f, line, out RaycastHit block, 20, ~(1 << 2), QueryTriggerInteraction.Ignore) ? block.distance : 20;
+                if (range > bestRange) { bestRange = range; bestYaw = yaw; }
+            }
+            report.openFlightRange = bestRange; motor.transform.rotation = Quaternion.Euler(0, bestYaw, 0);
+            InputSystem.QueueStateEvent(pad, new GamepadState { buttons = 1u << (int)GamepadButton.RightStick }); yield return null; yield return null;
+            InputSystem.QueueStateEvent(pad, new GamepadState()); yield return null;
+            Require(Mathf.Abs(Mathf.DeltaAngle(orbit.Yaw, bestYaw)) < 0.1f && bestRange >= 12, "No open flight line from spawn: " + bestRange);
             InputSystem.QueueStateEvent(mouse, new MouseState { delta = new Vector2(0, 150) }); yield return null; yield return null;
             Require(Mathf.Abs(orbit.Pitch) < 1, "Could not aim horizontally through actual mouse input");
             PlaceTarget(2); Vector3 start = motor.transform.position;
@@ -138,7 +152,7 @@ namespace Xena.Assets
             report.checks.Add("swept chakram hits practice target once per throw");
             Vector3 beforeSteer = chakram.FlightDirection;
             InputSystem.QueueStateEvent(mouse, new MouseState { delta = new Vector2(150, 0) }); yield return null; yield return null; yield return Ticks(8);
-            Require(chakram.Flying && !chakram.Returning && Vector3.Angle(beforeSteer, chakram.FlightDirection) > 5, "Mouse did not steer flying chakram");
+            Require(chakram.Flying && !chakram.Returning && Vector3.Angle(beforeSteer, chakram.FlightDirection) > 5, "Mouse did not steer flying chakram; returning " + chakram.Returning + " walls " + chakram.WallContacts + " " + chakram.LastImpactCollider + " at " + chakram.ProjectilePosition + " from " + motor.transform.position);
             Require(Mathf.Abs(Vector3.Dot(chakram.DiscNormal, chakram.FlightDirection)) < 0.001f, "Steering tipped disc out of flight plane");
             report.checks.Add("actual mouse motion steers outgoing flight");
             Require(Vector3.Distance(orbit.transform.position, chakram.ProjectilePosition) < 5, "Camera did not follow flight");
@@ -198,6 +212,30 @@ namespace Xena.Assets
             report.checks.Add("solid wall stops outgoing flight and protects target behind it");
             yield return Ticks(30); Require(chakram.SparkCount == 0 && chakram.SparkBursts == 1, "Impact sparks did not expire or impact repeated");
             report.checks.Add("impact sparks expire after catch without repeated contact bursts");
+
+            // @plr_cx1 has no CLS (its footprint is a terrain hole); the visible
+            // stone pillar must still stop the disc.
+            yield return Ticks(30); motor.ResetToSpawn(); yield return Ticks(2);
+            Bounds pillar = default; foreach (MeshFilter filter in FindObjectsByType<MeshFilter>(FindObjectsSortMode.None))
+                if (filter.sharedMesh != null && filter.sharedMesh.name == "level-01-object-66") pillar = filter.GetComponent<Renderer>().bounds;
+            Require(pillar.size.y > 3, "Original stone pillar mesh unavailable");
+            Vector3 aim = Quaternion.Euler(0, orbit.Yaw, 0) * Vector3.forward; Vector3 stand = Vector3.zero; bool open = false;
+            for (float d = 2.5f; d < 9 && !open; d += 0.25f)
+            {
+                Vector3 p = pillar.center - aim * d; p.y = pillar.max.y + 2; float floor = motor.GroundHeight(p);
+                if (!float.IsNegativeInfinity(floor) && floor < pillar.center.y && floor > pillar.min.y - 1) { stand = new Vector3(p.x, floor + 0.05f, p.z); open = true; }
+            }
+            Require(open, "No open ground facing original pillar");
+            var capsule = motor.GetComponent<CharacterController>(); capsule.enabled = false; motor.transform.position = stand; capsule.enabled = true; Physics.SyncTransforms();
+            yield return Ticks(10); int contacts = chakram.WallContacts; bool entered = false;
+            yield return Throw();
+            for (int i = 0; i < 120 && chakram.WallContacts == contacts; i++)
+            { yield return new WaitForFixedUpdate(); Vector3 c = chakram.ProjectilePosition; if (c.x > pillar.center.x - 0.3f && c.x < pillar.center.x + 0.3f && c.z > pillar.center.z - 0.3f && c.z < pillar.center.z + 0.3f && c.y < pillar.max.y) entered = true; }
+            report.pillarContacts = chakram.WallContacts - contacts; report.pillarEntered = entered;
+            Require(report.pillarContacts == 1 && !entered, "Chakram crossed original stone pillar");
+            report.checks.Add("visible stone pillar without CLS stops the chakram");
+            for (int i = 0; i < 240 && chakram.Active; i++) yield return new WaitForFixedUpdate();
+            Release();
             yield return Mode(PrototypeChakram.Mode.Ready); Destroy(wall); yield return null;
             motor.ResetToSpawn(); PlaceTarget(20);
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Q)); yield return Mode(PrototypeChakram.Mode.Aiming);

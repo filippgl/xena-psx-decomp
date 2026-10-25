@@ -8,28 +8,33 @@ using UnityEngine.Rendering;
 
 namespace Xena.Assets.Editor
 {
-    [ScriptedImporter(2, "xenamodel")]
+    [ScriptedImporter(3, "xenamodel")]
     public sealed class XenaModelImporter : ScriptedImporter
     {
         private const string ShaderPath = "Packages/com.xena.original-assets/Shaders/OriginalUnlit.shader";
+        private const string SemiShaderPath = "Packages/com.xena.original-assets/Shaders/OriginalSemiTransparent.shader";
 
         public override void OnImportAsset(AssetImportContext context)
         {
             XenaDocument document = JsonUtility.FromJson<XenaDocument>(File.ReadAllText(context.assetPath));
             XenaDocumentValidator.Validate(document);
             context.DependsOnArtifact(ShaderPath);
+            context.DependsOnArtifact(SemiShaderPath);
             Shader shader = AssetDatabase.LoadAssetAtPath<Shader>(ShaderPath);
             if (shader == null) throw new InvalidDataException("Xena shader is unavailable");
             var originalTextures = new Texture2D[document.textures.Length];
             var upscaledTextures = new Texture2D[document.textures.Length];
+            var stpMasks = new Texture2D[document.textures.Length];
             for (int i = 0; i < document.textures.Length; i++)
             {
                 originalTextures[i] = ReadTexture(context, document.textures[i].original, "texture-original-" + i);
                 upscaledTextures[i] = string.IsNullOrEmpty(document.textures[i].upscaled) ? originalTextures[i] :
                     ReadTexture(context, document.textures[i].upscaled, "texture-upscaled-" + i);
+                if (!string.IsNullOrEmpty(document.textures[i].semiTransparentMask))
+                    stpMasks[i] = ReadTexture(context, document.textures[i].semiTransparentMask, "texture-stp-" + i);
             }
-            var originalMaterials = CreateMaterials(context, document, shader, originalTextures, "original");
-            var upscaledMaterials = CreateMaterials(context, document, shader, upscaledTextures, "upscaled");
+            var originalMaterials = CreateMaterials(context, document, shader, originalTextures, stpMasks, "original");
+            var upscaledMaterials = CreateMaterials(context, document, shader, upscaledTextures, stpMasks, "upscaled");
             var root = new GameObject(Path.GetFileNameWithoutExtension(context.assetPath));
             context.AddObjectToAsset("model", root);
             context.SetMainObject(root);
@@ -97,13 +102,23 @@ namespace Xena.Assets.Editor
             return texture;
         }
 
-        private static Material[] CreateMaterials(AssetImportContext context, XenaDocument document, Shader shader, Texture2D[] textures, string variant)
+        private static Material[] CreateMaterials(AssetImportContext context, XenaDocument document, Shader shader, Texture2D[] textures, Texture2D[] stpMasks, string variant)
         {
             var materials = new Material[document.materials.Length];
             for (int i = 0; i < materials.Length; i++)
             {
                 XenaMaterial source = document.materials[i];
-                var material = new Material(shader) { name = source.name + "_" + variant };
+                Shader selectedShader = source.semiTransparent ? AssetDatabase.LoadAssetAtPath<Shader>(SemiShaderPath) : shader;
+                if (selectedShader == null) throw new InvalidDataException("Original semi-transparent shader missing");
+                if (source.semiTransparent && source.blendMode == 2) throw new NotSupportedException("PS1 subtractive blend requires a dedicated framebuffer pass");
+                var material = new Material(selectedShader) { name = source.name + "_" + variant };
+                if (source.semiTransparent)
+                {
+                    material.SetTexture("_StpMask", stpMasks[source.texture]);
+                    material.SetFloat("_Ps1BlendMode", source.blendMode);
+                    material.SetInt("_SrcBlend", (int)(source.blendMode == 0 ? BlendMode.SrcAlpha : BlendMode.One));
+                    material.SetInt("_DstBlend", (int)(source.blendMode == 0 ? BlendMode.OneMinusSrcAlpha : BlendMode.SrcAlpha));
+                }
                 material.SetColor("_Color", new Color(source.color[0], source.color[1], source.color[2], source.color[3]));
                 material.SetFloat("_Cutoff", 0.5f);
                 material.SetFloat("_UseVertexLighting", source.vertexLighting ? 1 : 0);

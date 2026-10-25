@@ -37,7 +37,8 @@ const meshes = gltf.meshes.map(mesh => ({ name: mesh.name, primitives: mesh.prim
 }) }));
 const materials = gltf.materials.map(m => ({ name: m.name, doubleSided: m.doubleSided,
   texture: m.pbrMetallicRoughness.baseColorTexture?.index ?? -1,
-  color: m.pbrMetallicRoughness.baseColorFactor || [1, 1, 1, 1], vertexLighting: levelMode }));
+  color: m.pbrMetallicRoughness.baseColorFactor || [1, 1, 1, 1], vertexLighting: levelMode,
+  semiTransparent: !!m.extras?.ps1SemiTransparent, blendMode: m.extras?.ps1BlendMode ?? 0 }));
 const clips = (gltf.animations || []).map(animation => ({ name: animation.name, slot: animation.extras.originalSlot,
   sourceFrameCount: animation.extras.sourceFrameCount, stepsPerSecond: animation.extras.assumedStepsPerSecond,
   times: read(animation.samplers[0].input), channels: animation.channels.map(channel => {
@@ -55,7 +56,9 @@ const textures = gltf.images.map((image, i) => {
   fs.copyFileSync(`${sourceDir}/${original}`, `${out}/${original}`);
   const hasUpscale = fs.existsSync(`${sourceDir}/${upscaled}`);
   if (hasUpscale) fs.copyFileSync(`${sourceDir}/${upscaled}`, `${out}/${upscaled}`);
-  return { original, upscaled: hasUpscale ? upscaled : '' };
+  const mask=`page-${i}-stp.png`;
+  if(levelMode && fs.existsSync(`${sourceDir}/${mask}`))fs.copyFileSync(`${sourceDir}/${mask}`,`${out}/${mask}`);
+  return { original, upscaled: hasUpscale ? upscaled : '', semiTransparentMask: levelMode ? mask : '' };
 });
 const document = { formatVersion: 1, source: 'SLUS-00977 verified asset export',
   sourceBufferSha256: crypto.createHash('sha256').update(binary).digest('hex'),

@@ -18,3 +18,5 @@ _remove_ChgclrPAD   hle_nop
 @probe              8003C6B4 probe_player_steer
 # file lookups in XENA.UDA (logged with --verbose)
 @probe              800A4B1C probe_file_lookup
+# buffer swap, once per frame (steady 30 fps in play)
+@probe              800A5AC8 probe_frame_swap

@@ -49,6 +49,8 @@ namespace Xena.Assets
         public string name;
         public bool doubleSided;
         public bool vertexLighting;
+        public bool semiTransparent;
+        public int blendMode;
         public int texture;
         public float[] color;
     }
@@ -57,6 +59,7 @@ namespace Xena.Assets
     {
         public string original;
         public string upscaled;
+        public string semiTransparentMask;
     }
 
     [Serializable] public sealed class XenaClip

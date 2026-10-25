@@ -10,6 +10,10 @@ are reproducible.
 """
 import argparse
 import concurrent.futures as cf
+from contextlib import contextmanager
+from datetime import datetime, timezone
+import glob
+import json
 import math
 import os
 import random
@@ -18,6 +22,7 @@ import struct
 import subprocess
 import sys
 import time
+import uuid
 import wave
 
 import numpy as np
@@ -64,6 +69,10 @@ SCENARIOS = [
                                                                     "--opt", "perspective=0", "--opt", "texture_filter=0"], False),
     ("memcard_selftest", 7400, "", ["--selftest", "memcard", "7350"], False),
     ("modern_controls", 8760, START_LEVEL1 + f",{MENU + 1240}:RIGHT:120", ["--ramdump", "{out}", "8760"], False),
+    # mouse turning with modern controls: while running forward, a scripted flick of 1200
+    # mouse counts must rotate her heading by that amount and hold it
+    ("mouse_turn", 9340, START_LEVEL1 + f",{MENU + 1360}:RIGHT:150,{MENU + 1520}:UP:420,9150:MOUSE=1200",
+     ["--opt", "mouse_turn=1", "--ramdump", "{out}", ",".join(str(f) for f in range(9140, 9265, 4))], False),
     # save through the game's save screen (game mode 4) on level 4, then load it from the
     # main menu in a second run: the load screen must offer it and stage 5 must start
     ("save_load", 9600, "7400:DOWN,7500:CROSS,7800:CROSS,8100:CROSS,8400:CROSS,8700:CROSS",
@@ -72,8 +81,26 @@ SCENARIOS = [
     # arena: at most 1% of pixels may differ beyond colour precision and 1-pixel shifts
     ("hd_matches_native", 9300, START_ARENA_SHORT, NATIVE_1X + ["--opt", "renderer=software", "--opt", "force_hd=1"], False),
     ("gl_matches_native", 9300, START_ARENA_SHORT, NATIVE_1X + ["--opt", "renderer=opengl", "--opt", "force_hd=1"], False),
+    # in play every picture lasts two vblanks (steady 30 fps)
+    ("steady_30fps", 8760, START_LEVEL1 + f",{MENU + 1240}:UP:120",
+     ["--shots", "1", "{out}", "--shots-from", "8700"], False),
     ("gl_8x_219_ssaa", 9700, START_LEVEL1 + f",{MENU + 1100}:UP:300", ["--render-scale", "8", "--aspect", "21:9", "--opt", "ssaa=2"], False),
 ]
+
+
+def child_path(path, exe):
+    """Path for the process we start, not for ourselves.
+
+    The port is a Windows program; started from WSL it cannot open or create "/mnt/..." paths,
+    so the disc image and everything it writes (screenshots, audio, mem card) must be given as
+    Windows paths - wslpath converts them. The harness keeps the Linux path to read those files
+    back, since both views are the same directory."""
+    if os.name == "posix" and exe.lower().endswith(".exe"):
+        w = subprocess.run(["wslpath", "-w", os.path.abspath(path)], capture_output=True, text=True)
+        if w.returncode:
+            sys.exit("wslpath could not convert %s: %s" % (path, w.stderr.strip()))
+        return w.stdout.strip()
+    return path
 
 
 def frame_ok(path):
@@ -105,12 +132,32 @@ def check_modern_controls(out, log):
     return None
 
 
+def check_mouse_turn(out, log):
+    """Mouse turning in modern mode: a flick of 1200 counts at frame 9150 must rotate
+    her heading by that amount, and it must still be turned in the last dump (the
+    camera-follow drift eating the aim off is the failure this caught at first)."""
+    def heading_at(fr):
+        ram = open(os.path.join(out, "ram_%06d.bin" % fr), "rb").read()
+        obj = int(log.split("player object ")[-1].split()[0], 16) & 0x1FFFFF
+        tr = struct.unpack_from("<I", ram, (struct.unpack_from("<I", ram, obj + 0xA8)[0] & 0x1FFFFF) + 0x18)[0] & 0x1FFFFF
+        return (struct.unpack_from("<H", ram, tr + 0xE)[0] + 2048) & 4095
+
+    before, after = heading_at(9140), heading_at(9260)
+    turned = (after - before + 2048) % 4096 - 2048
+    if abs(turned - 1200) > 120:
+        return f"heading {before} -> {after}: turned {turned}, the flick requested 1200"
+    return None
+
+
 def prepare_save_load(args, out):
     """First run of save_load: start level 4 and save it."""
     shutil.rmtree(os.path.join(out, "card"), ignore_errors=True)
-    subprocess.run([args.exe, "--headless", "--frames", "9300", "--memcard", os.path.join(out, "card"),
+    card = os.path.join(out, "card")
+    subprocess.run([args.exe, "--headless", "--frames", "9300",
+                    "--memcard", child_path(card, args.exe),
                     "--poke", f"{MENU + 20}:800EE200:4", "--poke", "9000:800F2648:4",
-                    "--script", START_LEVEL1, args.disc], capture_output=True, timeout=600)
+                    "--script", START_LEVEL1, child_path(args.disc, args.exe)],
+                   capture_output=True, timeout=600)
     if not os.path.exists(os.path.join(out, "card", "bu00", "BASLUS-00977")):
         return "the game did not write a save"
     return None
@@ -128,8 +175,10 @@ def prepare_hd_matches_native(args, out):
     """Reference picture from the native rasterizer."""
     ref = os.path.join(out, "native")
     os.makedirs(ref, exist_ok=True)
-    subprocess.run([args.exe, "--headless", "--frames", "9300", "--shots", "9300", ref, "--opt", "renderer=software"]
-                   + NATIVE_1X + ["--script", START_ARENA_SHORT, args.disc], capture_output=True, timeout=600)
+    subprocess.run([args.exe, "--headless", "--frames", "9300", "--shots", "9300",
+                    child_path(ref, args.exe), "--opt", "renderer=software"]
+                   + NATIVE_1X + ["--script", START_ARENA_SHORT, child_path(args.disc, args.exe)],
+                   capture_output=True, timeout=600)
     return None if os.path.exists(os.path.join(ref, "frame_009300.bmp")) else "no native picture"
 
 
@@ -152,7 +201,21 @@ def check_hd_matches_native(out, log):
     return f"{n} pixels differ ({n * 100 / a[..., 0].size:.1f}%)" if n * 100 > a[..., 0].size else None
 
 
-CHECKS = {"modern_controls": check_modern_controls, "save_load": check_save_load,
+def check_steady_30fps(out, log):
+    prev, start, lengths = None, None, []
+    for i, f in enumerate(sorted(glob.glob(os.path.join(out, "frame_0087*.bmp")))):
+        a = np.asarray(Image.open(f).convert("RGB"))
+        if prev is None or (a != prev).any():
+            if start is not None:
+                lengths.append(i - start)
+            start = i
+        prev = a
+    bad = [n for n in lengths if n != 2]
+    return f"picture lengths in vblanks: {lengths}" if not lengths or bad else None
+
+
+CHECKS = {"steady_30fps": check_steady_30fps, "modern_controls": check_modern_controls,
+          "mouse_turn": check_mouse_turn, "save_load": check_save_load,
           "hd_matches_native": check_hd_matches_native, "gl_matches_native": check_hd_matches_native}
 PREPARE = {"save_load": prepare_save_load, "hd_matches_native": prepare_hd_matches_native,
            "gl_matches_native": prepare_hd_matches_native}
@@ -162,16 +225,17 @@ def run(s, args):
     name, frames, script, extra, want_audio = s
     out = os.path.join(args.out, name)
     os.makedirs(out, exist_ok=True)
-    extra = [e.replace("{out}", out) for e in extra]
+    gout = child_path(out, args.exe)  # what the game opens/creates, see child_path()
+    extra = [e.replace("{out}", gout) for e in extra]
     if name in PREPARE:
         msg = PREPARE[name](args, out)
         if msg:
             return name, False, msg, 0.0
-    cmd = [args.exe, "--headless", "--frames", str(frames), "--shots", str(frames), out,
-           "--wav", os.path.join(out, "audio.wav")] + extra
+    cmd = [args.exe, "--headless", "--frames", str(frames),  # the exe itself: Linux path, interop runs it
+           "--shots", str(frames), gout, "--wav", os.path.join(gout, "audio.wav")] + extra
     if script:
         cmd += ["--script", script]
-    cmd.append(args.disc)
+    cmd.append(child_path(args.disc, args.exe))
     t0 = time.time()
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
@@ -206,25 +270,82 @@ def run(s, args):
     return name, not problems, "; ".join(problems) or "ok", time.time() - t0
 
 
+@contextmanager
+def smoke_run_lock(build_dir):
+    """A shared directory lock works across Windows and WSL on the same checkout."""
+    os.makedirs(build_dir, exist_ok=True)
+    lock_dir = os.path.join(build_dir, ".smoke-test.lock")
+    owner_file = os.path.join(lock_dir, "owner.json")
+    try:
+        os.mkdir(lock_dir)
+    except FileExistsError:
+        try:
+            with open(owner_file, encoding="utf-8") as f:
+                owner = json.load(f)
+        except (OSError, ValueError):
+            owner = {"status": "starting or interrupted"}
+        raise RuntimeError(f"another smoke run owns {lock_dir}: {owner}. "
+                           "Wait for it to finish; verify Windows/WSL processes before clearing an interrupted run's lock.")
+    run_id = uuid.uuid4().hex
+    try:
+        with open(owner_file, "w", encoding="utf-8") as f:
+            json.dump({"run_id": run_id, "pid": os.getpid(), "platform": sys.platform,
+                       "started_utc": datetime.now(timezone.utc).isoformat()}, f)
+        yield
+    finally:
+        try:
+            with open(owner_file, encoding="utf-8") as f:
+                still_ours = json.load(f).get("run_id") == run_id
+            if still_ours:
+                os.unlink(owner_file)
+                os.rmdir(lock_dir)
+        except (OSError, ValueError):
+            pass
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--exe", default="build/port/xena-console.exe")
     ap.add_argument("--disc", default="../Xena Warrior Princess.bin")
     ap.add_argument("--out", default="build/smoke")
-    ap.add_argument("--only")
-    ap.add_argument("--jobs", type=int, default=6)
+    ap.add_argument("--only", choices=[s[0] for s in SCENARIOS])
+    ap.add_argument("--jobs", type=int, choices=(1, 2), default=2,
+                    help="parallel scenarios (default: 2; project limit: 2)")
     args = ap.parse_args()
     args.exe = os.path.abspath(args.exe)
     args.disc = os.path.abspath(args.disc)
     todo = [s for s in SCENARIOS if not args.only or s[0] == args.only]
-    failed = 0
-    with cf.ThreadPoolExecutor(args.jobs) as ex:
-        for name, ok, msg, dt in ex.map(lambda s: run(s, args), todo):
-            print(f"{'PASS' if ok else 'FAIL'}  {name:16s} {dt:6.1f}s  {msg}", flush=True)
-            failed += not ok
-    print(f"{len(todo) - failed}/{len(todo)} passed")
-    sys.exit(1 if failed else 0)
+    build_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "build")
+    try:
+        with smoke_run_lock(build_dir):
+            log_dir = os.path.join(build_dir, "smoke-runs")
+            os.makedirs(log_dir, exist_ok=True)
+            stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+            log_path = os.path.join(log_dir, f"{stamp}-{os.getpid()}.log")
+            print(f"Run log: {log_path}", flush=True)
+            with open(log_path, "x", encoding="utf-8") as run_log:
+                def report(line):
+                    print(line, flush=True)
+                    print(line, file=run_log, flush=True)
+
+                report(f"Started UTC: {datetime.now(timezone.utc).isoformat()}; "
+                       f"platform: {sys.platform}; jobs: {args.jobs}; only: {args.only or 'all'}")
+                report(f"Executable: {args.exe}; modified_ns: {os.stat(args.exe).st_mtime_ns}")
+                failed = 0
+                try:
+                    with cf.ThreadPoolExecutor(args.jobs) as ex:
+                        for name, ok, msg, dt in ex.map(lambda s: run(s, args), todo):
+                            report(f"{'PASS' if ok else 'FAIL'}  {name:16s} {dt:6.1f}s  {msg}")
+                            failed += not ok
+                except BaseException as exc:
+                    report(f"INCOMPLETE: {type(exc).__name__}: {exc}")
+                    raise
+                report(f"{len(todo) - failed}/{len(todo)} passed")
+                return 1 if failed else 0
+    except RuntimeError as exc:
+        print(f"smoke_test: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

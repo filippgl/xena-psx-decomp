@@ -10,13 +10,13 @@ const resource='build/unity-movement/XenaMovementPrototype_Data/resources.assets
 const codeHash=hash(code),buildTime=fs.statSync(buildFile).mtimeMs;
 assert(fs.statSync(code).mtimeMs<=buildTime,'Game code newer than build report');
 assert(fs.statSync(resource).mtimeMs<=buildTime,'Resources newer than build report');
-const suites=['movement','combat','settings','chakram','special-moves','advanced-moves'].map(suite=>{
+const suites=['movement','combat','settings','chakram','special-moves','advanced-moves','presentation'].map(suite=>{
   const file=`${out}/${suite}-player-verification.json`,report=JSON.parse(fs.readFileSync(file));
   assert.equal(report.result,'PASS',suite);assert.equal(report.testedBuild.sha256,codeHash,`${suite} code hash`);
   assert(fs.statSync(file).mtimeMs>=buildTime,`${suite} report predates latest asset build`);
   return{suite,checks:report.checks.length};
 });
-const logs=['movement-player','combat-player','chakram-player','special-moves-player','advanced-moves-player','settings-write-player','settings-read-player','settings-malformed-player'];
+const logs=['movement-player','combat-player','chakram-player','special-moves-player','advanced-moves-player','presentation-player','settings-write-player','settings-read-player','settings-malformed-player'];
 for(const name of logs){
   const file=`${out}/${name}.log`,log=fs.readFileSync(file,'utf8');
   assert(fs.statSync(file).mtimeMs>=buildTime,`${name} log predates build`);

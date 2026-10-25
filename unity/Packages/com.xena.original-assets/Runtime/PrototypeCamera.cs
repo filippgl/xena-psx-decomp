@@ -70,7 +70,7 @@ namespace Xena.Assets
                 return;
             }
             view.fieldOfView = playerFov; view.nearClipPlane = playerNearClip;
-            Vector3 desiredFocus = target.position + Vector3.up * 1.1f;
+            Vector3 desiredFocus = (motor != null ? motor.PresentationPosition : target.position) + Vector3.up * 1.1f;
             if (!initialized || Vector3.Distance(smoothFocus, desiredFocus) > 8)
             { smoothFocus = desiredFocus; focusVelocity = Vector3.zero; initialized = true; }
             else smoothFocus = Vector3.SmoothDamp(smoothFocus, desiredFocus, ref focusVelocity, 0.08f);
@@ -78,7 +78,16 @@ namespace Xena.Assets
             Vector3 back = Quaternion.Euler(pitch, yaw, 0) * Vector3.back;
             float radius = DesiredDistance;
             if (Physics.SphereCast(focus, 0.18f, back, out RaycastHit hit, radius, ~(1 << 2), QueryTriggerInteraction.Ignore)) radius = Mathf.Max(0.35f, hit.distance - 0.12f);
+            // Stay inside the level: the original height query must find ground
+            // under the lens and the lens must stay above it, else move closer.
+            if (motor != null)
+                while (radius > 0.35f && OutsideLevel(focus + back * radius)) radius = Mathf.Max(0.35f, radius - 0.1f);
             transform.position = focus + back * radius; transform.LookAt(focus); DistanceToTarget = radius;
+        }
+        private bool OutsideLevel(Vector3 lens)
+        {
+            float ground = motor.GroundHeight(lens);
+            return float.IsNegativeInfinity(ground) || lens.y < ground + 0.25f;
         }
         private void OnGUI()
         {

@@ -159,6 +159,8 @@ namespace Xena.Assets
             combat.Target.Retaliates = true; yield return Ticks(125); combat.Target.Retaliates = false;
             Require(combat.Health == 100 && combat.BlockedHits == 2, "Automatic practice attack did not respect held guard"); report.checks.Add("automatic practice attack uses fixed simulation and guard");
             yield return new WaitForEndOfFrame(); Capture("combat-block.png");
+            // Let fixed-step catch-up after the slow capture finish before timing the next press.
+            yield return null;
             PlaceTarget(1.05f, true); combat.Target.Pulse(); Require(combat.Health == 90, "Guard incorrectly blocked rear hit"); report.checks.Add("rear practice hit bypasses guard");
             InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 3 }); yield return Ticks(3);
             Require(combat.Slot == 0x46 && visual.CurrentSlot == 0x46, "Guard-sword did not select native46");

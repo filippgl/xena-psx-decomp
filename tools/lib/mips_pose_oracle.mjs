@@ -83,6 +83,11 @@ export class PoseOracle {
           if (denominator === 0) { lo = numerator < 0 ? 1 : -1; hi = numerator; }
           else { lo = Math.trunc(numerator / denominator) | 0; hi = numerator % denominator; }
         }
+        else if (fn === 0x1b) {
+          const numerator = r[rs] >>> 0, denominator = r[rt] >>> 0;
+          lo = denominator === 0 ? 0xffffffff : Math.floor(numerator / denominator);
+          hi = denominator === 0 ? numerator : numerator % denominator;
+        }
         else if (fn === 0x20 || fn === 0x21) r[rd] = r[rs] + r[rt];
         else if (fn === 0x22 || fn === 0x23) r[rd] = r[rs] - r[rt];
         else if (fn === 0x24) r[rd] = r[rs] & r[rt];

@@ -152,6 +152,7 @@ void probe_player_update(void);
 void probe_player_steer(void);
 void probe_player_start(void);
 void probe_file_lookup(void);
+void probe_frame_swap(void);
 
 /* "Interrupt" delivery point, emitted on loop back-edges */
 /* Virtual time: every loop iteration (back-edge) costs CYCLES_PER_LOOP cycles of the

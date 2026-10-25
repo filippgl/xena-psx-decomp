@@ -1,5 +1,9 @@
 {
   "name": "Xena.Assets",
   "rootNamespace": "Xena.Assets",
-  "references": ["Unity.InputSystem"]
+  "references": [
+    "Unity.InputSystem",
+    "Unity.RenderPipelines.Universal.Runtime",
+    "Unity.RenderPipelines.Core.Runtime"
+  ]
 }

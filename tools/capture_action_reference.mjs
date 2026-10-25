@@ -14,6 +14,7 @@ const scenarios={
   'bicycle-stagger':{end:9630,options:['modern_controls=0'],intervals:[[9000,9200],[9360,9600]],script:'9000:UP+TRIANGLE:12,9004:UP+TRIANGLE+SQUARE:8,9360:UP+SQUARE:12,9364:UP+SQUARE+TRIANGLE:8,9390:SQUARE:8,9410:SQUARE:8,9430:SQUARE:8'},
   'bicycle-target':{end:9260,options:['modern_controls=0'],pokes:['8998:0x801e09bc:0xffffe26d:4','8998:0x801e09c0:0xfffff8d3:4','8998:0x801e09c4:0xffffbb1a:4'],intervals:[[9000,9250]],script:'9000:UP+SQUARE+TRIANGLE:8,9040:SQUARE:8,9060:SQUARE:8,9080:SQUARE:8'},
   'bicycle-target-stagger':{end:9260,options:['modern_controls=0'],pokes:['8998:0x801e09bc:0xffffe26d:4','8998:0x801e09c0:0xfffff8d3:4','8998:0x801e09c4:0xffffbb1a:4'],intervals:[[9000,9250]],script:'9000:SQUARE:12,9004:TRIANGLE+SQUARE:8,9040:SQUARE:8,9060:SQUARE:8,9080:SQUARE:8'},
+  'bicycle-target-delayed':{end:9260,options:['modern_controls=0'],pokes:['8998:0x801e09bc:0xffffe26d:4','8998:0x801e09c0:0xfffff8d3:4','8998:0x801e09c4:0xffffbb1a:4'],intervals:[[9000,9250]],script:'9000:SQUARE:28,9020:TRIANGLE+SQUARE:8,9040:SQUARE:8,9060:SQUARE:8,9080:SQUARE:8'},
   chakram:{end:9380,intervals:[[9000,9340]],script:'9000:R1:260,9020:R1+CROSS:8,9070:R1+RIGHT:40'}
 };
 const name=process.argv[2];if(!scenarios[name])throw Error('Choose '+Object.keys(scenarios).join(', '));

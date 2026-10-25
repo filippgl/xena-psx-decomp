@@ -5,6 +5,118 @@ One issue per task. Nothing here is a claim without the command/measurement that
 
 ## Current task — Unity combat and original collision audit (2026-10-24)
 
+- CLAUDE SESSION 2026-10-24 22:20 (continued Codex level-presentation work).
+  Build DLL build/unity-movement/.../Xena.Assets.dll 2026-10-24 22:19:51; all7
+  suites + check_prototype_reports PASS sequentially (logs build/unity-import/claude-v3-*.txt).
+  1) Codex @sunbm additive/HD-page staging verified (presentation PASS, screenshots).
+  2) Test-timing fixes, no expectation changed: sprint capture now once (unguarded
+     repeated capture skipped sim ticks -> frame11 missing, reproducible 2/2);
+     combat yields one frame after combat-block capture (fixed catch-up consumed
+     Ticks(3) before Input System processed the press, 3/3 fail -> 2/2 PASS).
+  3) GHOSTING ROOT CAUSE: root moved only in 60Hz FixedUpdate, camera SmoothDamp
+     per render frame. Strafe D+Shift @120FPS: 45/90 frames drawn model stalled,
+     screen second-difference 18.0px. PrototypeMotor render-only interpolation of
+     model root pos/rot between last two ticks (restored before each tick; teleports
+     snap) + camera focuses PresentationPosition: 0/90 stalled, 2.75px. New check.
+     Cartwheel/flip share this root path but were not separately measured.
+  4) OBJECT COLLISION: CLS(26 groups)=tree trunk prisms/3dtrees/doors; Unity
+     collider correct (capsule slides around, min axis .46m; new check). @rck_cx,
+     @plr_cx1/2 have NO CLS: height query returns NoHeight in their footprint (holes;
+     subagent MIPS read of mover 8006E78C: probes +-45deg 150u ahead + end point,
+     no surface or step-up>300u blocks). Implemented OriginalTerrainLimit (grounded
+     only; slide uses probe dir instead of unverified surface normal). Rock test:
+     50/90 ticks inside hole -> 0. plr_cx not separately tested.
+  USER REPORT 2026-10-24: chakram flies through stone pillars (@plr_cx1/2) and
+  probably other solids. Likely cause: those objects have no Unity collider (terrain
+  holes only); chakram uses Physics sweeps. FIXED 22:57 build: PrototypeMotor adds
+  runtime MeshColliders from visible meshes 65/66/67 (rck_cx/plr_cx1/plr_cx2).
+  New chakram check vs plr_cx1: before entered pillar (true), after 1 contact, not
+  entered. Chakram suite now faces longest open line from spawn (rock was 5.7m
+  ahead and correctly stopped the steering throw; no expectation changed).
+  All7 suites+aggregate PASS (claude-v4-*.txt). Original projectile collision
+  still NOT traced (subagent runs were cut off twice); other props unaudited.
+  REMASTER (F10) 23:18 build, all7+aggregate PASS (claude-v7-*.txt):
+  PrototypeRemasterEnvironment: Xena/RemasterWater on @_stream, RemasterWaterfall
+  on @rivlet2 + terrain submesh page-9 (all 180 tris = waterfall column), mist
+  particles per tall fall cluster, RemasterRainbow additive on rndbow.
+  PrototypeRemasterGeometry: PN-triangle 3x3 subdivision of terrain+props (2432->
+  21888 tris), crease70deg, walkable faces/edges exact (max walk offset 5e-6m,
+  cliffs up to .33m), averaged baked corner colours, Xena/RemasterLit shape light.
+  Colliders/height query/CLS untouched; Original restores meshes+materials (tested).
+  Materials are Resources/Remaster/*.mat recreated each build. Next: texture-seam
+  crossfade, trees, screenshots in build/unity-import/presentation-*.png.
+  23:41 build all7+aggregate PASS (claude-v9-*.txt). Added: seam crossfade on steep
+  faces (712 edges), sky (Original solid RGB(0,72,95) measured from native frame
+  9200; Remaster CC0 Poly Haven kloofendal_48d_partly_cloudy_puresky 4k, source
+  build/remaster-sources/sky, copied to both Unity projects' Assets/Imported/Remaster/Sky),
+  PrototypeRemasterFalls: lip chains -> Chaikin -> ballistic curtains to pool level,
+  hidden boxy falling faces drawn as wet rock, plunge foam strips (Xena/RemasterFoam),
+  mist+spray. Screens: presentation-bigfall-{original,remaster}.png.
+  USER VERDICT: better than original but still mediocre. Honest gaps: no post (bloom/
+  tonemap/AO), no fog/atmosphere, flat unshadowed lighting, boxy cliffs around falls,
+  milky uniform falls, pale pools. Enemy research agent runs in a separate worktree.
+  2026-10-25 00:01 build all7+aggregate PASS (claude-v11-*.txt): falls now particle
+  streams (velocity-stretched, lip-mesh emitters, prewarm + AlwaysSimulate so they
+  are present at distance), curtains/foam on @rivlet2 too (free-standing faces clipped),
+  URP post (renderer had null PostProcessData; Neutral tonemap keeps palette, bloom,
+  grading, SMAA), XenaSkyFog.hlsl: aerial perspective into the HDRI panorama 14..52m
+  on all Remaster level shaders (trees/bushes now RemasterLit), follow camera kept
+  inside level (ground under lens + above it). Screens presentation-gameplay-*.png.
+  ENEMIES (subagent worktree .claude/worktrees/agent-ad9d1aed306272328, uncommitted):
+  tools/export_enemy_unity.mjs (Xena parity 0 diffs; BANDIT/1/2/4 37 nodes,18 meshes,
+  61 shared clips), docs/xena-enemy-audit.md (AI func_8001B460, modes 0..7, ranges,
+  crowd max 2 attackers). Damage/hit/death code still not located. Next: import bandits.
+  00:27 build all7+aggregate PASS (claude-v14-*.txt): fog 30..85m (user: 14m too
+  close), 4-heading gameplay shots, sun shadows (URP 4 cascades/70m/4096/soft; importer
+  disables renderer shadows -> enabled in Remaster for level/Xena/bandits; ShadowCaster
+  passes in RemasterLit+OriginalUnlit), CC0 ambientCG Rock051 triplanar relief on steep
+  grey surfaces of subdivided terrain/props (build/remaster-sources/rock051 -> Resources/
+  Remaster/Rock*.jpg). Bandits: tools/export_enemy_unity.mjs + docs/xena-enemy-audit.md
+  merged from worktree; models in Resources/Bandits, spawns Resources/Level01Spawns.json;
+  PrototypeBandits places 11 generator bandits idle 07 (spawn in Awake; Start+SetMode
+  broke saved Original mode -> fixed). NEXT: bandit AI per func_8001B460, then user asks
+  in-game level scripts (events/triggers).
+  00:32 build all8 (new tools/check_bandit_player.mjs) + aggregate PASS (claude-v15-*).
+  PrototypeBanditBrain: func_8001B460 subset at 30 steps/s (modes 0/1/2/3/5, ranges
+  9500/700/1700/2000/550, turn 64, weighted attacks + cooldown, <=2 attackers, root
+  motion from <Model>Motion.json written by exporter). Smoke: 363 steps, 16 attacks,
+  max 2 attackers, closest 413u. AI disabled in player-mechanics smokes (isolation).
+  NOT done: damage, hit/death, block, patrol waypoints, avoid, flee, generator trigger.
+  NEXT (user): in-game level scripts; research agent launched.
+  LEVEL SCRIPTS (00:5x): no interpreter in level01; tools/export_level_scripts.mjs +
+  docs/xena-level-scripts.md (merged from worktree; 42/42 RAM checks) -> Resources/
+  Level01Scripts.json. PrototypeBandits now = original generators (16-frame slots,
+  radius/segment/|dy| triggers, max 3 alive, 350 occupancy; 12 bandits from 11 gens);
+  PrototypeLevelScripts: signs (0x46+p, rearm 400), scroll (level*2+p0), health2/
+  up_sword first-pickup messages, Siras 1450 level end, modal Russian message box.
+  check_bandit_player covers generator, AI and scripts. Open: sign/pickup visuals
+  (SIGN_PT has no SMA; pickups STM-only sprites), Siras cutscene path, m_vill music,
+  pickup anim 0x37, larks/frogs/butterflies, damage/hit/death, camera line test.
+  Props: exporter --shared/--static (SIGN_PT has no SMA -> SMI rest pose; bandit output
+  byte-identical, Xena parity 0 diffs); SIGN_PT x3 + SIRAS placed (Resources/Props).
+  Siras ending: 563-frame camera path from table 0x800C804C (yaw=+0x2A, pitch=+0x28
+  confirmed by key 0 looking at Siras), Xena placed (130,-330) yaw 2787, then level end.
+  Damage/hit/death research agent running (worktree). Pickup sprite rendering unknown.
+  DAMAGE (06:xx): docs/xena-damage-audit.md + tools decode_action_scripts/verify_damage_
+  windows/inspect_sma_damage merged. PrototypeOriginalDamage: Xena 500 hp, per-clip windows
+  (+0xFE live start+1..end), |d|+sword level, potions <350, block d>40?d-40:1, death 0x91.
+  Bandits: reactions 67/6D/6A, death 8D/8B/8A, 8-step invuln, knockback, retaliation,
+  removal after clip+300 (Live = not removed). Contact geometry APPROXIMATED (reach/cone).
+  Smoke: sword 31 (30+lvl1), death 0x8D + removal, intake 15, blocked 1. Also: hazed sky
+  (Xena/RemasterSky, haze below ~37deg) + haze fog 22..70m; bandit render interpolation
+  (run stalled 14/28 -> 0/28); fall particles minParticleSize; water reflects HDRI.
+  Open: contact points, Xena hit reactions, power-up meter, chakram damage, game over.
+  06:4x: pickups = screen-facing sprites (tools/export_pickup_sprites.mjs, sizes D_800C1D1C,
+  bottom-centre pivot), m_vill music (tools/export_music.mjs, approx render; seq0 explore,
+  seq1/2 combat) via PrototypeMusic (muted in smokes; package dep com.unity.modules.audio),
+  docs/xena-ambient-audit.md merged. Potions now used at once when health+150<500 (user
+  report confirmed by jtbl_80017594). HUD research agent running; user wants HD HUD via Codex.
+  Remaster keeps bandit corpses (removed from live count, last death pose); Original hides them.
+  Unverified/next: original Xena radius obj+0x28=150u (.375m) vs capsule .28m;
+  normal-Y<3200 slope block not implemented (query has no normal); narrowphase
+  800A129C slide math. Next: cartwheel/backflip continuity measurement; then F10
+  Remaster environment (geometry/water/waterfall/rainbow/trees) design.
+
 - COMPLETE user-requested close chakram camera + collision sparks/rebound.
   Baseline18chakramchecksPASS on89bc DLL. New camera measured actual original
   mesh width0.319383viewport anddistance0.828734m, looksdown/forward, no lensclip;

@@ -9,7 +9,7 @@ stages.push(['tools/audit_assets.mjs', '--disc', '../Xena Warrior Princess.bin']
   ['tools/inspect_level_flags.mjs'], ['tools/inspect_level_water.mjs'],
   ['tools/inspect_level_spawns.mjs'],
   ['tools/inspect_level_assets.mjs', '--level', '1'], ['tools/verify_level_assets.mjs', '--level', '1'],
-  ['tools/verify_level_assembly.mjs'], ['tools/export_xena_unity.mjs', '--level-01'],
+  ['tools/verify_level_assembly.mjs'], ['tools/prepare_level_upscales.mjs'], ['tools/export_xena_unity.mjs', '--level-01'],
   ['tools/prepare_unity_project.mjs'], ['tools/check_unity_assets.mjs']);
 if (process.argv.includes('--api')) stages.push(['tools/compile_unity_api.mjs']);
 if (process.argv.includes('--browser')) stages.push(['tools/check_xena_preview.mjs', '--level']);

@@ -44,3 +44,6 @@ unity/XenaUnity/UserSettings/
 unity/XenaUnity/Packages/packages-lock.json
 unity/XenaUnity/ProjectSettings/*.asset
 tools/UnityAssetCheck/obj/
+
+# Claude Code agent worktrees
+.claude/

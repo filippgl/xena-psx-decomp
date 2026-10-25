@@ -284,8 +284,8 @@ static void primlog(const char* kind, int n, const int* xs, const int* ys, u32 t
         if (ys[i] < y0) y0 = ys[i]; if (ys[i] > y1) y1 = ys[i];
     }
     if (x1 < r[1] || x0 > r[3] || y1 < r[2] || y0 > r[4]) return;
-    log_msg("prim %s op=%02X tp=%04X clut=%04X semi=%d bbox=%d,%d..%d,%d mask=%d%d", kind, fifo[0] >> 24, tp, clut,
-            semi_mode, x0, y0, x1, y1, mask_set, mask_check);
+    log_msg("prim %s op=%02X tp=%04X clut=%04X semi=%d bbox=%d,%d..%d,%d mask=%d%d at %06X", kind, fifo[0] >> 24, tp, clut,
+            semi_mode, x0, y0, x1, y1, mask_set, mask_check, fifo_addr[0]);
 }
 
 static void exec_polygon(void) {
