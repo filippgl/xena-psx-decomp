@@ -100,8 +100,9 @@ namespace Xena.Assets
             bool wasGrounded = Grounded;
             orbit.SynchronizeGuardCamera();
             chakram.Tick(dt, Grounded, orbit.Yaw, orbit.Pitch);
-            if (!chakram.Active) combat.Tick(dt, Grounded, orbit.Yaw);
-            Vector2 controls = input.Move;
+            var hurt = GetComponent<PrototypeOriginalDamage>(); bool reacting = hurt != null && hurt.Reacting;
+            if (!chakram.Active && !reacting) combat.Tick(dt, Grounded, orbit.Yaw);
+            Vector2 controls = reacting ? Vector2.zero : input.Move;
             Vector3 motion = Quaternion.Euler(0, orbit.Yaw, 0) * new Vector3(controls.x, 0, controls.y);
             if (combat.Busy || chakram.Active) motion = Vector3.zero;
             bool jump = input.ConsumeJump() && Grounded && !combat.Busy;
@@ -128,7 +129,8 @@ namespace Xena.Assets
             else Grounded = false;
             if (wasGrounded && !Grounded && vertical <= 0) { ConfigureJump(false); backwardsJump = false; }
             if (Grounded && !wasGrounded) { landingTime = 0; backwardsJump = false; }
-            if (!chakram.PresentPose() && !combat.PresentPose()) SampleLocomotion(motion.sqrMagnitude > 0.01f, dt);
+            if (reacting) hurt.PresentReaction(controller);
+            else if (!chakram.PresentPose() && !combat.PresentPose()) SampleLocomotion(motion.sqrMagnitude > 0.01f, dt);
             else { groundSlot = 0; groundTime = 0; landingTime = -1; }
             // These are externally driven sampled clips, not animation root motion.
             if (transform.position.y < spawn.y - 30) ResetToSpawn();

@@ -43,6 +43,52 @@ namespace Xena.Assets
         public int HitsDealt { get; private set; }
         public int LastDamageDealt { get; private set; }
         public bool Dead { get; private set; }
+        // Xena hit reactions (docs/xena-hit-reactions.md, func_800367BC 0x80037E68..0x800383F8):
+        // only when final damage >= 2; sector s = (atan2(Xena - attacker) - rotY + 0x200) & 0xFFF:
+        // [0,0x400) front -> 0x66 (2/3) / 0x67 (1/3), or knockdown 0x7C when damage >= 30;
+        // [0x400,0x800) side A -> 0x74; [0x800,0xC00) rear -> 0x72; else side B -> 0x75 (mid
+        // height assumed: bandit contact heights are not ported; side mirroring UNKNOWN).
+        // Frame 1 is held 4 steps pushing min(d,30) units/step away from the attacker (not
+        // for knockdowns); input is locked; invulnerable only while the reaction clip plays;
+        // knockdowns get up with 0x88. No reaction in attack states 0x48, 0x4A..0x4D, 0x5C,
+        // airborne or pickup states (damage still applies).
+        public bool Reacting { get; private set; }
+        public int ReactionSlot { get; private set; } = -1;
+        public int ReactionFrame { get; private set; }
+        public int Reactions { get; private set; }
+        private int freeze, pushUnits; private Vector3 pushDirection; private bool getUp;
+        private static readonly Dictionary<int, int> ReactionFrames = new Dictionary<int, int> { { 0x66, 13 }, { 0x67, 22 }, { 0x70, 41 }, { 0x72, 14 }, { 0x74, 14 }, { 0x75, 14 }, { 0x7C, 26 }, { 0x88, 37 } };
+        private readonly System.Random random = new System.Random(5);
+        private void StartReaction(int damage, Vector3 attacker)
+        {
+            if (combat != null && (combat.Slot == 0x48 || (combat.Slot >= 0x4A && combat.Slot <= 0x4D) || combat.Slot == 0x5C)) return;
+            if (!motor.Grounded) return;
+            Vector3 away = transform.position - attacker; away.y = 0;
+            int angle = Mathf.RoundToInt(Mathf.Atan2(away.x, away.z) / (2 * Mathf.PI) * 4096) & 4095;
+            int yaw = Mathf.RoundToInt(transform.eulerAngles.y / 360f * 4096) & 4095;
+            int sector = (angle - yaw + 0x200) & 0xFFF;
+            int slot = sector < 0x400 ? (damage >= 30 ? 0x7C : (random.Next(3) < 2 ? 0x66 : 0x67)) : sector < 0x800 ? 0x74 : sector < 0xC00 ? 0x72 : 0x75;
+            if (combat != null) combat.Interrupt();
+            Reacting = true; ReactionSlot = slot; ReactionFrame = 1; getUp = slot == 0x7C; Reactions++;
+            freeze = slot == 0x7C ? 0 : 4; pushUnits = Mathf.Min(damage, 30); pushDirection = away.sqrMagnitude > 0.0001f ? away.normalized : -transform.forward;
+        }
+        // Called by the motor each 60 Hz tick while reacting; steps the 30/s reaction clock.
+        private float reactionClock;
+        public void PresentReaction(CharacterController controller)
+        {
+            reactionClock += Time.fixedDeltaTime;
+            while (reactionClock >= 1f / 30 && Reacting)
+            {
+                reactionClock -= 1f / 30;
+                if (freeze > 0) { freeze--; controller.Move(pushDirection * pushUnits / 400f); }
+                else if (++ReactionFrame >= ReactionFrames[ReactionSlot])
+                {
+                    if (getUp && ReactionSlot != 0x88) { ReactionSlot = 0x88; ReactionFrame = 0; }
+                    else { Reacting = false; ReactionSlot = -1; }
+                }
+            }
+            if (Reacting) visual.SampleSlotFrame(ReactionSlot, ReactionFrame);
+        }
         private PrototypeMotor motor; private PrototypeCombat combat; private PrototypeLevelScripts scripts; private PrototypeBandits bandits;
         private XenaAssetPreview visual;
         private float clock; private int deathFrame;
@@ -61,7 +107,7 @@ namespace Xena.Assets
             if (Health + MaxHealth * 30 / 100 < MaxHealth && scripts != null && scripts.UsePotion()) Health = Mathf.Min(MaxHealth, Health + MaxHealth * 30 / 100);
         }
         public void SetHealthForTest(int value) { Health = Mathf.Clamp(value, 0, MaxHealth); }
-        public void ResetState() { Health = MaxHealth; Dead = false; deathFrame = 0; HitsTaken = 0; BlockedHits = 0; HitsDealt = 0; struck.Clear(); attackSlot = -1; if (motor != null) motor.enabled = true; }
+        public void ResetState() { Reacting = false; ReactionSlot = -1; Reactions = 0; Health = MaxHealth; Dead = false; deathFrame = 0; HitsTaken = 0; BlockedHits = 0; HitsDealt = 0; struck.Clear(); attackSlot = -1; if (motor != null) motor.enabled = true; }
 
         private void FixedUpdate()
         {
@@ -103,12 +149,15 @@ namespace Xena.Assets
         public bool TakeHit(int damage, Vector3 attacker)
         {
             if (Dead || (scripts != null && (scripts.Modal || scripts.CutsceneActive))) return false;
+            // Invulnerable while a reaction clip plays (not during the get-up 0x88).
+            if (Reacting && ReactionSlot != 0x88) return false;
             Vector3 toward = attacker - transform.position; toward.y = 0;
             bool facing = toward.sqrMagnitude < 0.0001f || Vector3.Angle(transform.forward, toward) <= 90;
             if (combat != null && combat.IsBlocking && facing) { damage = damage > 40 ? damage - 40 : 1; BlockedHits++; }
             Health = Mathf.Max(0, Health - damage); HitsTaken++; LastIntake = damage; LastIntakeBlocked = combat != null && combat.IsBlocking && facing;
             if (Health > 0 && Health < PotionThreshold && scripts != null && scripts.UsePotion()) Health = Mathf.Min(MaxHealth, Health + MaxHealth * 30 / 100);
-            if (Health == 0) { Dead = true; deathFrame = 0; motor.enabled = false; }
+            if (Health == 0) { Dead = true; deathFrame = 0; motor.enabled = false; Reacting = false; }
+            else if (damage >= 2) StartReaction(damage, attacker);
             return true;
         }
 

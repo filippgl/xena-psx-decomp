@@ -118,6 +118,11 @@ One issue per task. Nothing here is a claim without the command/measurement that
   Remaster anchors to screen edges and loads Resources/HUD/<name>-4x.png when present;
   originals to upscale in build/hud-for-upscale/. Bandit smoke press held over real frames
   (fixed catch-up after the 4x ending lost presses 1/3 -> 4/4 pass). Xena hit-reaction RE running.
+  Xena hit reactions (docs/xena-hit-reactions.md merged): sector table of func_800367BC
+  (0x66/0x67/0x72/0x74/0x75, knockdown 0x7C+getup 0x88 at d>=30), 4-step freeze push
+  min(d,30), input lock, invulnerable during reaction; none for 1-damage blocked hits.
+  Frontal bandit hit -> 0x72 (same as native capture). Bandit continuity metric now counts
+  frames where the AI root moved but the body froze; strict 0 (78 frames).
   Unverified/next: original Xena radius obj+0x28=150u (.375m) vs capsule .28m;
   normal-Y<3200 slope block not implemented (query has no normal); narrowphase
   800A129C slide math. Next: cartwheel/backflip continuity measurement; then F10

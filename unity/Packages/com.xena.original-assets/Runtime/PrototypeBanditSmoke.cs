@@ -16,7 +16,7 @@ namespace Xena.Assets
         [Serializable] private sealed class Report
         {
             public string result = "FAIL", error; public List<string> checks = new List<string>();
-            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError;
+            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError;
         }
         private readonly Report report = new Report();
         private string output; private bool finished;
@@ -72,7 +72,7 @@ namespace Xena.Assets
             bool noticed = false, inRange = false, attacked = false;
             // Drawn-body continuity while the first bandit runs in (120 FPS render).
             Transform drawn = chosen[0].GetComponentInChildren<XenaAssetPreview>().transform; Vector3 lastDrawn = drawn.position;
-            int movingFrames = 0, stalledFrames = 0; float lastStep = 0;
+            int movingFrames = 0, stalledFrames = 0; Vector3 rootTwoAgo = chosen[0].transform.position, rootOneAgo = rootTwoAgo;
             for (int tick = 0; tick < 60 * 12; tick++)
             {
                 yield return new WaitForFixedUpdate();
@@ -94,14 +94,17 @@ namespace Xena.Assets
                 if (chosen[0].Slot == PrototypeBanditBrain.Run || chosen[0].Slot == PrototypeBanditBrain.Walk)
                 {
                     yield return new WaitForEndOfFrame();
+                    // Stalled = the drawn body froze although the AI root moved within the last
+                    // AI step (two 60 Hz ticks); a bandit standing blocked is not counted.
                     float moved = Vector3.Distance(drawn.position, lastDrawn);
-                    if (moved > 0.0005f) { movingFrames++; lastStep = moved; } else if (lastStep > 0) stalledFrames++;
+                    bool rootMoved = Vector3.Distance(chosen[0].transform.position, rootTwoAgo) > 0.0005f;
+                    if (moved > 0.0005f) movingFrames++; else if (rootMoved) stalledFrames++;
                 }
-                lastDrawn = drawn.position;
+                lastDrawn = drawn.position; rootTwoAgo = rootOneAgo; rootOneAgo = chosen[0].transform.position;
             }
             foreach (var brain in chosen) { report.attacks += brain.AttacksStarted; report.steps = Mathf.Max(report.steps, brain.Steps); }
             report.runRenderFrames = movingFrames + stalledFrames; report.runStalledFrames = stalledFrames;
-            Require(movingFrames > 20 && stalledFrames * 10 <= movingFrames + stalledFrames, "Bandit body steps with the 30Hz AI instead of gliding: " + stalledFrames + "/" + (movingFrames + stalledFrames));
+            Require(movingFrames > 20 && stalledFrames == 0, "Bandit body steps with the 30Hz AI instead of gliding: " + stalledFrames + "/" + (movingFrames + stalledFrames));
             report.checks.Add("running bandits are render-interpolated between AI steps (no stalled frames)");
             Require(noticed, "Bandits did not notice Xena inside 9500 units ahead"); report.checks.Add("bandits notice Xena within 9500 units, not from the rear");
             Require(inRange, "Bandits did not close to the 700-unit attack range"); report.checks.Add("bandits close to the 700-unit attack range using clip root motion");
@@ -165,6 +168,8 @@ namespace Xena.Assets
             report.firstIntake = damage.LastIntake;
             Require(report.firstIntake == 15 || report.firstIntake == 25 || report.firstIntake == 30, "Bandit hit did not use an original window damage: " + report.firstIntake);
             report.checks.Add("bandit attack damages Xena by its original window value");
+            Require(damage.Reactions >= 1, "Xena did not play an original hit reaction"); report.xenaReaction = damage.ReactionSlot;
+            report.checks.Add("Xena plays an original hit reaction (0x66/0x67/0x72/0x74/0x75/0x7C) on an unblocked hit");
             var hud = motor.GetComponent<PrototypeHud>(); for (int i = 0; i < 10; i++) yield return new WaitForFixedUpdate();
             Require(hud.Loaded && hud.TargetLength == PrototypeHud.HealthLength(damage.Health, 500) && hud.ShownLength == hud.TargetLength,
                 "HUD did not follow the original health mapping: " + hud.ShownLength + "/" + hud.TargetLength + " bars " + hud.VisibleEnemyBars);
@@ -172,14 +177,16 @@ namespace Xena.Assets
             yield return new WaitForEndOfFrame(); Capture("hud-remaster.png");
             PrototypeGraphics.Active.SetMode(XenaVisualMode.Original); for (int i = 0; i < 3; i++) yield return null; yield return new WaitForEndOfFrame(); Capture("hud-original.png");
             PrototypeGraphics.Active.SetMode(XenaVisualMode.Remaster);
-            int health = damage.Health, blocked = damage.BlockedHits;
+            for (int i = 0; i < 90 && damage.Reacting; i++) yield return new WaitForFixedUpdate();
+            int health = damage.Health, blocked = damage.BlockedHits, reactionsBefore = damage.Reactions;
             Vector3 at = attacker.transform.position - motor.transform.position; at.y = 0; motor.transform.rotation = Quaternion.LookRotation(at);
             InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 2 });
             for (int i = 0; i < 60 * 15 && damage.BlockedHits == blocked; i++) { yield return new WaitForFixedUpdate(); Vector3 t = attacker.transform.position - motor.transform.position; t.y = 0; if (t.sqrMagnitude > 0.01f) motor.transform.rotation = Quaternion.LookRotation(t); }
             InputSystem.QueueStateEvent(mouse, new MouseState());
             report.blockedIntake = damage.LastIntake;
             Require(damage.BlockedHits > blocked && damage.LastIntakeBlocked && report.blockedIntake == 1, "Blocked bandit hit did not deal original 1 damage: " + report.blockedIntake);
-            report.checks.Add("blocked bandit hits deal d>40 ? d-40 : 1 (=1 for bandits)");
+            Require(damage.Reactions == reactionsBefore, "A 1-damage blocked hit staggered Xena");
+            report.checks.Add("blocked bandit hits deal d>40 ? d-40 : 1 (=1) and do not stagger Xena");
             attacker.Active = false;
         }
         private IEnumerator Visit(PrototypeMotor motor, Vector3 at)

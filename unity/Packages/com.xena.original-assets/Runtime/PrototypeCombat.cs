@@ -77,6 +77,12 @@ namespace Xena.Assets
         }
         private void Begin(int value, int frame = 0) { slot = value; time = frame / 30f; struck.Clear(); }
         private void ClearChain() { firstAction = secondAction = 0; reservedSlot = -1; }
+        // Hit reaction interrupts the current action (no damage/target reset).
+        public void Interrupt()
+        {
+            slot = -1; time = 0; buffer.Clear(); struck.Clear(); input.ClearPending(); ClearChain();
+            heldEvade = 0; evadeVelocity = Vector3.zero; spinLap = spinBudget = 0; spinExtend = false;
+        }
         public void ResetState()
         {
             slot = -1; time = 0; clock = 0; buffer.Clear(); struck.Clear(); input.ClearPending();
