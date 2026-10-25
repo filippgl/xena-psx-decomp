@@ -85,8 +85,8 @@ namespace Xena.Assets
             yield return SkyViews(motor, orbit, camera, "presentation-sky-remaster.png");
             yield return WallCamera(motor, orbit, camera, level);
             var generatedProps = motor.GetComponent<PrototypeRemasterProps>();
-            Require(generatedProps.Replaced >= 1 && generatedProps.RemasterShown, "Remaster did not place the generated signpost: " + generatedProps.Replaced);
-            report.checks.Add("Remaster places " + generatedProps.Replaced + " image-to-3D signposts over the original Sign_pt props: " + generatedProps.Describe());
+            Require(generatedProps.Replaced >= 1 && generatedProps.RemasterShown, "Remaster did not place the generated props: " + generatedProps.Replaced);
+            report.checks.Add("Remaster places " + generatedProps.Replaced + " image-to-3D props: " + generatedProps.Describe());
             var vegetation = motor.GetComponent<PrototypeRemasterVegetation>();
             Require(vegetation.Replaced == 35 && vegetation.RemasterShown, "Remaster did not replace the 35 @pretty plants: " + vegetation.Replaced);
             report.checks.Add("Remaster replaces the 35 @pretty plant cards with CC0 Poly Haven plants");

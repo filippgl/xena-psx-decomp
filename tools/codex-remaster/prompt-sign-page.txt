@@ -1,0 +1,10 @@
+Use your built-in image_gen tool (imagegen skill, built-in mode, not the CLI), EDITING the attached image.
+The attached 1024x1024 image is the texture page of the signpost model from the PS1 game "Xena: Warrior Princess", enlarged 4x with hard
+pixels. It contains: a weathered blue-grey wooden plank with a carved left arrow "<" and two lines of carved Greek-style capital letters
+"ΞΑΣΨΙΘ" (top) and "ΘΑΣΝΩ" (bottom); a flat grey area used for the wooden post; magenta (#FF00FF) areas are unused/transparent.
+Repaint it as a modern high-resolution texture: real weathered grey-blue wood with grain, cracks and knots, the arrow and the letters
+deeply carved and slightly lighter, the grey post area as matching weathered grey wood grain.
+STRICT LAYOUT LOCK (UV-mapped): every element keeps its exact position, size and shape; the letters stay EXACTLY these glyphs in exactly
+the same place and size (Ξ Α Σ Ψ Ι Θ / Θ Α Σ Ν Ω), not mirrored, not changed; the arrow keeps its place and direction; magenta areas stay
+pure flat #FF00FF; same colours and brightness as the original; no new elements, no text added, no border. Output exactly 1024x1024.
+Save the final selected image into this workspace as out/sign-page.png (copy it from CODEX_HOME/generated_images). Do nothing else.
