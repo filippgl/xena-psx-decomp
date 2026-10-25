@@ -10,8 +10,8 @@ namespace Xena.Assets
     // lightning bolts, hair channels 0..2, the cursor highlight, then the prompt added with
     // 5-bit saturation (abr 1). Texel 0 is transparent. Menu tick = 30 Hz here (INFERRED:
     // the native port ran ~34.7 Hz, the hardware rate is UNKNOWN); frame flips, no interpolation.
-    // Remaster: Codex HD background (labels removed), Codex HD labels, Real-ESRGAN lightning and
-    // prompt, and a wind warp of Xena's hair driven by the same tick (presentation only).
+    // Remaster: Codex HD background (labels removed), labels/prompt in Tenor Sans (Google Fonts),
+    // Real-ESRGAN lightning and a wind warp of Xena's hair driven by the same tick.
     // Ported actions: New game (starts level 01). Load game, Training arena, Options and the
     // 900-tick attract demo are not ported (a note is shown / the idle timer only restarts).
     // Menu sounds 0x39/0 are not ported.
@@ -47,18 +47,10 @@ namespace Xena.Assets
         private Color32[] background, prompt; private int promptW, promptH;
         private Color32[][] hairTiles, boltTiles, highlights; private Vector2Int[] hairSize, boltSize, highlightSize;
         private Color32[] frame = new Color32[320 * 240]; private Texture2D screen;
-        private Texture2D hdBackground, hdPrompt, hairPatch; private Texture2D[] hdBolts = new Texture2D[4], hdLabels = new Texture2D[4], hdLabelsSel = new Texture2D[4];
+        private Texture2D hdBackground, hairPatch; private readonly Texture2D[] hdBolts = new Texture2D[4];
+        public static readonly string[] Labels = { "НОВАЯ ИГРА", "ЗАГРУЗКА ИГРЫ", "ТРЕНИРОВОЧНАЯ АРЕНА", "ОПЦИИ" };
         private Color32[] hdSource, hairMask, patchPixels; private RectInt patchRect;
         private float clock, noteUntil;
-        private readonly RectInt[] labelBounds = new RectInt[4];
-        // Alpha bounding box in top-down texture pixels.
-        private static RectInt AlphaBounds(Texture2D t)
-        {
-            var p = t.GetPixels32(); int x0 = t.width, x1 = -1, y0 = t.height, y1 = -1;
-            for (int y = 0; y < t.height; y++) for (int x = 0; x < t.width; x++)
-                if (p[y * t.width + x].a > 40) { x0 = Mathf.Min(x0, x); x1 = Mathf.Max(x1, x); y0 = Mathf.Min(y0, y); y1 = Mathf.Max(y1, y); }
-            return x1 < x0 ? new RectInt(0, 0, t.width, t.height) : new RectInt(x0, t.height - 1 - y1, x1 - x0 + 1, y1 - y0 + 1);
-        }
 
         private void Awake()
         {
@@ -95,16 +87,10 @@ namespace Xena.Assets
                     int x0 = mask.width, x1 = -1, y0 = mask.height, y1 = -1;
                     for (int y = 0; y < mask.height; y++) for (int x = 0; x < mask.width; x++)
                         if (hairMask[y * mask.width + x].r > 0) { x0 = Mathf.Min(x0, x); x1 = Mathf.Max(x1, x); y0 = Mathf.Min(y0, y); y1 = Mathf.Max(y1, y); }
-                    if (x1 > x0) { patchRect = new RectInt(x0 - 6, y0 - 6, x1 - x0 + 13, y1 - y0 + 13); hairPatch = new Texture2D(patchRect.width, patchRect.height, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp }; patchPixels = new Color32[patchRect.width * patchRect.height]; }
+                    if (x1 > x0) { patchRect = new RectInt(x0 - 10, y0 - 10, x1 - x0 + 21, y1 - y0 + 21); hairPatch = new Texture2D(patchRect.width, patchRect.height, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp }; patchPixels = new Color32[patchRect.width * patchRect.height]; }
                 }
-                hdPrompt = Resources.Load<Texture2D>("Menu/HD/prompt");
                 var hdBoltTiles = Resources.LoadAll<Texture2D>("Menu/HD/lightning"); Array.Sort(hdBoltTiles, (a, b) => string.CompareOrdinal(a.name, b.name));
                 for (int i = 0; i < 4 && i < hdBoltTiles.Length; i++) hdBolts[i] = hdBoltTiles[i];
-                for (int i = 0; i < 4; i++)
-                {
-                    hdLabels[i] = Resources.Load<Texture2D>("Menu/HD/label-" + ItemNames[i]); hdLabelsSel[i] = Resources.Load<Texture2D>("Menu/HD/label-" + ItemNames[i] + "-sel");
-                    labelBounds[i] = hdLabels[i] != null && hdLabels[i].isReadable ? AlphaBounds(hdLabels[i]) : new RectInt(0, 0, 1, 1);
-                }
             }
             return true;
         }
@@ -233,8 +219,9 @@ namespace Xena.Assets
             }
         }
 
-        // Remaster hair: wind displacement of the masked hair pixels, stronger toward the
-        // back/ends of the hair (away from the face), resampled from the still HD image.
+        // Remaster hair: wind displacement of the hair, stronger toward the back/ends (away
+        // from the face). A pixel takes the displaced sample only when that sample is hair, so
+        // strands sway over the sky while the sky, face and shoulder never move.
         private void WarpHair()
         {
             int w = hdBackground.width, pw = patchRect.width, ph = patchRect.height; float t = Ticks;
@@ -244,13 +231,13 @@ namespace Xena.Assets
                 for (int px = 0; px < pw; px++)
                 {
                     int x = patchRect.x + px; int i = y * w + x;
-                    float m = hairMask[i].r / 255f;
-                    if (m <= 0) { patchPixels[py * pw + px] = hdSource[i]; continue; }
                     float reach = Mathf.Clamp01((float)px / pw * 1.3f) * Mathf.Clamp01(1.2f - (float)py / ph * 0.4f);
-                    float amp = 4.5f * m * (0.35f + reach);
+                    float amp = 4.5f * (0.35f + reach);
                     float dx = amp * (Mathf.Sin(t * 0.19f + y * 0.045f) + 0.45f * Mathf.Sin(t * 0.43f + y * 0.13f + x * 0.031f));
                     float dy = amp * 0.35f * Mathf.Sin(t * 0.27f + x * 0.052f);
-                    patchPixels[py * pw + px] = Sample(x - dx, y - dy, w, hdBackground.height);
+                    int sx = Mathf.Clamp(Mathf.RoundToInt(x - dx), 0, w - 1), sy = Mathf.Clamp(Mathf.RoundToInt(y - dy), 0, hdBackground.height - 1);
+                    float hair = hairMask[sy * w + sx].r / 255f;
+                    patchPixels[py * pw + px] = hair <= 0 ? hdSource[i] : Color32.Lerp(hdSource[i], Sample(x - dx, y - dy, w, hdBackground.height), hair);
                 }
             }
             hairPatch.SetPixels32(patchPixels); hairPatch.Apply(false);
@@ -288,17 +275,21 @@ namespace Xena.Assets
             for (int i = 0; i < 4; i++) if (boltVisible[i] && hdBolts[i] != null) { var tl = BoltCentre[i] - boltSize[i] / 2; GUI.DrawTexture(Ps(tl.x, tl.y, boltSize[i].x, boltSize[i].y), hdBolts[i]); }
             // Texture rows are bottom-up: the patch rect's GUI y is measured from the top.
             if (hairPatch != null) GUI.DrawTexture(Hd(patchRect.x, bh - patchRect.y - patchRect.height, patchRect.width, patchRect.height), hairPatch);
-            for (int i = 0; i < 4; i++)
+            // Labels and prompt in Tenor Sans (PrototypeMenuText): peach capitals with a soft shadow,
+            // the selected item white-pink with a magenta glow (the highlight TIMs' look); left
+            // edges at x 30 like the baked labels, letter height ~9 px of 240.
+            if (PrototypeMenuText.Available)
             {
-                var label = i == Cursor && hdLabelsSel[i] != null ? hdLabelsSel[i] : hdLabels[i];
-                if (label == null) continue;
-                // One scale for all labels (Codex drew them at one letter height): the New game
-                // letters span 13 px of 240; left edges aligned at x 30 like the baked labels.
-                float unit = 13f / Mathf.Max(1, labelBounds[0].height); var r = labelBounds[i];
-                float x = 30 - r.x * unit, y = ItemCentre[i].y - (r.y + r.height / 2f) * unit;
-                GUI.DrawTexture(Ps(x, y, label.width * unit, label.height * unit), label);
+                int size = Mathf.RoundToInt(12 * k * scale);
+                for (int i = 0; i < 4; i++)
+                {
+                    bool selected = i == Cursor;
+                    PrototypeMenuText.Draw(Ps(30, ItemCentre[i].y - 12, 260, 24), Labels[i], size,
+                        selected ? new Color(1f, 0.9f, 0.96f) : new Color(0.95f, 0.69f, 0.52f), TextAnchor.MiddleLeft,
+                        selected ? new Color(0.95f, 0.2f, 0.85f, 1) : default);
+                }
+                PrototypeMenuText.Draw(Ps(100, 199, 200, 22), "Нажми Enter для выбора", Mathf.RoundToInt(12 * k * scale), new Color(0.92f, 0.9f, 0.95f), TextAnchor.MiddleRight);
             }
-            if (hdPrompt != null) GUI.DrawTexture(Ps(PromptTopLeft.x, PromptTopLeft.y, promptW, promptH), hdPrompt);
         }
     }
 }

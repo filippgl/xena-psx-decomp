@@ -148,6 +148,7 @@ namespace Xena.Assets
             Require(menu.ConfirmDelay == 0 && menu.HdReady, "Menu delay did not expire or the HD layers are missing");
             PrototypeGraphics.Active.SetMode(XenaVisualMode.Original); yield return null; yield return new WaitForEndOfFrame(); Capture("menu-original.png");
             PrototypeGraphics.Active.SetMode(XenaVisualMode.Remaster); yield return null; yield return new WaitForEndOfFrame(); Capture("menu-remaster.png");
+            for (int i = 0; i < 8; i++) menu.Tick(); yield return null; yield return new WaitForEndOfFrame(); Capture("menu-remaster-b.png");
             menu.MoveCursor(1); yield return null; yield return new WaitForEndOfFrame(); Capture("menu-remaster-load.png");
             menu.Select(); Require(menu.Visible && menu.Note != null, "Unported Load game did not stay in the menu with a note");
             menu.MoveCursor(-1); int games = PrototypeMainMenu.NewGames; menu.Select();

@@ -17,7 +17,7 @@ namespace Xena.Assets
     //   plays MEDIA/CHAKDETH.STR (GAME OVER, 5.8 s) and returns to the main menu (state 2).
     //   After the video the level reloads behind the main menu (PrototypeMainMenu).
     // Remaster plays the Real-ESRGAN 4x video chakdeth-hd when present.
-    // Menu text uses the GUI font (xenafont.tim is not exported yet).
+    // Menu text: Tenor Sans (Google Fonts, PrototypeMenuText); the original xenafont renderer is not ported.
     public sealed class PrototypeGameOver : MonoBehaviour
     {
         public enum Phase { None, Menu, Confirm, Video }
@@ -29,7 +29,7 @@ namespace Xena.Assets
         public static int Restarts { get; private set; }
         private PrototypeOriginalDamage damage;
         private VideoPlayer player; private RenderTexture frame;
-        private GUIStyle style; private float videoStart;
+        private float videoStart;
         public static readonly string[] MenuItems = { "Повтор уровня", "Выход" };
         public static readonly string[] ConfirmItems = { "Да", "Нет" };
 
@@ -93,8 +93,6 @@ namespace Xena.Assets
                 if (frame != null) GUI.DrawTexture(new Rect((Screen.width - w) / 2, 0, w, h), frame, ScaleMode.StretchToFill);
                 return;
             }
-            if (style == null) style = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
-            style.fontSize = Mathf.Max(16, Screen.height / 22);
             // Native layout (320x240): title/first line centred at y~139, next lines 20 px below.
             string[] lines = State == Phase.Menu ? MenuItems : new[] { "Хочешь выйти?", ConfirmItems[0], ConfirmItems[1] };
             int first = State == Phase.Menu ? 0 : 1;
@@ -103,8 +101,9 @@ namespace Xena.Assets
             {
                 bool selected = i - first == Selected && i >= first;
                 var rect = new Rect(0, y + i * 20 * scale - 10 * scale, Screen.width, 20 * scale);
-                style.normal.textColor = new Color(0, 0, 0, 0.8f); GUI.Label(new Rect(rect.x + 2, rect.y + 2, rect.width, rect.height), lines[i], style);
-                style.normal.textColor = selected ? new Color(1f, 0.93f, 0.35f) : Color.white; GUI.Label(rect, lines[i], style);
+                // Native colours: selected yellow, others white, dark drop shadow.
+                PrototypeMenuText.Draw(rect, lines[i], Mathf.Max(16, Mathf.RoundToInt(13 * scale)), selected ? new Color(1f, 0.93f, 0.35f) : Color.white,
+                    TextAnchor.MiddleCenter, selected ? new Color(1f, 0.75f, 0.2f, 0.6f) : default, 0.85f);
             }
         }
         private void OnDestroy() { if (frame != null) frame.Release(); }

@@ -9,8 +9,7 @@ Remaster (Resources/Menu/HD), all optional:
                   x 85..1450 at full height);
 - hair-mask.png   8-bit mask of Xena's dark hair in that image (wind animation);
 - lightning/*.png Real-ESRGAN x4plus upscales of the LTNG tiles;
-- prompt.png      Real-ESRGAN upscale of the prompt text, alpha = brightness (additive look);
-- label-*.png     Codex HD labels (tools/codex-remaster/out/label-*.png) when present.
+(Remaster labels and prompt are drawn with Tenor Sans at runtime, PrototypeMenuText.)
 
 usage: install_main_menu.py [--realesrgan ../_tools/realesrgan/realesrgan-ncnn-vulkan.exe]
 """
@@ -24,7 +23,6 @@ import numpy as np
 from PIL import Image, ImageFilter
 
 PROJECTS = ["unity/XenaUnity", "unity/XenaLightingVerification"]
-LABELS = ["ng", "lg", "ta", "op"]
 
 
 def upscale(exe, src, dst):
@@ -33,18 +31,32 @@ def upscale(exe, src, dst):
 
 
 def hair_mask(path):
-    """Soft mask of the dark hair around Xena's head (box chosen on the Codex image)."""
+    """Soft mask of Xena's hair on the Codex image: dark, not blue (the night sky is violet-blue),
+    not skin, connected to the crown, fading out above the shoulder armour."""
     im = np.asarray(Image.open(path).convert("RGB")).astype(np.float32)
     h, w, _ = im.shape
-    lum = im @ np.array([0.299, 0.587, 0.114], np.float32)
-    mask = np.zeros((h, w), np.float32)
-    x0, x1, y0, y1 = 1050, 1195, 95, 262
-    box = lum[y0:y1, x0:x1]
-    mask[y0:y1, x0:x1] = np.clip((78 - box) / 30, 0, 1)
-    # Keep the face/neck (lit skin) still: no hair left of the jaw line below the crown.
-    yy, xx = np.mgrid[0:h, 0:w]
-    mask[(xx < 1120) & (yy > 140)] = 0
-    m = Image.fromarray((mask * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(3))
+    r, g, b = im[..., 0], im[..., 1], im[..., 2]
+    lum = 0.299 * r + 0.587 * g + 0.114 * b
+    hair = (lum < 70) & (b - r < 18) & (r < 95)
+    x0, x1, y0, y1 = 1040, 1200, 90, 262
+    box = np.zeros_like(hair); box[y0:y1, x0:x1] = True
+    hair &= box
+    # Keep the component connected to the crown (flood fill from a seed on the hair).
+    from collections import deque
+    seed = min(((y, x) for y in range(110, 140) for x in range(1100, 1150) if hair[y, x]), default=None)
+    keep = np.zeros_like(hair)
+    if seed is not None:
+        q = deque([seed]); keep[seed] = True
+        while q:
+            y, x = q.popleft()
+            for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                ny, nx = y + dy, x + dx
+                if hair[ny, nx] and not keep[ny, nx]:
+                    keep[ny, nx] = True; q.append((ny, nx))
+    mask = keep.astype(np.float32)
+    yy = np.arange(h, dtype=np.float32)[:, None]
+    mask *= np.clip((250 - yy) / 24, 0, 1)  # fade out where the hair lies on the shoulder
+    m = Image.fromarray((mask * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(1.5))
     return m
 
 
@@ -63,11 +75,6 @@ def main():
     if os.path.exists(os.path.join(codex, "menu-main.png")):
         shutil.copy(os.path.join(codex, "menu-main.png"), os.path.join(hd, "background.png"))
         hair_mask(os.path.join(hd, "background.png")).save(os.path.join(hd, "hair-mask.png"))
-    for name in LABELS:
-        for suffix in ("", "-sel"):
-            src = os.path.join(codex, "label-%s%s.png" % (name, suffix))
-            if os.path.exists(src):
-                shutil.copy(src, os.path.join(hd, "label-%s%s.png" % (name, suffix)))
     if os.path.exists(args.realesrgan):
         upscale(args.realesrgan, os.path.join(export, "lightning"), os.path.join(hd, "lightning"))
         # The LTNG tiles are opaque rectangles with main.tim's sky baked in (no texel 0): on the
@@ -83,21 +90,6 @@ def main():
             mask = Image.fromarray((gain * 255).astype(np.uint8)).resize((w * 4, h * 4), Image.BILINEAR)
             up = Image.open(os.path.join(hd, "lightning", name)).convert("RGB")
             up.putalpha(mask); up.save(os.path.join(hd, "lightning", name))
-        tmp = os.path.join(args.work, "prompt-up")
-        shutil.rmtree(tmp, ignore_errors=True); os.makedirs(tmp)
-        # Prompt: upscale on black, then alpha = brightness so normal blending looks additive.
-        prompt = Image.open(os.path.join(export, "font", "prompt.png")).convert("RGBA")
-        # Real-ESRGAN fails on very small images: pad by 32 px, crop the 4x result back.
-        pad = 32
-        black = Image.new("RGB", (prompt.width + 2 * pad, prompt.height + 2 * pad)); black.paste(prompt, (pad, pad), mask=prompt.split()[3])
-        black.save(os.path.join(tmp, "prompt.png"))
-        os.makedirs(tmp + "-hd", exist_ok=True)
-        upscale(args.realesrgan, tmp, tmp + "-hd")
-        up = Image.open(os.path.join(tmp + "-hd", "prompt.png")).convert("RGB")
-        up = np.asarray(up.crop((4 * pad, 4 * pad, 4 * (pad + prompt.width), 4 * (pad + prompt.height)))).astype(np.float32)
-        alpha = up.max(axis=2)
-        rgb = np.where(alpha[..., None] > 0, up * 255 / np.maximum(alpha[..., None], 1), 0)
-        Image.fromarray(np.dstack([rgb, alpha]).clip(0, 255).astype(np.uint8), "RGBA").save(os.path.join(hd, "prompt.png"))
     for project in PROJECTS:
         out = os.path.join(project, "Assets", "Imported", "Resources", "Menu")
         shutil.rmtree(out, ignore_errors=True)

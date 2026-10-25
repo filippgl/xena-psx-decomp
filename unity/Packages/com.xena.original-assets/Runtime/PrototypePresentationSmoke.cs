@@ -10,7 +10,7 @@ namespace Xena.Assets
 {
     internal sealed class PrototypePresentationSmoke : MonoBehaviour
     {
-        [Serializable] private sealed class Report { public string result = "FAIL", error; public int highResolutionPages, stpTexels, originalTriangles, remasterTriangles; public float maxTerrainOffset, maxWalkableOffset; public int seamEdges, curtains, foams, bandits; public List<string> checks = new List<string>(); }
+        [Serializable] private sealed class Report { public string result = "FAIL", error; public int highResolutionPages, stpTexels, originalTriangles, remasterTriangles; public float maxTerrainOffset, maxWalkableOffset; public int seamEdges, curtains, foams, bandits; public List<string> checks = new List<string>(), wallSpots = new List<string>(); public int wallSpotsTested, wallLensBehind; }
         private readonly Report report = new Report();
         private string output; private bool finished; private Gamepad pad;
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -82,6 +82,7 @@ namespace Xena.Assets
             Require(sky.LandscapeActive && Shader.GetGlobalVector("_XenaLandscapeParams").w > 0.5f, "Remaster painted 360-degree landscape inactive");
             report.checks.Add("Remaster sky and far fog show the painted 360-degree landscape");
             yield return SkyViews(motor, orbit, camera, "presentation-sky-remaster.png");
+            yield return WallCamera(motor, orbit, camera, level);
             var bandits = motor.GetComponent<PrototypeBandits>(); report.bandits = bandits.Bandits.Count;
             Require(bandits.GeneratorCount == 11 && bandits.Spawned + bandits.TotalRemaining == 12 && bandits.Live() <= bandits.MaxLiveEnemies, "Level01 bandit generators differ from the original records");
             report.checks.Add("11 original bandit generators hold 12 bandits, at most 3 alive");
@@ -162,6 +163,47 @@ namespace Xena.Assets
             camera.targetTexture = null; target.Release(); Destroy(target); Destroy(pixels); Destroy(diffuse); Destroy(stp); Destroy(material); Destroy(quad); Destroy(cameraObject);
         }
         // The ordinary follow camera behind Xena at the original spawn.
+        // Camera at walls (user report: walls turn see-through up close). Xena stands with her
+        // back to a terrain wall, camera centred behind her; the lens must stay in front of the
+        // VISIBLE (Remaster-smoothed) surface: a line focus -> lens must not cross it.
+        private IEnumerator WallCamera(PrototypeMotor motor, PrototypeCamera orbit, Camera camera, GameObject level)
+        {
+            MeshFilter terrain = null; foreach (var c in level.GetComponentsInChildren<MeshCollider>()) if (c.sharedMesh.name == "level-01-object-1") terrain = c.GetComponent<MeshFilter>();
+            Require(terrain != null && terrain.sharedMesh != null, "Terrain mesh not found");
+            var probe = new GameObject("VisualTerrainProbe"); probe.layer = 31; probe.transform.SetParent(terrain.transform, false);
+            var visual = probe.AddComponent<MeshCollider>(); visual.sharedMesh = terrain.sharedMesh; visual.enabled = false;
+            orbit.enabled = true; int spots = 0, behind = 0; var capsule = motor.GetComponent<CharacterController>();
+            motor.ResetToSpawn(); Vector3 origin = motor.transform.position;
+            for (float r = 2; r < 40 && spots < 8; r += 3)
+                for (int a = 0; a < 12 && spots < 8; a++)
+                {
+                    Vector3 at = origin + Quaternion.Euler(0, a * 30, 0) * Vector3.forward * r;
+                    float ground = motor.GroundHeight(at + Vector3.up * 1.5f); if (float.IsNegativeInfinity(ground) || Mathf.Abs(ground - origin.y) > 4) continue;
+                    at.y = ground;
+                    for (int d = 0; d < 8; d++)
+                    {
+                        Vector3 dir = Quaternion.Euler(0, d * 45, 0) * Vector3.forward;
+                        if (!Physics.Raycast(at + Vector3.up * 1.2f, dir, out RaycastHit wall, 1.4f, 1 << terrain.gameObject.layer) || wall.distance < 0.7f || Mathf.Abs(wall.normal.y) > 0.5f) continue;
+                        capsule.enabled = false; motor.transform.SetPositionAndRotation(at + Vector3.up * 0.02f, Quaternion.LookRotation(-dir)); capsule.enabled = true; motor.SnapPresentationForTest();
+                        InputSystem.QueueStateEvent(pad, new GamepadState { buttons = 1u << (int)GamepadButton.RightStick }); yield return null; yield return null;
+                        InputSystem.QueueStateEvent(pad, new GamepadState());
+                        for (int i = 0; i < 30; i++) yield return null;
+                        Vector3 focus = motor.PresentationPosition + Vector3.up * 1.1f, lens = camera.transform.position;
+                        visual.enabled = true; Physics.SyncTransforms();
+                        bool hidden = Physics.Linecast(focus, lens, out RaycastHit cut, 1 << 31, QueryTriggerInteraction.Ignore);
+                        visual.enabled = false;
+                        spots++; if (hidden) behind++;
+                        report.wallSpots.Add(string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0:F1},{1:F1},{2:F1} lens {3:F2} m{4}", at.x, at.y, at.z, Vector3.Distance(focus, lens), hidden ? " BEHIND visible wall by " + (Vector3.Distance(focus, lens) - cut.distance).ToString("F2") : ""));
+                        if (spots == 1) { yield return new WaitForEndOfFrame(); Capture("presentation-wall-camera-remaster.png"); }
+                        break;
+                    }
+                }
+            Destroy(probe); motor.ResetToSpawn(); orbit.enabled = false;
+            report.wallSpotsTested = spots; report.wallLensBehind = behind;
+            Require(spots >= 4, "Too few wall spots found: " + spots);
+            Require(behind == 0, "Camera lens ends up behind the visible wall at " + behind + "/" + spots + " spots");
+            report.checks.Add("camera stays in front of the visible (Remaster) wall surface at " + spots + " wall spots");
+        }
         // Sky views: lens at Xena's eye height, 12 deg up, four headings (painted landscape check).
         private IEnumerator SkyViews(PrototypeMotor motor, PrototypeCamera orbit, Camera camera, string name)
         {

@@ -218,6 +218,7 @@ namespace Xena.Assets
             float floor = Floor(new Vector3(point.x, transform.position.y, point.z));
             return float.IsNegativeInfinity(floor) || floor - transform.position.y > 0.75f;
         }
+        public void SnapPresentationForTest() => SnapPresentation();
         private void SnapPresentation()
         {
             previousPosition = currentPosition = transform.position;

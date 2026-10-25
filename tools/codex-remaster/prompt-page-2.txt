@@ -1,0 +1,15 @@
+Use your built-in image_gen tool (imagegen skill, built-in mode, not the CLI), editing mode with the attached image.
+The attached 1024x1024 image is a texture atlas page from level 1 of the PS1 game "Xena: Warrior Princess" (1999), enlarged 4x.
+It contains FOUR separate 512x512 textures in its quadrants (top-left: worn dirt path crossing between grass at the top and
+bottom edges; top-right: dirt path with a clump of green fan-palm plants; bottom-left: mossy ground with dark holes/roots;
+bottom-right: grass with a grey boulder and a tuft of grass on top). They are mapped onto 3D terrain.
+Repaint ALL FOUR as modern high-resolution, photoreal, detailed game textures in the style of a beautiful AAA matte painting:
+crisp grass blades, soil grains, small pebbles, real fern/palm leaves, real stone surface with lichen.
+STRICT RULES (UV mapping must not break):
+- keep each quadrant's exact composition: every element (path, grass areas, plants, rock, holes) stays at the same position,
+  same size and same shape; the borders between grass and path stay exactly where they are;
+- keep the same colours and brightness (dark forest greens, grey-brown soil, grey stone); do not brighten or saturate;
+- the quadrant edges must keep the same colours as in the original so neighbouring terrain still connects;
+- no new objects, no text, no frame, no lighting direction change (soft overhead light), no vignette;
+- output exactly 1024x1024 with the four quadrants still exactly 512x512 each.
+Save the final selected image into this workspace as out/page-2.png (copy it from CODEX_HOME/generated_images). Do nothing else.
