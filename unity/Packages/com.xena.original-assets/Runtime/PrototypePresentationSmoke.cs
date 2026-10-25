@@ -270,6 +270,17 @@ namespace Xena.Assets
                 camera.transform.position = b.center + new Vector3(0.7f, 0.35f, 0.7f).normalized * (extent * 1.6f + 1.5f); camera.transform.LookAt(b.center);
                 yield return null; yield return new WaitForEndOfFrame(); Capture("veg-" + kind.Trim('@') + ".png");
             }
+            // Props for the image-to-3D trial: first signpost and the bridge, both modes.
+            foreach (string prop in new[] { "Sign_pt", "@u_brg" })
+            {
+                Renderer target = null; foreach (var r in FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None)) if (r.name.Contains(prop) && r.enabled) { target = r; break; }
+                if (target == null) { report.checks.Add("prop " + prop + ": none"); continue; }
+                var pb = target.bounds; report.checks.Add("prop " + prop + " " + target.name + " size " + pb.size.ToString("F2") + " centre " + pb.center.ToString("F1"));
+                float ext = Mathf.Max(pb.size.x, Mathf.Max(pb.size.y, pb.size.z));
+                camera.transform.position = pb.center + new Vector3(0.8f, 0.3f, 0.6f).normalized * (ext * 1.4f + 0.6f); camera.transform.LookAt(pb.center);
+                foreach (var m in new[] { XenaVisualMode.Original, XenaVisualMode.Remaster })
+                { PrototypeGraphics.Active.SetMode(m); yield return null; yield return new WaitForEndOfFrame(); Capture("prop-" + prop.Trim('@') + "-" + m.ToString().ToLowerInvariant() + ".png"); }
+            }
             orbit.enabled = true;
         }
         // Sky views: lens at Xena's eye height, 12 deg up, four headings (painted landscape check).

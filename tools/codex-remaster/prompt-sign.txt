@@ -1,0 +1,9 @@
+Use your built-in image_gen tool (imagegen skill, built-in mode, not the CLI).
+Attached: (1) the texture of a signpost board from the PS1 game "Xena: Warrior Princess" (1999): a weathered blue-grey wooden plank
+with carved Greek-style letters and a left arrow; (2) the signpost in the game (a board on a single wooden post).
+Create a single modern, photoreal, highly detailed game prop of exactly this signpost: one square wooden post about 2 m tall stuck
+in the ground with the rectangular plank board nailed near its top, the board showing the same carved arrow and letters
+(ΞΑΣΨΙΘ / ΘΑΣΝΩ), weathered grey-blue wood with grain and cracks, iron nails. Same proportions as the game object.
+Isolated object only, three-quarter front view, whole object visible with margin, soft even studio light, plain pure white
+background, no shadow on the background, no ground, no text other than the carved letters. Output 1024x1024.
+Save the final selected image into this workspace as out/sign-concept.png (copy it from CODEX_HOME/generated_images). Do nothing else.

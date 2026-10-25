@@ -130,6 +130,18 @@ namespace Xena.Assets
             var menu = motor.GetComponent<PrototypeMainMenu>();
             Require(menu != null && menu.Visible && Time.timeScale == 0, "GAME OVER did not return to the main menu");
             report.checks.Add("GAME OVER returns to the main menu (game paused behind it)");
+            // Boot videos (docs/xena-fmv.md): EA_LOGO -> UNILOGO -> INTRO, logos unskippable, START skips INTRO.
+            var boot = motor.GetComponent<PrototypeBootVideos>(); boot.Begin(); yield return null;
+            Require(PrototypeBootVideos.Playing && boot.Index == 0 && boot.ClipName == "ea_logo-hd" && !boot.Skip(), "EA_LOGO did not start (HD) or could be skipped: " + boot.ClipName);
+            float bootStart = Time.unscaledTime; for (int i = 0; i < 30; i++) yield return null; boot.SeekNearEndForTest();
+            while (boot.Index == 0 && Time.unscaledTime - bootStart < 9) yield return null;
+            Require(boot.Index == 1 && boot.ClipName == "unilogo-hd" && !boot.Skip(), "UNILOGO did not follow EA_LOGO or could be skipped: " + boot.ClipName);
+            yield return null; yield return new WaitForEndOfFrame(); Capture("boot-unilogo-remaster.png");
+            bootStart = Time.unscaledTime; boot.SeekNearEndForTest(); while (boot.Index == 1 && Time.unscaledTime - bootStart < 9) yield return null;
+            Require(boot.Index == 2 && boot.ClipName == "intro-hd", "INTRO did not follow UNILOGO: " + boot.ClipName);
+            for (int i = 0; i < 120; i++) yield return null; yield return new WaitForEndOfFrame(); Capture("boot-intro-remaster.png");
+            Require(boot.Skip() && !PrototypeBootVideos.Playing && menu.Visible, "START did not skip INTRO to the main menu");
+            report.checks.Add("boot videos: EA_LOGO, UNILOGO (unskippable), INTRO (START skips), then the main menu");
             menu.Show(); menu.SeedForTest(0x1234567);
             Require(menu.HairSeq[0] == 2 && menu.HairFrame[0] == 72 && menu.HairFrame[1] == 91 && menu.HairFrame[2] == 112, "Hair channels do not start at seq 2/3/4");
             int cursor = PrototypeMainMenu.Cursor; menu.MoveCursor(-4); Require(PrototypeMainMenu.Cursor == 0, "Cursor wrapped or moved above New game");

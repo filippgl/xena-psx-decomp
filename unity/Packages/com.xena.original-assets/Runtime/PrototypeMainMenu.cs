@@ -136,6 +136,7 @@ namespace Xena.Assets
         private void Update()
         {
             if (!Visible) return;
+            if (PrototypeBootVideos.Playing || PrototypeBootVideos.ChangedFrame == Time.frameCount) return; // boot videos own the screen and keys
             int move = 0; bool confirm = false;
             if (Pressed(Key.UpArrow) || Pressed(Key.W) || Gamepad.current?.dpad.up.wasPressedThisFrame == true) move = -1;
             if (Pressed(Key.DownArrow) || Pressed(Key.S) || Gamepad.current?.dpad.down.wasPressedThisFrame == true) move = 1;

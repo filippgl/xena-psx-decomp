@@ -62,6 +62,7 @@ namespace Xena.Assets
             if (GetComponent<PrototypeRemasterGrass>() == null) gameObject.AddComponent<PrototypeRemasterGrass>();
             if (GetComponent<PrototypeGameOver>() == null) gameObject.AddComponent<PrototypeGameOver>();
             if (GetComponent<PrototypeMainMenu>() == null) gameObject.AddComponent<PrototypeMainMenu>();
+            if (GetComponent<PrototypeBootVideos>() == null) gameObject.AddComponent<PrototypeBootVideos>();
             if (GetComponent<PrototypeGraphics>() == null) gameObject.AddComponent<PrototypeGraphics>();
             AddHoleSolidColliders();
         }
