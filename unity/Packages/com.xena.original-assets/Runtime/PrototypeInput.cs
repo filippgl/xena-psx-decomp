@@ -25,6 +25,11 @@ namespace Xena.Assets
         public float Zoom => Paused ? 0 : zoom.ReadValue<float>();
         public bool Block => !Paused && block.IsPressed();
         public bool Paused { get; private set; }
+        // Set while a front-end menu (main menu) owns the keys: no pause toggle, no queued actions;
+        // after it is released, actions stay blocked until jump/sword/kick are all let go, so the
+        // confirming press (Space = jump) never reaches gameplay.
+        private bool menuOwnsInput, waitRelease;
+        public bool MenuOwnsInput { get => menuOwnsInput; set { if (menuOwnsInput && !value) waitRelease = true; menuOwnsInput = value; } }
         public bool Automated { get; set; }
         public Vector2 Move => Paused ? Vector2.zero : Vector2.ClampMagnitude(move.ReadValue<Vector2>(), 1);
         public bool Sprint => !Paused && sprint.IsPressed();
@@ -51,7 +56,9 @@ namespace Xena.Assets
         private void Update()
         {
             if (suppressPause) { if (!IsRebinding && !pause.IsPressed()) suppressPause = false; }
-            else if (!IsRebinding && pause.WasPressedThisFrame()) { Paused = !Paused; ClearPending(); CaptureCursor(); }
+            else if (!IsRebinding && !MenuOwnsInput && pause.WasPressedThisFrame()) { Paused = !Paused; ClearPending(); CaptureCursor(); }
+            if (waitRelease && !jump.IsPressed() && !sword.IsPressed() && !kick.IsPressed()) waitRelease = false;
+            if (menuOwnsInput || waitRelease) { ClearPending(); return; }
             if (!Paused && jump.WasPressedThisFrame()) jumpPending = true;
             if (!Paused && sword.WasPressedThisFrame()) swordPending = true;
             if (!Paused && kick.WasPressedThisFrame()) kickPending = true;

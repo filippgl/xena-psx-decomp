@@ -117,11 +117,13 @@ namespace Xena.Assets
             if (seed == 0) seed = (uint)Environment.TickCount | 1;
             hair[0] = new Hair { seq = 2, frame = SeqStart[2] }; hair[1] = new Hair { seq = 3, frame = SeqStart[3] }; hair[2] = new Hair { seq = 4, frame = SeqStart[4] };
             for (int i = 0; i < 4; i++) bolts[i] = new Bolt { timer = Range(30, 200), state = 2 };
-            Time.timeScale = 0; AudioListener.pause = true;
+            Time.timeScale = 0; AudioListener.pause = true; SetMenuInput(true);
             Compose();
         }
         public void SeedForTest(uint value) { seed = value; }
-        private void Hide() { Visible = false; Time.timeScale = 1; AudioListener.pause = false; }
+        // The confirming press (Enter/Space/pad A) must not reach gameplay as a jump or attack.
+        private void Hide() { Visible = false; Time.timeScale = 1; AudioListener.pause = false; SetMenuInput(false); }
+        private void SetMenuInput(bool owned) { var input = GetComponent<PrototypeInput>(); if (input != null) { input.MenuOwnsInput = owned; input.ClearPending(); } }
 
         // func_800B42D8 / func_800B4350.
         private int Rand()

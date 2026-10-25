@@ -151,8 +151,15 @@ namespace Xena.Assets
             for (int i = 0; i < 8; i++) menu.Tick(); yield return null; yield return new WaitForEndOfFrame(); Capture("menu-remaster-b.png");
             menu.MoveCursor(1); yield return null; yield return new WaitForEndOfFrame(); Capture("menu-remaster-load.png");
             menu.Select(); Require(menu.Visible && menu.Note != null, "Unported Load game did not stay in the menu with a note");
-            menu.MoveCursor(-1); int games = PrototypeMainMenu.NewGames; menu.Select();
+            menu.MoveCursor(-1); int games = PrototypeMainMenu.NewGames;
+            // Confirm with a real Space press (Space is also jump): the level must start without a jump.
+            var keys = Keyboard.current; Require(keys != null, "No keyboard for the menu confirm test");
+            InputSystem.QueueStateEvent(keys, new KeyboardState(Key.Space)); for (int i = 0; i < 3; i++) yield return null;
+            InputSystem.QueueStateEvent(keys, new KeyboardState()); yield return null;
             Require(!menu.Visible && Time.timeScale == 1 && PrototypeMainMenu.NewGames == games + 1, "New game did not start the level");
+            bool airborne = false; for (int i = 0; i < 40; i++) { yield return new WaitForFixedUpdate(); if (!motor.Grounded) airborne = true; }
+            Require(!airborne, "The Space press that confirmed New game made Xena jump");
+            report.checks.Add("confirming New game with Space does not make Xena jump");
             report.checks.Add("main menu: New game starts level 01; unported items stay in the menu");
         }
         // Death -> menu -> exit confirm -> GAME OVER video -> level restart (native capture build/gameover).
