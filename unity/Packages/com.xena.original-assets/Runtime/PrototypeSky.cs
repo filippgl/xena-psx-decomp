@@ -12,7 +12,7 @@ namespace Xena.Assets
     public sealed class PrototypeSky : MonoBehaviour, IXenaVisualModeTarget
     {
         public static readonly Color32 OriginalBackground = new Color32(0, 72, 95, 255);
-        public const float FogStart = 22, FogEnd = 70;
+        public const float FogStart = 37, FogEnd = 85; // user: 15 m farther than 22/70 (Silent Hill feel)
         public bool SkyFogActive { get; private set; }
         private Material remasterSky;
         private Texture2D landscape;

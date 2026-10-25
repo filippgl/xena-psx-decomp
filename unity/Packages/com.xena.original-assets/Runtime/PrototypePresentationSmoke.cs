@@ -214,6 +214,20 @@ namespace Xena.Assets
                 camera.transform.SetPositionAndRotation(motor.transform.position + Vector3.up * 1.7f, Quaternion.Euler(-12, heading * 90, 0));
                 yield return null; yield return new WaitForEndOfFrame();
                 Capture(heading == 0 ? name : name.Replace(".png", "-" + heading * 90 + ".png"));
+                if (heading == 0)
+                    foreach (var probe in new[] { new Vector2(0.75f, 0.75f), new Vector2(0.6f, 0.45f), new Vector2(0.2f, 0.35f) })
+                    {
+                        // Which meshes the prominent shapes of this view belong to (nearest renderer hit by bounds+mesh).
+                        var ray = camera.ViewportPointToRay(probe); string found = "none"; float best = float.MaxValue;
+                        foreach (var f in FindObjectsByType<MeshFilter>(FindObjectsSortMode.None))
+                        {
+                            var r = f.GetComponent<Renderer>(); if (r == null || !r.enabled || f.sharedMesh == null || !r.bounds.IntersectRay(ray)) continue;
+                            var temp = f.gameObject.AddComponent<MeshCollider>(); temp.sharedMesh = f.sharedMesh;
+                            if (temp.Raycast(ray, out RaycastHit hit, 500) && hit.distance < best) { best = hit.distance; found = f.name + "/" + f.sharedMesh.name; }
+                            Destroy(temp);
+                        }
+                        report.checks.Add("probe " + name + " " + probe + ": " + found + " at " + best.ToString("F1") + " m");
+                    }
             }
             orbit.enabled = true;
         }

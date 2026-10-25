@@ -10,11 +10,29 @@ namespace Xena.Assets
     // use one symmetric edge normal, so neighbouring faces remain watertight.
     // MeshColliders, the original height query, CLS and placements keep the
     // original meshes; Original mode restores the original MeshFilter mesh.
+    // Rock relief: non-walkable faces are displaced up to the relief amplitude along a smooth vertex
+    // normal by 3D fBm noise of the position, so straight hard edges and flat faces read as
+    // rough stone. The weight is built only from vertex/edge data both neighbours share
+    // (vertex weights, a bump on free edges, the face interior), so the mesh stays watertight;
+    // it is 0 on walkable faces and on edges/vertices touching them or open borders, so the
+    // ground under Xena stays exact. Shading normals soften the hard corners.
+    // Tone harmonisation: each face's mean texture colour is measured on its page; at every
+    // corner the faces of one colour family (similar chroma, e.g. dark and light grass) share a
+    // target tone, and the vertex colour pulls the face toward it near its edges (1 on the edge,
+    // 0 at the centre), so similar textures on neighbouring faces no longer meet in a hard step
+    // while distinct materials (path vs grass) keep their border.
     public sealed class PrototypeRemasterGeometry : MonoBehaviour, IXenaVisualModeTarget
     {
         // Terrain, rock, two pillars, hole fill, bridge and outer jungle net.
         private static readonly string[] Targets = { "level-01-object-1", "level-01-object-65", "level-01-object-66", "level-01-object-67", "level-01-object-68", "level-01-object-39", "level-01-object-73" };
-        public const int Segments = 3;
+        public const int Segments = 6;
+        // Relief amplitude: terrain cliffs / free-standing rocks and pillars (meshes 65-67, which
+        // also round every edge like natural boulders: crease 180).
+        public const float TerrainReliefMeters = 0.18f, RockReliefMeters = 0.25f;
+        // Terrain cliffs also round their right-angle corners (crease 120), with the PN bulge
+        // capped so long walls do not balloon.
+        private const float TerrainCreaseDegrees = 120, TerrainMaxBulgeMeters = 0.45f;
+        private static readonly string[] Boulders = { "level-01-object-65", "level-01-object-66", "level-01-object-67" };
         private const float CreaseDegrees = 70, FallCreaseDegrees = 100, TerrainBulge = 0.6f, PropBulge = 1;
         private sealed class Pair { public MeshFilter filter; public MeshRenderer renderer; public Mesh original, remaster; }
         private readonly Dictionary<(Material, bool), Material> litMaterials = new Dictionary<(Material, bool), Material>();
@@ -27,6 +45,7 @@ namespace Xena.Assets
         public float MaxWalkableOffset { get; private set; }
         public bool RemasterActive { get; private set; }
         public int SeamEdges { get; private set; }
+        public float MaxReliefMeters { get; private set; }
 
         private void Awake()
         {
@@ -37,7 +56,11 @@ namespace Xena.Assets
                 // Falling-water faces (terrain page-9) round their box corners.
                 var rounded = new HashSet<int>(); Material[] bound = filter.GetComponent<MeshRenderer>().sharedMaterials;
                 for (int i = 0; i < bound.Length; i++) if (bound[i] != null && bound[i].name.StartsWith("page-9_")) rounded.Add(i);
-                Mesh remaster = Subdivide(filter.sharedMesh, rounded, terrain ? TerrainBulge : PropBulge, filter.transform.InverseTransformDirection(Vector3.up).normalized, out float offset, out float walkOffset, out int seams, filter.transform.lossyScale.y);
+                bool boulder = System.Array.IndexOf(Boulders, filter.sharedMesh.name) >= 0;
+                var pages = new Texture2D[bound.Length]; for (int i = 0; i < bound.Length; i++) pages[i] = bound[i] != null ? bound[i].mainTexture as Texture2D : null;
+                Mesh remaster = Subdivide(filter.sharedMesh, rounded, pages, terrain ? TerrainBulge : PropBulge, filter.transform.InverseTransformDirection(Vector3.up).normalized, out float offset, out float walkOffset, out int seams, filter.transform.lossyScale.y, out float relief,
+                    terrain ? TerrainReliefMeters : boulder ? RockReliefMeters : 0, boulder ? 180 : terrain ? TerrainCreaseDegrees : CreaseDegrees, terrain ? TerrainMaxBulgeMeters : float.PositiveInfinity);
+                MaxReliefMeters = Mathf.Max(MaxReliefMeters, relief);
                 SeamEdges += seams;
                 if (terrain) { MaxTerrainOffset = offset; MaxWalkableOffset = walkOffset; }
                 pairs.Add(new Pair { filter = filter, renderer = filter.GetComponent<MeshRenderer>(), original = filter.sharedMesh, remaster = remaster });
@@ -84,7 +107,31 @@ namespace Xena.Assets
 
         private static Vector3Int Key(Vector3 p) => new Vector3Int(Mathf.RoundToInt(p.x * 4096), Mathf.RoundToInt(p.y * 4096), Mathf.RoundToInt(p.z * 4096));
 
-        private static Mesh Subdivide(Mesh source, HashSet<int> rounded, float bulge, Vector3 localUp, out float maxOffset, out float walkableOffset, out int seamCount, float worldScaleY)
+        // 3D gradient noise (Perlin) and 3-octave fBm, deterministic.
+        private static readonly int[] Perm = BuildPermutation();
+        private static int[] BuildPermutation()
+        {
+            var r = new System.Random(1999); var p = new int[512]; var b = new int[256];
+            for (int i = 0; i < 256; i++) b[i] = i;
+            for (int i = 255; i > 0; i--) { int j = r.Next(i + 1); int tmp = b[i]; b[i] = b[j]; b[j] = tmp; }
+            for (int i = 0; i < 512; i++) p[i] = b[i & 255];
+            return p;
+        }
+        private static float Grad(int h, float x, float y, float z) { h &= 15; float u = h < 8 ? x : y, v = h < 4 ? y : h == 12 || h == 14 ? x : z; return ((h & 1) == 0 ? u : -u) + ((h & 2) == 0 ? v : -v); }
+        private static float Ease(float t) => t * t * t * (t * (t * 6 - 15) + 10);
+        private static float Perlin(Vector3 p)
+        {
+            int X = Mathf.FloorToInt(p.x), Y = Mathf.FloorToInt(p.y), Z = Mathf.FloorToInt(p.z);
+            float x = p.x - X, y = p.y - Y, z = p.z - Z; X &= 255; Y &= 255; Z &= 255;
+            float u = Ease(x), v = Ease(y), w = Ease(z);
+            int A = Perm[X] + Y, AA = Perm[A] + Z, AB = Perm[A + 1] + Z, B = Perm[X + 1] + Y, BA = Perm[B] + Z, BB = Perm[B + 1] + Z;
+            return Mathf.Lerp(Mathf.Lerp(Mathf.Lerp(Grad(Perm[AA], x, y, z), Grad(Perm[BA], x - 1, y, z), u), Mathf.Lerp(Grad(Perm[AB], x, y - 1, z), Grad(Perm[BB], x - 1, y - 1, z), u), v),
+                Mathf.Lerp(Mathf.Lerp(Grad(Perm[AA + 1], x, y, z - 1), Grad(Perm[BA + 1], x - 1, y, z - 1), u), Mathf.Lerp(Grad(Perm[AB + 1], x, y - 1, z - 1), Grad(Perm[BB + 1], x - 1, y - 1, z - 1), u), v), w);
+        }
+        // Metres in, roughly -1..1 out: large forms plus finer cracks.
+        private static float Relief(Vector3 m) => 0.62f * Perlin(m * 0.7f) + 0.28f * Perlin(m * 1.9f + new Vector3(17, 3, 9)) + 0.1f * Perlin(m * 4.6f + new Vector3(5, 29, 11));
+
+        private static Mesh Subdivide(Mesh source, HashSet<int> rounded, Texture2D[] pages, float bulge, Vector3 localUp, out float maxOffset, out float walkableOffset, out int seamCount, float worldScaleY, out float maxRelief, float reliefMeters, float creaseDegrees, float maxBulgeMeters)
         {
             Vector3[] positions = source.vertices; Vector2[] uvs = source.uv; Color[] colors = source.colors;
             bool hasUv = uvs.Length == positions.Length, hasColor = colors.Length == positions.Length;
@@ -113,12 +160,45 @@ namespace Xena.Assets
                     list.Add(f);
                 }
             }
-            float crease = Mathf.Cos(CreaseDegrees * Mathf.Deg2Rad), fallCrease = Mathf.Cos(FallCreaseDegrees * Mathf.Deg2Rad);
+            // Relief anchors: vertices of walkable faces or open-border edges, and edges touching them.
+            var anchoredVertex = new HashSet<Vector3Int>(); var anchoredEdge = new HashSet<(Vector3Int, Vector3Int)>();
+            foreach (var pair in edges)
+                if (pair.Value.Count != 2 || pair.Value.Exists(face => Vector3.Dot(unitNormal[face], localUp) > 0.7f))
+                { anchoredEdge.Add(pair.Key); anchoredVertex.Add(pair.Key.Item1); anchoredVertex.Add(pair.Key.Item2); }
+            // Smooth (crease-free, area-weighted) normal per position: shared by all faces there.
+            var smoothNormal = new Dictionary<Vector3Int, Vector3>();
+            foreach (var pair in incident) { Vector3 sum = Vector3.zero; foreach (int face in pair.Value) sum += faceNormal[face]; smoothNormal[pair.Key] = sum.sqrMagnitude > 0 ? sum.normalized : Vector3.up; }
+            // Mean texture colour per face (7 samples inside its UV triangle).
+            var tone = new Color[faceCount]; var toned = new bool[faceCount];
+            for (int f = 0; f < faceCount && hasUv; f++)
+            {
+                int sub = faceSubmesh[f]; Texture2D page = sub < pages.Length ? pages[sub] : null;
+                if (page == null || !page.isReadable) continue;
+                Vector2 a = uvs[faces[f * 3]], b = uvs[faces[f * 3 + 1]], c = uvs[faces[f * 3 + 2]]; Color sum = Color.clear;
+                foreach (var w in new[] { new Vector3(1f / 3, 1f / 3, 1f / 3), new Vector3(0.6f, 0.2f, 0.2f), new Vector3(0.2f, 0.6f, 0.2f), new Vector3(0.2f, 0.2f, 0.6f), new Vector3(0.4f, 0.4f, 0.2f), new Vector3(0.2f, 0.4f, 0.4f), new Vector3(0.4f, 0.2f, 0.4f) })
+                { Vector2 uv = a * w.x + b * w.y + c * w.z; sum += page.GetPixelBilinear(uv.x, uv.y); }
+                tone[f] = sum / 7; toned[f] = tone[f].a > 0.5f && tone[f].r + tone[f].g + tone[f].b > 0.03f;
+            }
+            bool Family(int a, int b)
+            {
+                if (!toned[a] || !toned[b]) return false;
+                float sa = tone[a].r + tone[a].g + tone[a].b, sb = tone[b].r + tone[b].g + tone[b].b;
+                return Mathf.Abs(tone[a].r / sa - tone[b].r / sb) + Mathf.Abs(tone[a].g / sa - tone[b].g / sb) + Mathf.Abs(tone[a].b / sa - tone[b].b / sb) < 0.09f;
+            }
+            // Target tone of face f at corner key: area-weighted mean over the incident faces of its family.
+            Color Target(int f, Vector3Int at)
+            {
+                Color sum = Color.clear; float weight = 0;
+                foreach (int g in incident[at]) if (g == f || Family(f, g)) { float area = faceNormal[g].magnitude; sum += tone[g] * area; weight += area; }
+                return weight > 0 ? sum / weight : tone[f];
+            }
+            float crease = Mathf.Cos(creaseDegrees * Mathf.Deg2Rad), fallCrease = Mathf.Cos(FallCreaseDegrees * Mathf.Deg2Rad);
             // Symmetric per pair, so both sides of an edge agree.
             bool Smooth(int a, int b) => Vector3.Dot(unitNormal[a], unitNormal[b]) > (rounded.Contains(faceSubmesh[a]) && rounded.Contains(faceSubmesh[b]) ? fallCrease : crease);
-            // Floors/ceilings stay exactly original so feet match the original
-            // height query; only steep cliff and rock faces become curved.
-            bool Walkable(int f) => Mathf.Abs(Vector3.Dot(unitNormal[f], localUp)) > 0.7f;
+            // Floors stay exactly original so feet match the original height query;
+            // cliffs, rock faces and ceilings/overhangs (never stood on; the height query
+            // uses the original data) become curved and rough.
+            bool Walkable(int f) => Vector3.Dot(unitNormal[f], localUp) > 0.7f;
             Vector3 CornerNormal(int f, Vector3Int at)
             {
                 Vector3 sum = Vector3.zero;
@@ -178,7 +258,8 @@ namespace Xena.Assets
             int seamEdges = 0;
             var outPositions = new List<Vector3>(); var outUv = new List<Vector2>(); var outColor = new List<Color>(); var outNormal = new List<Vector3>();
             var outTriangles = new List<int>[source.subMeshCount]; for (int s = 0; s < source.subMeshCount; s++) outTriangles[s] = new List<int>();
-            maxOffset = 0; walkableOffset = 0; seamCount = 0;
+            maxOffset = 0; walkableOffset = 0; seamCount = 0; maxRelief = 0;
+            float metresPerUnit = Mathf.Max(1e-6f, worldScaleY), reliefUnits = reliefMeters / metresPerUnit;
             var cp = new Vector3[10];
             for (int f = 0; f < faceCount; f++)
             {
@@ -203,6 +284,12 @@ namespace Xena.Assets
                 Vector3 e = (cp[3] + cp[4] + cp[5] + cp[6] + cp[7] + cp[8]) / 6, v = (p0 + p1 + p2) / 3;
                 cp[9] = Walkable(f) ? v : e + (e - v) / 2;
                 int s0 = SeamNeighbour(f, 0), s1 = SeamNeighbour(f, 1), s2 = SeamNeighbour(f, 2);
+                bool rough = reliefMeters > 0 && !Walkable(f) && !rounded.Contains(faceSubmesh[f]);
+                float vw0 = anchoredVertex.Contains(k0) ? 0 : 1, vw1 = anchoredVertex.Contains(k1) ? 0 : 1, vw2 = anchoredVertex.Contains(k2) ? 0 : 1;
+                bool Free(Vector3Int a, Vector3Int b) => !anchoredEdge.Contains(Compare(a, b) < 0 ? (a, b) : (b, a));
+                bool free01 = Free(k0, k1), free12 = Free(k1, k2), free20 = Free(k2, k0);
+                Vector3 m0 = smoothNormal[k0], m1 = smoothNormal[k1], m2 = smoothNormal[k2];
+                Color g0 = toned[f] ? Target(f, k0) : Color.white, g1 = toned[f] ? Target(f, k1) : Color.white, g2 = toned[f] ? Target(f, k2) : Color.white;
                 seamEdges += (s0 >= 0 ? 1 : 0) + (s1 >= 0 ? 1 : 0) + (s2 >= 0 ? 1 : 0);
                 int start = outPositions.Count;
                 for (int row = 0; row <= Segments; row++)
@@ -213,11 +300,33 @@ namespace Xena.Assets
                         Vector3 curved = t * t * t * cp[0] + u * u * u * cp[1] + w * w * w * cp[2]
                             + 3 * t * t * u * cp[3] + 3 * t * u * u * cp[4] + 3 * u * u * w * cp[5]
                             + 3 * u * w * w * cp[6] + 3 * w * w * t * cp[7] + 3 * w * t * t * cp[8] + 6 * t * u * w * cp[9];
-                        Vector3 point = linear + (curved - linear) * bulge;
+                        Vector3 bulgeOffset = (curved - linear) * bulge;
+                        float cap = maxBulgeMeters / Mathf.Max(1e-6f, worldScaleY);
+                        if (bulgeOffset.magnitude > cap) bulgeOffset = bulgeOffset.normalized * cap;
+                        Vector3 point = linear + bulgeOffset;
+                        Vector3 shadeNormal = (t * n0 + u * n1 + w * n2).normalized;
+                        if (rough)
+                        {
+                            // Weight from shared data only (see class comment), then fBm along the smooth normal.
+                            float weight = Mathf.Max(t * vw0 + u * vw1 + w * vw2, 27 * t * u * w);
+                            if (free01) weight = Mathf.Max(weight, 4 * t * u);
+                            if (free12) weight = Mathf.Max(weight, 4 * u * w);
+                            if (free20) weight = Mathf.Max(weight, 4 * w * t);
+                            weight = Mathf.SmoothStep(0, 1, Mathf.Clamp01(weight));
+                            Vector3 dir = (t * m0 + u * m1 + w * m2).normalized, metres = linear * metresPerUnit;
+                            float h = Relief(metres);
+                            point += dir * (h * weight * reliefUnits);
+                            maxRelief = Mathf.Max(maxRelief, Mathf.Abs(h * weight) * reliefMeters);
+                            // Shading: soften hard corners toward the smooth normal, tilt by the relief slope.
+                            const float step = 0.05f;
+                            Vector3 grad = new Vector3(Relief(metres + Vector3.right * step) - h, Relief(metres + Vector3.up * step) - h, Relief(metres + Vector3.forward * step) - h) / step;
+                            Vector3 soft = Vector3.Slerp(shadeNormal, dir, 0.55f);
+                            shadeNormal = (soft - Vector3.ProjectOnPlane(grad, soft) * (reliefMeters * weight)).normalized;
+                        }
                         float offset = (point - linear).magnitude * worldScaleY; maxOffset = Mathf.Max(maxOffset, offset);
                         if (Walkable(f)) walkableOffset = Mathf.Max(walkableOffset, offset);
                         outPositions.Add(point);
-                        outNormal.Add((t * n0 + u * n1 + w * n2).normalized);
+                        outNormal.Add(shadeNormal);
                         Vector2 own = hasUv ? t * uvs[i0] + u * uvs[i1] + w * uvs[i2] : Vector2.zero;
                         if (hasUv) outUv.Add(own);
                         // Edge k joins corners k,k+1; its opposite barycentric is w,t,u.
@@ -228,7 +337,17 @@ namespace Xena.Assets
                         Vector2 e0 = s0 >= 0 ? Continue(s0, linear, out o0) : own, e1 = s1 >= 0 ? Continue(s1, linear, out o1) : own, e2 = s2 >= 0 ? Continue(s2, linear, out o2) : own;
                         seamUv[0].Add(e0); seamUv[1].Add(e1); seamUv[2].Add(e2);
                         seamWeight.Add(new Vector3(s0 >= 0 ? Fade(w) * Trust(o0) : 0, s1 >= 0 ? Fade(t) * Trust(o1) : 0, s2 >= 0 ? Fade(u) * Trust(o2) : 0));
-                        if (hasColor) outColor.Add(t * c0 + u * c1 + w * c2);
+                        Color lighting = hasColor ? t * c0 + u * c1 + w * c2 : Color.white;
+                        if (toned[f])
+                        {
+                            // Pull toward the shared family tone near the edges (proximity 1 on an edge).
+                            float near = Mathf.Clamp01(1 - 3 * Mathf.Min(t, Mathf.Min(u, w)));
+                            Color shared = t * g0 + u * g1 + w * g2, mine = tone[f];
+                            Vector3 factor = new Vector3(Mathf.Clamp(shared.r / Mathf.Max(mine.r, 0.01f), 0.6f, 1.6f), Mathf.Clamp(shared.g / Mathf.Max(mine.g, 0.01f), 0.6f, 1.6f), Mathf.Clamp(shared.b / Mathf.Max(mine.b, 0.01f), 0.6f, 1.6f));
+                            factor = Vector3.Lerp(Vector3.one, factor, near * near * (3 - 2 * near));
+                            lighting = new Color(Mathf.Min(1, lighting.r * factor.x), Mathf.Min(1, lighting.g * factor.y), Mathf.Min(1, lighting.b * factor.z), lighting.a);
+                        }
+                        if (hasColor) outColor.Add(lighting);
                     }
                 int Index(int row, int col) { int offset = 0; for (int r = 0; r < row; r++) offset += Segments + 1 - r; return start + offset + col; }
                 List<int> target = outTriangles[faceSubmesh[f]];
