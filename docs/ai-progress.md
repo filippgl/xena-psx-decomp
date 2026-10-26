@@ -40,7 +40,20 @@ One issue per task. Nothing here is a claim without the command/measurement that
   butterfly 0/399 stalled frames at 120 FPS; build/unity-import/creatures-butterfly-close.png.
   All 8 suites + aggregate PASS (claude-v150-*). Wings still static: agent researching g_lark generator +
   SMA wing timing + vertex-frame export (docs/xena-lark-generator.md).
-  Next: wing vertex animation, larks + chirps 0x4B/0x4C, bandit patrol/avoid (mode 6).
+- CLAUDE 2026-10-26 claude-v158 build: PATROL + LARKS + WINGS. Merged agent research
+  (docs/xena-lark-generator.md, tools/export_creature_vertex.mjs, 1219/1219 RAM samples).
+  Patrol (flag 0x200, 3 level-01 generators): mode 1 walks to waypoint 0, sight test 6000/+-35 deg or
+  1000/+-90 deg + line cast 1 m up -> approach; stop at waypoint and "hit ends patrol" INFERRED.
+  Larks: g_lark phase/count/radius/350 exclusion, perched at generator pos+yaw, 210-step life, flight
+  (-rsin/150, -9|-13, -rcos/150), chirps. Wings: tools/install_creature_vertex.py -> SMA vertex frames,
+  one per step (butterfly rest every 2nd, perched lark frozen), blended per render frame.
+  Smoke: patrol walk 1.1 m unseen then sighting; wings 0/119 stalled, 19 shapes; lark v = (26,-13,7)
+  for yaw -1216 (expected 26/7); build/unity-import/creatures-lark-close.png. All suites PASS (claude-v158-*).
+  CANDIDATE BUG (unverified): PSX rotY and Unity yaw are the same matrix and PSX models face local -z,
+  so bandit heading = rotY + 2048; PrototypeBandits uses spawnYaw as heading directly -> bandits may
+  spawn facing backwards. Check against a native capture before changing (the frog's +sin/+cos jump
+  direction from the audit has the same open sign question).
+  Next: verify bandit spawn facing vs native, mode 6 avoid, bandit hurt-voice lists.
 - CLAUDE 2026-10-25 10:50 build (DLL 10:50:29), all 8 suites + aggregate PASS
   (build/unity-import/claude-v32-*.txt), bandit 6/6 runs 0 stalled.
   GAME OVER (native capture build/gameover, --poke 8700:0x8014E4F2:600:2 = Xena +0x12):

@@ -15,7 +15,7 @@ namespace Xena.Assets
     // original max+3/8min metric for radii and XZ point-segment distance for
     // segments (INFERRED). Not implemented: camera line test flag 0x100 (its
     // direction is unknown), the post-3-spawn rate limit D_800F0A58 (unknown,
-    // treated as 0), patrol targets (flag 0x200), larks.
+    // treated as 0), larks.
     public sealed class PrototypeBandits : MonoBehaviour, IXenaVisualModeTarget
     {
         [Serializable] private sealed class ScriptFile { public LevelConfig levelConfig; public Actor[] actors; }
@@ -25,7 +25,7 @@ namespace Xena.Assets
         [Serializable] private sealed class Generator
         {
             public string spawnClass, flags; public int remaining, aggression, healthDelta, blockPercent, spawnYaw; public bool infinite, countsAsEnemy;
-            public int[] spawnPosition; public Trigger trigger;
+            public int[] spawnPosition, patrolTarget; public Trigger trigger;
         }
         [Serializable] private sealed class Trigger { public string type; public int[] centre, from, to; public int radius, lateral; }
         private sealed class Slot { public Actor actor; public int remaining; public int flags; public int spawned; }
@@ -130,6 +130,7 @@ namespace Xena.Assets
             var brain = root.AddComponent<PrototypeBanditBrain>();
             brain.Configure(preview, motor, Motion(model), MaxHealth[g.spawnClass] + g.healthDelta, g.aggression, slot.actor.index * 7919 + slot.spawned * 131 + 17);
             brain.ConfigureDefence(g.spawnClass != "bandit", g.blockPercent); // classes 0x96..0x98 block; plain bandit never
+            brain.ConfigurePatrol(g.patrolTarget != null && g.patrolTarget.Length == 3, g.patrolTarget != null && g.patrolTarget.Length == 3 ? PrototypeFire.Unity(g.patrolTarget) : Vector3.zero); // flag 0x200, waypoint 0
             Brains.Add(brain); Spawned++;
         }
 

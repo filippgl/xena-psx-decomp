@@ -16,7 +16,7 @@ namespace Xena.Assets
         [Serializable] private sealed class Report
         {
             public string result = "FAIL", error; public List<string> checks = new List<string>();
-            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError, deathLensHeight, gameOverVideoSeconds; public int gameOverMenuStep; public string gameOverVideo; public int hitFlashLife, hitDiscs, hitTriangles, remasterDroplets, discFrames, discStalls; public string strikeState; public int fallDamage, banditBlocks, contactHits, banditContactHits, lowReaction, midReaction, rearReaction; public string sfxLog, sfxAttenuation; public int butterflies, frogs, butterflyFrames, butterflyStalls, butterflyTeleports; public Vector3 contactPoint; public List<string> discTrace = new List<string>(); public int menuBolts; public List<string> runTrace = new List<string>();
+            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError, deathLensHeight, gameOverVideoSeconds; public int gameOverMenuStep; public string gameOverVideo; public int hitFlashLife, hitDiscs, hitTriangles, remasterDroplets, discFrames, discStalls; public string strikeState; public int fallDamage, banditBlocks, contactHits, banditContactHits, lowReaction, midReaction, rearReaction; public string sfxLog, sfxAttenuation; public int butterflies, frogs, butterflyFrames, butterflyStalls, butterflyTeleports, patrolSightings, wingFrames, wingStalls, wingShapes, larkMode; public float patrolWalked, patrolFlatness; public Vector3 larkVelocity; public Vector3 contactPoint; public List<string> discTrace = new List<string>(); public int menuBolts; public List<string> runTrace = new List<string>();
         }
         private readonly Report report = new Report();
         private string output; private bool finished;
@@ -122,6 +122,7 @@ namespace Xena.Assets
             yield return Scripts(motor);
             yield return Damage(motor, bandits);
             yield return Creatures(motor);
+            yield return Patrol(motor, bandits);
             yield return GameOver(motor);
             report.result = "PASS"; Finish(null);
         }
@@ -465,6 +466,42 @@ namespace Xena.Assets
             report.butterflyFrames = frames; report.butterflyStalls = stalls; report.butterflyTeleports = creatures.Teleports;
             Require(creatures.Teleports >= 1 && frames > 60 && stalls == 0, "Butterfly motion: teleports " + creatures.Teleports + ", stalls " + stalls + "/" + frames);
             report.checks.Add("butterflies follow Xena (teleport >= 5001) and glide interpolated (0 stalled frames at 120 FPS)");
+            // Wings: SMA vertex frames loop one per step, blended per render frame (0 stalled frames while flapping).
+            {
+                int wf = 0, ws = 0; Vector3[] lw = null; var shapes = new HashSet<int>();
+                for (int i = 0; i < 120; i++)
+                {
+                    yield return null;
+                    var wv = creatures.DrawnWing(b); if (wv == null) break;
+                    shapes.Add(Mathf.RoundToInt(wv[0].y + wv[wv.Length - 1].y * 7 + wv[wv.Length / 2].y * 3));
+                    if (creatures.WingsMoving(b) && lw != null) { wf++; float sum = 0; for (int k = 0; k < wv.Length; k++) sum += (wv[k] - lw[k]).sqrMagnitude; if (sum < 1e-8f) ws++; }
+                    lw = creatures.WingsMoving(b) ? wv : null;
+                }
+                report.wingFrames = wf; report.wingStalls = ws; report.wingShapes = shapes.Count;
+                Require(wf > 30 && ws == 0 && shapes.Count >= 4, "Butterfly wings: frames " + wf + ", stalls " + ws + ", shapes " + shapes.Count);
+                report.checks.Add("butterfly wings play the SMA vertex frames, blended per render frame (0 stalled at 120 FPS)");
+            }
+            // Larks: g_lark actor 24 (-11253, 582, 1997, yaw -1216) releases a perched lark when Xena is within 3000 (and
+            // not within 350); within 2000 it flies at (trunc(-rsin/150), -9|-13, trunc(-rcos/150)) per step.
+            {
+                int before = creatures.LarksSpawned;
+                Vector3 gen = PrototypeCreatures.ToUnity(new Vector3(-11253, 582, 1997));
+                yield return Visit(motor, gen + new Vector3(4f, 0, 0));
+                System.Predicate<PrototypeCreatures.Creature> from24 = c => c.kind == "lark" && c.root.name.StartsWith("lark_24_");
+                for (int i = 0; i < 80 && !creatures.Creatures.Exists(from24); i++) yield return new WaitForFixedUpdate();
+                Require(creatures.LarksSpawned > before && creatures.Creatures.Exists(from24), "g_lark 24 did not release a lark with Xena 1600 units away");
+                var lark = creatures.Creatures.Find(from24);
+                for (int i = 0; i < 6; i++) yield return new WaitForFixedUpdate();
+                Vector3 a0 = lark.p; for (int i = 0; i < 8; i++) yield return new WaitForFixedUpdate(); Vector3 v = (lark.p - a0) / 4; // 8 ticks = 4 steps
+                report.larkVelocity = v; report.larkMode = lark.mode;
+                float ang = -1216 / 4096f * 2 * Mathf.PI; int ex = -Mathf.RoundToInt(Mathf.Sin(ang) * 4096) / 150, ez = -Mathf.RoundToInt(Mathf.Cos(ang) * 4096) / 150;
+                Require(lark.mode == 3 && Mathf.Abs(v.x - ex) < 0.01f && Mathf.Abs(v.z - ez) < 0.01f && v.y <= -9 && v.y >= -13 && lark.life > 0,
+                    "Lark flight differs: mode " + lark.mode + ", v " + v + ", expected (" + ex + ", -9..-13, " + ez + ")");
+                report.checks.Add("g_lark releases a perched lark; within 2000 it flies at the original (-rsin/150, -9|-13, -rcos/150) per step");
+                var main2 = Camera.main; var orbit2 = main2.GetComponent<PrototypeCamera>(); orbit2.enabled = false;
+                for (int i = 0; i < 3; i++) { Vector3 lp = lark.root.position; main2.transform.position = lp + new Vector3(0.6f, 0.2f, 0.6f); main2.transform.LookAt(lp); yield return new WaitForEndOfFrame(); }
+                Capture("creatures-lark-close.png"); orbit2.enabled = true;
+            }
             yield return new WaitForEndOfFrame(); Capture("creatures-butterfly.png");
             // Close-up of the butterfly for the visual review.
             var main = Camera.main; var keepPos = main.transform.position; var keepRot = main.transform.rotation; var orbit = main.GetComponent<PrototypeCamera>(); orbit.enabled = false;
@@ -474,6 +511,39 @@ namespace Xena.Assets
                 yield return new WaitForEndOfFrame();
             }
             Capture("creatures-butterfly-close.png"); main.transform.SetPositionAndRotation(keepPos, keepRot); orbit.enabled = true;
+        }
+        // Patrol (flag 0x200): walks toward waypoint 0 without noticing Xena behind it; sees her ahead within
+        // 35 deg / 6000 units (line test clear) and switches to approach.
+        private IEnumerator Patrol(PrototypeMotor motor, PrototypeBandits bandits)
+        {
+            motor.ResetToSpawn(); for (int i = 0; i < 6; i++) yield return new WaitForFixedUpdate();
+            // Pick the flattest direction from the spawn so the line test 1 m above the feet is not cut by a slope.
+            Vector3 f = motor.transform.forward; f.y = 0; f.Normalize(); float best = float.MaxValue; Vector3 o = motor.transform.position;
+            for (int k = 0; k < 16; k++)
+            {
+                Vector3 dir = Quaternion.Euler(0, k * 22.5f, 0) * Vector3.forward; float g0 = motor.GroundHeight(o + dir * 3 + Vector3.up * 1.5f), spread = 0;
+                for (int m = 4; m <= 12; m++) { float gm = motor.GroundHeight(o + dir * m + Vector3.up * 1.5f); spread = float.IsNegativeInfinity(gm) || float.IsNegativeInfinity(g0) ? float.MaxValue : Mathf.Max(spread, Mathf.Abs(gm - g0)); }
+                if (spread < best) { best = spread; f = dir; }
+            }
+            report.patrolFlatness = best;
+            var foe = bandits.SpawnForTest(motor.transform.position + f * 3); Require(foe != null, "No pending bandit for the patrol test");
+            foe.transform.rotation = Quaternion.LookRotation(f); foe.Configure(foe.GetComponentInChildren<XenaAssetPreview>(), motor, Motion(foe), 75, 0, 5);
+            foe.ConfigurePatrol(true, foe.transform.position + f * 6); foe.Active = true;
+            Vector3 start = foe.transform.position;
+            for (int i = 0; i < 60 && foe.State == PrototypeBanditBrain.Mode.Idle; i++) yield return new WaitForFixedUpdate();
+            // Mode 0 picks 1 (patrol) or 2 (approach) at random; force the patrol branch for the check.
+            foe.ForcePatrolHoldForTest();
+            for (int i = 0; i < 40; i++) yield return new WaitForFixedUpdate();
+            report.patrolWalked = Vector3.Dot(foe.transform.position - start, f); report.patrolSightings = foe.Sightings;
+            Require(foe.Patrolling && foe.Sightings == 0 && report.patrolWalked > 0.3f, "Patrolling bandit did not walk to its waypoint unseen: walked " + report.patrolWalked.ToString("F2") + " m, sightings " + foe.Sightings);
+            var capsule = motor.GetComponent<CharacterController>(); capsule.enabled = false;
+            Vector3 look = foe.transform.forward; look.y = 0; look.Normalize(); Vector3 ahead = foe.transform.position + look * 2.5f; float g = motor.GroundHeight(ahead + Vector3.up * 1.5f);
+            motor.transform.position = new Vector3(ahead.x, float.IsNegativeInfinity(g) ? ahead.y : g + 0.02f, ahead.z); capsule.enabled = true; Physics.SyncTransforms();
+            for (int i = 0; i < 30 && foe.Sightings == 0; i++) yield return new WaitForFixedUpdate();
+            report.patrolSightings = foe.Sightings;
+            Require(foe.Sightings == 1 && !foe.Patrolling && foe.State != PrototypeBanditBrain.Mode.Idle, "Patrolling bandit did not see Xena ahead: blocker " + foe.SightBlocker + ", state " + foe.State + ", dist " + (Vector3.Distance(foe.transform.position, motor.transform.position) * 400).ToString("F0") + ", angle " + Vector3.Angle(foe.transform.forward, motor.transform.position - foe.transform.position).ToString("F0"));
+            report.checks.Add("patrol (flag 0x200): walks to waypoint 0, sees Xena only ahead (35 deg / 6000) and then approaches");
+            foe.Active = false;
         }
         private IEnumerator Visit(PrototypeMotor motor, Vector3 at)
         {

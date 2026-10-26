@@ -32,6 +32,24 @@ namespace Xena.Assets
         private int blockRolledFor = -1;
         public void ConfigureDefence(bool canBlock, int blockPercent) { CanBlock = canBlock; BlockPercent = blockPercent; }
         public void ForceFleeForTest() { Fleeing = true; }
+        // Patrol (flag 0x200, waypoint 0; docs/xena-enemy-audit.md mode 1, 0x80020648): while patrolling, mode 1
+        // walks (15) to the waypoint and only looks for the player: dist < 6000 within +-35 deg or dist < 1000
+        // within +-90 deg, plus a line test 400 units above the feet (func_800A2E98, here a Physics line cast
+        // against level colliders: APPROXIMATED) -> mode 2. Stopping at the waypoint is INFERRED (unknown).
+        public bool Patrolling { get; private set; }
+        public Vector3 PatrolTarget { get; private set; }
+        public int Sightings { get; private set; }
+        public string SightBlocker { get; private set; } // last collider that failed the line test (diagnostics)
+        public void ConfigurePatrol(bool patrol, Vector3 target) { Patrolling = patrol; PatrolTarget = target; }
+        public void ForcePatrolHoldForTest() { State = Mode.Hold; Patrolling = true; }
+        private bool SeesTarget(int distance, int relative)
+        {
+            if (!((distance < 6000 && Mathf.Abs(relative) <= 398) || (distance < 1000 && Mathf.Abs(relative) <= 1024))) return false;
+            Vector3 from = transform.position + Vector3.up, to = target.transform.position + Vector3.up;
+            foreach (var hit in Physics.RaycastAll(from, (to - from).normalized, Vector3.Distance(from, to), ~0, QueryTriggerInteraction.Ignore))
+                if (!hit.collider.transform.IsChildOf(target.transform) && !hit.collider.transform.IsChildOf(transform) && hit.collider.GetComponentInParent<PrototypeBanditBrain>() == null) { SightBlocker = hit.collider.name; return false; }
+            return true;
+        }
         public const int Notice = 9500, AttackRange = 700, Engage = 1700, LeaveWait = 2000, TooClose = 550, Turn = 64, Radius = 150;
         public const int Walk = 0x15, Run = 0x1A, Backstep = 0x23, SideLeft = 0x26, SideRight = 0x27;
         public static readonly int[] Attacks = { 0x3D, 0x3E, 0x3F, 0x50 };
@@ -84,6 +102,7 @@ namespace Xena.Assets
             if (Health == 0) { Dying = true; Slot = rear ? DieRear : kick ? DieLow : DieMid; Frame = 0; deathWait = 0; return true; }
             Slot = rear ? ReactRear : kick ? ReactLow : ReactFront; Frame = 0; Invulnerable = 8; Reactions++;
             if (Retaliation == 0) { Retaliation = random.Next(90, 221); Cooldown = 0; }
+            Patrolling = false; // a hit ends the patrol (INFERRED)
             if (!Fleeing && Health < MaxHealth / 3 && random.Next(4) == 0) Fleeing = true;
             return true;
         }
@@ -112,7 +131,7 @@ namespace Xena.Assets
         {
             pose = model; target = player; motion = clips; Health = maxHealth; MaxHealth = maxHealth; aggression = Mathf.Clamp(aggressionPercent, 0, 99);
             random = new System.Random(seed); heading = Mathf.RoundToInt(transform.eulerAngles.y / 360f * 4096) & 4095;
-            Fleeing = false; State = Mode.Idle; blockRolledFor = -1; Twist = 0; previousKey = -1;
+            Fleeing = false; Patrolling = false; State = Mode.Idle; blockRolledFor = -1; Twist = 0; previousKey = -1;
             pose.enabled = false; Play(PrototypeBandits.IdleSlot);
         }
         private void OnEnable() { all.Add(this); }
@@ -213,6 +232,9 @@ namespace Xena.Assets
                 case Mode.Idle:
                     if (distance < Notice && (Mathf.Abs(relative) < 1536)) State = random.Next(2) == 0 ? Mode.Hold : Mode.Approach;
                     break;
+                case Mode.Hold when Patrolling:
+                    if (SeesTarget(distance, relative)) { Patrolling = false; State = Mode.Approach; Sightings++; }
+                    break;
                 case Mode.Hold:
                 case Mode.Approach:
                     // The crowd test (0x8002012C) runs before the < 700 attack test: with two
@@ -233,6 +255,12 @@ namespace Xena.Assets
             if (!busy || ClipFinished())
             {
                 if (State == Mode.Idle) Play(PrototypeBandits.IdleSlot);
+                else if (State == Mode.Hold && Patrolling)
+                {
+                    Vector3 w = (PatrolTarget - transform.position) * 400; int wd = Mathf.Max(Mathf.Abs((int)w.x), Mathf.Abs((int)w.z)) + 3 * Mathf.Min(Mathf.Abs((int)w.x), Mathf.Abs((int)w.z)) / 8;
+                    int toward = Mathf.RoundToInt(Mathf.Atan2(w.x, w.z) / (2 * Mathf.PI) * 4096) & 4095;
+                    if (wd > 200) { TurnToward(((toward - heading + 2048) & 4095) - 2048); Play(Walk); } else Play(PrototypeBandits.IdleSlot);
+                }
                 else if (State == Mode.Hold || State == Mode.Approach) { TurnToward(relative); Play(State == Mode.Hold && distance < Engage ? Walk : Run); }
                 else if (State == Mode.Wait) { TurnToward(relative); if (distance < Engage && distance > TooClose) { int r = random.Next(51); Play(r == 0 ? SideLeft : r == 1 ? SideRight : PrototypeBandits.IdleSlot); } else Play(distance <= TooClose ? Backstep : Walk); }
                 else if (State == Mode.Attack)
