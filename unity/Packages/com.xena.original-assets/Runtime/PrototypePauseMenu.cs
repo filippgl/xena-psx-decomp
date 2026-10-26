@@ -10,7 +10,7 @@ namespace Xena.Assets
     // right-aligned at (160,64) with an underline, a vertical separator at x 180, items right-aligned at
     // x 160, y 90/110/130/150 (Продолжить, Повтор уровня, Опции, Вых), right column shield / sword /
     // scroll with "%dx" counts at x 216; selected item glows (64-vblank pulse); cursor resets on open,
-    // no wrap; confirm dialogs start on "Нет". Original mode draws the exported labels (pixel exact).
+    // no wrap; confirm dialogs start on "Нет". Text: PrototypeMenuText (Original Underdog, Remaster Tenor Sans).
     // Remaster: the same layout in Tenor Sans with a soft dark gradient.
     // The prototype's settings live here now: Опции holds music/effects volume, graphics
     // (Original/Remaster), mouse sensitivity / invert Y and the key bindings (PrototypeInput).
@@ -35,7 +35,6 @@ namespace Xena.Assets
         private void Awake()
         {
             input = GetComponent<PrototypeInput>(); scripts = GetComponent<PrototypeLevelScripts>();
-            foreach (var t in Resources.LoadAll<Texture2D>("PauseMenu/labels")) { t.filterMode = FilterMode.Point; labels[t.name] = t; }
             shield = Resources.Load<Texture2D>("PauseMenu/icons/shield"); sword = Resources.Load<Texture2D>("PauseMenu/icons/sword"); scroll = Resources.Load<Texture2D>("PauseMenu/icons/scroll");
             foreach (var t in new[] { shield, sword, scroll }) if (t != null) t.filterMode = FilterMode.Point;
             // Remaster icons: Codex shield (PauseMenu/icons/shield-hd); the sword and scroll are the same
@@ -180,20 +179,9 @@ namespace Xena.Assets
         // Right-aligned text at the anchor: Original draws the exported label when there is one.
         private void Text(Func<float, float, float, float, Rect> R, float x, float y, string text, string label, Color colour, bool selected, float scale, float pulse)
         {
-            if (!Remaster && label != null && labels.TryGetValue(label, out var add))
-            {
-                labels.TryGetValue(label + "_shadow", out var shadow); labels.TryGetValue(label + "_glow", out var glow);
-                // Right alignment: pen = anchor - extent; image pixel (0,0) = pen + originOffset (export JSON).
-                float w = add.width, h = add.height; layout.TryGetValue(label, out var l);
-                Rect r = l != null && l.originOffset != null && l.originOffset.Length == 2 ? R(x - l.extent + l.originOffset[0], y + l.originOffset[1], w, h) : R(x - w + 1, y - 2, w, h);
-                if (shadow != null) GUI.DrawTexture(r, shadow);
-                // Glow: R = G = pulse, B = 15 (yellow), added over the label.
-                if (selected && glow != null) { var c = GUI.color; GUI.color = new Color(1, 1, 15 / 255f, pulse); GUI.DrawTexture(r, glow); GUI.DrawTexture(r, add); GUI.color = c; }
-                GUI.DrawTexture(r, add);
-                return;
-            }
             var area = R(x - 300, y - 2, 300, 18);
-            PrototypeMenuText.Draw(area, text, Mathf.RoundToInt(11 * scale), selected ? Color.Lerp(colour, new Color(1, 0.9f, 0.4f), 0.5f + 0.5f * pulse) : colour * 1.6f, TextAnchor.MiddleRight,
+            if (!Remaster && selected) colour = new Color(1, 1, 0.3f); // original: yellow pulse on the selected line
+            PrototypeMenuText.Draw(area, text, Mathf.RoundToInt(11 * scale), selected && Remaster ? Color.Lerp(colour, new Color(1, 0.9f, 0.4f), 0.5f + 0.5f * pulse) : colour * 1.6f, TextAnchor.MiddleRight,
                 selected ? new Color(1, 0.8f, 0.25f, pulse) : default);
         }
     }

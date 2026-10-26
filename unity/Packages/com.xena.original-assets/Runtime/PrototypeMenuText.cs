@@ -2,13 +2,24 @@ using UnityEngine;
 
 namespace Xena.Assets
 {
-    // Menu text in Tenor Sans (Google Fonts, SIL OFL 1.1, Resources/Fonts; Cyrillic,
-    // classical humanist capitals close to the menu art). Shadow and glow are drawn as
-    // offset copies; used by the main menu (Remaster) and the death/exit menu.
+    // All UI text (Resources/Fonts, Google Fonts, SIL OFL 1.1, licences alongside): Remaster uses
+    // Tenor Sans (classical capitals close to the menu art), Original uses Underdog, a quirky
+    // Cyrillic face that resembles the original xenafont (user decision 2026-10-26: no port of the
+    // original bitmap font / its Russian remapping; English text will be added later). Shadow and
+    // glow are drawn as offset copies.
     public static class PrototypeMenuText
     {
-        private static Font font; private static GUIStyle style;
-        public static Font Font { get { if (font == null) font = Resources.Load<Font>("Fonts/TenorSans-Regular"); return font; } }
+        private static Font font, originalFont; private static GUIStyle style;
+        private static bool Remaster => PrototypeGraphics.Active == null || PrototypeGraphics.Active.Mode == XenaVisualMode.Remaster;
+        public static Font Font
+        {
+            get
+            {
+                if (font == null) font = Resources.Load<Font>("Fonts/TenorSans-Regular");
+                if (originalFont == null) originalFont = Resources.Load<Font>("Fonts/Underdog-Regular");
+                return Remaster || originalFont == null ? font : originalFont;
+            }
+        }
         public static bool Available => Font != null;
 
         private static GUIStyle Style(int size, TextAnchor anchor)

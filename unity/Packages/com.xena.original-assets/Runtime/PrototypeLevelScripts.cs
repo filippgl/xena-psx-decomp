@@ -263,16 +263,10 @@ namespace Xena.Assets
                 Overlay(Remaster ? 0.5f : 0.22f);
                 int n = Shown.Length; float top = 114 - 8 * n;
                 bool prompt = Time.unscaledTime - shownAt > MessageDelay;
-                if (!Remaster && PrototypePs1Text.Available)
                 {
-                    for (int i = 0; i < n; i++) PrototypePs1Text.Draw(R, Shown[i], 160, top + 17 * i, 2, new Color32(50, 150, 150, 255));
-                    if (prompt) PrototypePs1Text.Draw(R, "Нажми ⓧдля продолж", 160, 194, 2, new Color32(64, 200, 64, 255));
-                }
-                else
-                {
-                    var band = GUI.color; GUI.color = new Color(0, 0, 0, 0.35f); GUI.DrawTexture(R(0, top - 14, 320, 17 * n + 24), Texture2D.whiteTexture); GUI.color = band;
-                    for (int i = 0; i < n; i++) PrototypeMenuText.Draw(R(0, top + 17 * i - 2, 320, 18), Shown[i].Trim(), Mathf.RoundToInt(11 * scale), new Color(0.6f, 0.92f, 0.9f), TextAnchor.MiddleCenter);
-                    if (prompt) PrototypeMenuText.Draw(R(0, 192, 320, 16), "Нажми Enter, чтобы продолжить", Mathf.RoundToInt(9 * scale), new Color(0.55f, 0.95f, 0.45f), TextAnchor.MiddleCenter);
+                    if (Remaster) { var band = GUI.color; GUI.color = new Color(0, 0, 0, 0.35f); GUI.DrawTexture(R(0, top - 14, 320, 17 * n + 24), Texture2D.whiteTexture); GUI.color = band; }
+                    for (int i = 0; i < n; i++) PrototypeMenuText.Draw(R(0, top + 17 * i - 2, 320, 18), Shown[i].Trim(), Mathf.RoundToInt(11 * scale), Remaster ? new Color(0.6f, 0.92f, 0.9f) : new Color(50 / 110f, 150 / 110f, 150 / 110f), TextAnchor.MiddleCenter);
+                    if (prompt) PrototypeMenuText.Draw(R(0, 192, 320, 16), "Нажми Enter, чтобы продолжить", Mathf.RoundToInt(9 * scale), Remaster ? new Color(0.55f, 0.95f, 0.45f) : new Color(64 / 110f, 200 / 110f, 64 / 110f), TextAnchor.MiddleCenter);
                 }
                 return;
             }
@@ -285,11 +279,9 @@ namespace Xena.Assets
             var rows = new List<(string label, string value)> { ("Время", (seconds / 60) + ":" + (seconds % 60).ToString("00")), ("Убито врагов    :", (bandits != null ? bandits.Kills : 0).ToString()),
                 ("Собрано вешеи   :", ItemsCollected.ToString()), ("Свитки          :", found + "  " + total), ("", ""), ("Всего свитков:", found + "  " + total) };
             Color32 grey = new Color32(100, 100, 100, 255), gold = new Color32(125, 125, 70, 255);
-            bool ps1 = !Remaster && PrototypePs1Text.Available;
             void Line(string text, float x, float y, int align, Color32 c)
             {
-                if (ps1) PrototypePs1Text.Draw(R, text, x, y, align, c);
-                else PrototypeMenuText.Draw(align == 1 ? R(x - 300, y - 2, 300, 18) : align == 2 ? R(x - 150, y - 2, 300, 18) : R(x, y - 2, 300, 18), (x < 160 ? text.Replace("вешеи", "вещей").Replace(":", "") : text).Trim(),
+                PrototypeMenuText.Draw(align == 1 ? R(x - 300, y - 2, 300, 18) : align == 2 ? R(x - 150, y - 2, 300, 18) : R(x, y - 2, 300, 18), (x < 160 ? text.Replace("вешеи", "вещей").Replace(":", "") : text).Trim(),
                     Mathf.RoundToInt(11 * scale), new Color(c.r / 110f, c.g / 110f, c.b / 110f), align == 1 ? TextAnchor.MiddleRight : align == 2 ? TextAnchor.MiddleCenter : TextAnchor.MiddleLeft);
             }
             Line("Путь к Обалусу", 160, 34, 2, gold);
@@ -297,14 +289,14 @@ namespace Xena.Assets
             {
                 if (rows[i].label == "") continue;
                 Color32 c = i == rows.Count - 1 ? gold : grey;
-                Line(rows[i].label, 45, 68 + 17 * i, 3, c); Line(rows[i].value, 270, 68 + 17 * i, 1, c);
+                Line(rows[i].label, 45, 68 + 17 * i, 3, c);
+                Line(rows[i].value, 270, 68 + 17 * i, 1, c);
             }
             if (LevelEndRows >= 6)
             {
                 float pulse = 0.6f + 0.4f * Mathf.Sin(Time.unscaledTime * Mathf.PI * 2 * 60f / 64f);
                 var prompt = new Color32((byte)(175 * pulse), (byte)(200 * pulse), (byte)(50 * pulse), 255);
-                if (ps1) PrototypePs1Text.Draw(R, "Нажми ⓧдля продолж", 160, 210, 2, prompt);
-                else PrototypeMenuText.Draw(R(0, 208, 320, 16), "Нажми Enter, чтобы продолжить", Mathf.RoundToInt(9 * scale), new Color(0.7f, 0.85f, 0.25f) * (0.7f + 0.3f * pulse), TextAnchor.MiddleCenter);
+                PrototypeMenuText.Draw(R(0, 208, 320, 16), "Нажми Enter, чтобы продолжить", Mathf.RoundToInt(9 * scale), new Color(0.7f, 0.85f, 0.25f) * (0.7f + 0.3f * pulse), TextAnchor.MiddleCenter);
             }
         }
         private static void Overlay(float alpha) { var c = GUI.color; GUI.color = new Color(0, 0, 0, alpha); GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture); GUI.color = c; }
