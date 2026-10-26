@@ -75,7 +75,9 @@ namespace Xena.Assets
                 case 0x62: return next == 0x4f ? 31 : next == 0x55 ? 19 : 22;
                 default: return int.MaxValue; }
         }
-        private void Begin(int value, int frame = 0) { slot = value; time = frame / 30f; struck.Clear(); }
+        // Count of clip starts (lets observers tell two consecutive uses of the same slot apart).
+        public int Starts { get; private set; }
+        private void Begin(int value, int frame = 0) { slot = value; time = frame / 30f; struck.Clear(); Starts++; }
         private void ClearChain() { firstAction = secondAction = 0; reservedSlot = -1; }
         // Hit reaction interrupts the current action (no damage/target reset).
         public void Interrupt()

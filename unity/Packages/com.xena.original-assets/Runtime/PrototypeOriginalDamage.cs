@@ -172,6 +172,14 @@ namespace Xena.Assets
                     Vector3 offset = bandit.transform.position - transform.position; float dy = offset.y; offset.y = 0;
                     if (offset.magnitude > reach + PrototypeBanditBrain.Radius / 400f || Mathf.Abs(dy) * 400 > 750) continue;
                     if (!spin && offset.sqrMagnitude > 0.0001f && Vector3.Angle(transform.forward, offset) > 60) continue;
+                    if (bandit.Blocking)
+                    {
+                        // Blocking bandit: all damage discarded, blue spark, clang 0x1B (docs/xena-damage-audit.md 4).
+                        struck.Add(bandit);
+                        if (Effects != null) Effects.Spark(bandit.transform.position + Vector3.up * ((kick ? 733 : 418) / 400f), damage, PrototypeHitEffects.Type.Block);
+                        continue;
+                    }
+                    bool wasFleeing = bandit.Fleeing;
                     if (bandit.TakeHit(damage, transform.position, kick))
                     {
                         struck.Add(bandit); HitsDealt++; LastDamageDealt = damage;
@@ -184,7 +192,8 @@ namespace Xena.Assets
                             effects.Spark(point, damage, Array.IndexOf(SpecialEffectStates, combat.Slot) >= 0 ? PrototypeHitEffects.Type.Special : PrototypeHitEffects.Type.Hit);
                             if (damage >= 4) effects.Bleed(bandit.transform, point, bandit.Health == 0 ? 20 : 10, bandit.Health == 0 ? 170 : 80);
                         }
-                        if (bandit.Health == 0 && PowerUp == 0 && Array.IndexOf(KarmaStates, combat.Slot) >= 0 && (Karma = Mathf.Min(96, Karma + 10)) >= 96) { PowerUp = 825; PowerUps++; }
+                        if (bandit.Health == 0 && PowerUp == 0 && wasFleeing) Karma = Mathf.Max(0, Karma - 10); // killing a fleeing enemy
+                        else if (bandit.Health == 0 && PowerUp == 0 && Array.IndexOf(KarmaStates, combat.Slot) >= 0 && (Karma = Mathf.Min(96, Karma + 10)) >= 96) { PowerUp = 825; PowerUps++; }
                     }
                 }
             }

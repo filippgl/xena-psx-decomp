@@ -129,6 +129,7 @@ namespace Xena.Assets
             bandits.Add(preview);
             var brain = root.AddComponent<PrototypeBanditBrain>();
             brain.Configure(preview, motor, Motion(model), MaxHealth[g.spawnClass] + g.healthDelta, g.aggression, slot.actor.index * 7919 + slot.spawned * 131 + 17);
+            brain.ConfigureDefence(g.spawnClass != "bandit", g.blockPercent); // classes 0x96..0x98 block; plain bandit never
             Brains.Add(brain); Spawned++;
         }
 

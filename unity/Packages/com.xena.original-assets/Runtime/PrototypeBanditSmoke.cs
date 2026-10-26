@@ -16,7 +16,7 @@ namespace Xena.Assets
         [Serializable] private sealed class Report
         {
             public string result = "FAIL", error; public List<string> checks = new List<string>();
-            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError, deathLensHeight, gameOverVideoSeconds; public int gameOverMenuStep; public string gameOverVideo; public int hitFlashLife, hitDiscs, hitTriangles, remasterDroplets, discFrames, discStalls; public string strikeState; public int fallDamage; public List<string> discTrace = new List<string>(); public int menuBolts; public List<string> runTrace = new List<string>();
+            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError, deathLensHeight, gameOverVideoSeconds; public int gameOverMenuStep; public string gameOverVideo; public int hitFlashLife, hitDiscs, hitTriangles, remasterDroplets, discFrames, discStalls; public string strikeState; public int fallDamage, banditBlocks; public List<string> discTrace = new List<string>(); public int menuBolts; public List<string> runTrace = new List<string>();
         }
         private readonly Report report = new Report();
         private string output; private bool finished;
@@ -282,6 +282,28 @@ namespace Xena.Assets
             report.hitFlashLife = effects.LastFlashLife; report.hitDiscs = effects.LastDiscs;
             report.checks.Add("sword hit: red flash life min(d/4+4,12), ring for d >= 26, clamp(d/4-1,0,6) discs, bandit bleeds");
             Require(motor.GetComponent<PrototypeHud>().VisibleEnemyBars >= 1, "Enemy dagger bar not shown after the hit"); report.checks.Add("HUD shows the enemy dagger bar for 60 frames after its health changes");
+            // Block (mode 4): a blocking bandit discards all damage; flee: fleeing kill costs 10 karma.
+            {
+                for (int i = 0; i < 24 && foe.Invulnerable > 0; i++) { foe.Active = true; yield return new WaitForFixedUpdate(); }
+                foe.Active = false;
+                // A blocking-class bandit with 100 % block, in front of Xena, facing her.
+                foe.Configure(foe.GetComponentInChildren<XenaAssetPreview>(), motor, Motion(foe), 500, 0, 11); foe.ConfigureDefence(true, 100);
+                foe.transform.rotation = Quaternion.LookRotation(motor.transform.position - foe.transform.position); foe.Active = true;
+                int hpBefore = foe.Health, blocksBefore = foe.Blocks;
+                yield return null; yield return null;
+                InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 1 }); for (int i = 0; i < 4; i++) yield return null;
+                InputSystem.QueueStateEvent(mouse, new MouseState()); for (int i = 0; i < 40; i++) yield return new WaitForFixedUpdate();
+                report.banditBlocks = foe.Blocks - blocksBefore;
+                Require(foe.Blocks > blocksBefore && foe.Health == hpBefore, "Blocking bandit did not block the sword (blocks " + (foe.Blocks - blocksBefore) + ", hp " + hpBefore + " -> " + foe.Health + ")");
+                report.checks.Add("bandit1/2/4 block (mode 4, clip 80/82) discards Xena's damage; plain bandits never block");
+                // Flee: runs away from Xena.
+                foe.ConfigureDefence(false, 0); foe.ForceFleeForTest(); float fleeStart = Vector3.Distance(foe.transform.position, motor.transform.position);
+                for (int i = 0; i < 60; i++) yield return new WaitForFixedUpdate();
+                Require(Vector3.Distance(foe.transform.position, motor.transform.position) > fleeStart + 1, "Fleeing bandit did not run away");
+                report.checks.Add("fleeing bandit turns away and runs");
+                foe.Active = false; foe.Configure(foe.GetComponentInChildren<XenaAssetPreview>(), motor, Motion(foe), 75, 0, 7);
+                foe.transform.position = motor.transform.position + motor.transform.forward * 1.3f; foe.transform.rotation = Quaternion.LookRotation(-motor.transform.forward);
+            }
             // Chakram (docs/xena-chakram-damage.md): flat 300 at a body contact, independent of sword level.
             // The bandit's 8-step hit timer only runs while its AI steps: let it run out first.
             foe.Active = true; for (int i = 0; i < 24 && foe.Invulnerable > 0; i++) yield return new WaitForFixedUpdate();

@@ -11,14 +11,27 @@ namespace Xena.Assets
     // attackers per target), 5 attack (weighted 3D/3E/3F/50/none, cooldown
     // rand(4q,6q), q=(100-aggression)/5; backstep 23 under 550; ally spacing
     // sidesteps). Movement is the clip root motion (BANDIT.SMA speed/direction
-    // per frame). NOT implemented (unknown in the original): damage, hit
-    // reactions/death, block (mode 4), patrol waypoints, avoid (mode 6), flee.
+    // per frame). Block (mode 4, bandit1/2/4 only): dist < 1000, rand(1,100) <= block %, Xena in an
+    // attack state 0x3A..0x65 within +-70 deg ahead; clip 80 then 82; guard while 80 frame < 15 or
+    // 82 frame < 14 discards all damage (blue spark); leaves to attack (< 700) or hold. Flee: after a
+    // hit with health < max/3, 1/4 chance: turn away and run, despawn at dist >= 14001
+    // (docs/xena-enemy-audit.md, docs/xena-damage-audit.md section 4). NOT implemented: patrol
+    // waypoints, avoid (mode 6).
     public sealed class PrototypeBanditBrain : MonoBehaviour
     {
         [Serializable] public sealed class MotionFile { public MotionClip[] clips; }
         [Serializable] public sealed class MotionClip { public int slot, frames; public Move[] moves; }
         [Serializable] public sealed class Move { public int frame, speed, direction; }
-        public enum Mode { Idle = 0, Hold = 1, Approach = 2, Wait = 3, Attack = 5 }
+        public enum Mode { Idle = 0, Hold = 1, Approach = 2, Wait = 3, Block = 4, Attack = 5 }
+        public const int BlockStart = 0x80, BlockHold = 0x82;
+        public bool CanBlock { get; private set; }
+        public int BlockPercent { get; private set; }
+        public int Blocks { get; private set; }
+        public bool Fleeing { get; private set; }
+        public bool Blocking => !Dying && ((Slot == BlockStart && Frame < 15) || (Slot == BlockHold && Frame < 14));
+        private int blockRolledFor = -1;
+        public void ConfigureDefence(bool canBlock, int blockPercent) { CanBlock = canBlock; BlockPercent = blockPercent; }
+        public void ForceFleeForTest() { Fleeing = true; }
         public const int Notice = 9500, AttackRange = 700, Engage = 1700, LeaveWait = 2000, TooClose = 550, Turn = 64, Radius = 150;
         public const int Walk = 0x15, Run = 0x1A, Backstep = 0x23, SideLeft = 0x26, SideRight = 0x27;
         public static readonly int[] Attacks = { 0x3D, 0x3E, 0x3F, 0x50 };
@@ -64,6 +77,7 @@ namespace Xena.Assets
             if (Health == 0) { Dying = true; Slot = rear ? DieRear : kick ? DieLow : DieMid; Frame = 0; deathWait = 0; return true; }
             Slot = rear ? ReactRear : kick ? ReactLow : ReactFront; Frame = 0; Invulnerable = 8; Reactions++;
             if (Retaliation == 0) { Retaliation = random.Next(90, 221); Cooldown = 0; }
+            if (!Fleeing && Health < MaxHealth / 3 && random.Next(4) == 0) Fleeing = true;
             return true;
         }
         private int knockbackUnits;
@@ -91,6 +105,7 @@ namespace Xena.Assets
         {
             pose = model; target = player; motion = clips; Health = maxHealth; MaxHealth = maxHealth; aggression = Mathf.Clamp(aggressionPercent, 0, 99);
             random = new System.Random(seed); heading = Mathf.RoundToInt(transform.eulerAngles.y / 360f * 4096) & 4095;
+            Fleeing = false; State = Mode.Idle; blockRolledFor = -1;
             pose.enabled = false; Play(PrototypeBandits.IdleSlot);
         }
         private void OnEnable() { all.Add(this); }
@@ -162,6 +177,29 @@ namespace Xena.Assets
             if (Cooldown > 0) Cooldown--;
             int distance = Distance(out int relative);
             bool busy = Array.IndexOf(Attacks, Slot) >= 0 || Slot == Backstep || Slot == SideLeft || Slot == SideRight;
+            if (Fleeing)
+            {
+                // Turn away and run; far enough -> gone (despawn INFERRED).
+                if (distance >= 14001) { Removed = true; enabled = false; gameObject.SetActive(false); return; }
+                if (!busy || ClipFinished()) { TurnToward(((relative + 2048 + 2048) & 4095) - 2048); Play(Run); }
+                Advance(); return;
+            }
+            if (State == Mode.Block)
+            {
+                if (Slot == BlockStart && ClipFinished()) Play(BlockHold);
+                else if (Slot == BlockHold && Frame >= 9) State = distance < AttackRange ? Mode.Attack : Mode.Hold;
+                Advance(); return;
+            }
+            if (CanBlock && distance < 1000 && (!busy || ClipFinished()))
+            {
+                // One roll per Xena attack (AI +0x3E guard, INFERRED); Xena attacking and in front.
+                var combat = target.GetComponent<PrototypeCombat>(); int xs = combat != null && combat.Busy ? combat.Slot : -1;
+                if (xs >= 0x3A && xs <= 0x65 && Mathf.Abs(relative) <= 0x31C && blockRolledFor != xs + 1000 * combat.Starts)
+                {
+                    blockRolledFor = xs + 1000 * combat.Starts;
+                    if (random.Next(1, 101) <= BlockPercent) { State = Mode.Block; Play(BlockStart); Blocks++; TurnToward(relative); Advance(); return; }
+                }
+            }
             switch (State)
             {
                 case Mode.Idle:
