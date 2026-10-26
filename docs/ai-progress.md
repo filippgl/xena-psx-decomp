@@ -131,6 +131,23 @@ One issue per task. Nothing here is a claim without the command/measurement that
   build/unity-import/presentation-sky-remaster-*.png vs -original-180. Cost: 1.61 ms vs 0.87 ms frame (spawn,
   looking back). All suites PASS (claude-v193-*, presentation claude-v194). PENDING user verdict; next: tour
   the whole perimeter (other painted walls / corners), tune palette vs the painted backdrops.
+- claude-v210: OUTER WORLD rework after the user's review (colour steps, a green wall left, two trees on a rock,
+  out of bounds by the light shaft; "make it universal for all levels"). Now universal: painted backdrop = steep
+  boundary face with open space behind (no terrain face above/below at 1.5/3/5/8 m from its centre and base ends),
+  opaque texture region (<= 25 % cut-out) and a page whose boundary faces' median colour is painted forest
+  (G >= 1.5 R and G >= 1.5 B; level 01: forest 1.7..3+, fern rock 1.27..1.3, rock ~1.0, cliff 0.7, red sky 0.45);
+  coplanar panels are dropped whole or not at all; paths continue where the foot ground is brown earth
+  (R >= 0.85 G, R > 1.6 B). Band ground = crops of the foot faces' own textures (world scale, baked vertex
+  light), path strip = the path foot's texture; gentle rise (no bank); no plants under level colliders; original
+  backdrop trees beyond the walls stand on the band where it reaches them. Tests: perimeter tour (groups +
+  shaft views, perimeter-sheet-*.png), path views, tree ground check (528 trees; one original backdrop tree
+  beyond the level as in Original). 69 tris hidden, 1 path, frame 1.70 vs 0.77 ms. All suites PASS (claude-v210-*).
+  Known left: thin dark strips of kept wall at two group edges (4, 5); rocks for kept cliff pockets (user: rocks
+  allowed) not done.
+- TODO (user 2026-10-26): after level 2 is ported, return to level 1 and rebuild (Remaster) the part of level 2
+  that should be visible through the gaps of the burning gate (@2doors).
+- TODO (user 2026-10-26): "many trees in the level look inside out" (Remaster trees) - check after the outer
+  world fixes (bark/leaf winding or _Cull, normals).
 - CLAUDE 2026-10-25 10:50 build (DLL 10:50:29), all 8 suites + aggregate PASS
   (build/unity-import/claude-v32-*.txt), bandit 6/6 runs 0 stalled.
   GAME OVER (native capture build/gameover, --poke 8700:0x8014E4F2:600:2 = Xena +0x12):

@@ -44,7 +44,7 @@ namespace Xena.Assets
             ApplyVisualMode(PrototypeGraphics.Active == null ? XenaVisualMode.Remaster : PrototypeGraphics.Active.Mode);
         }
         // GPU readback works for pages that are not CPU readable.
-        private static Color32[] Read(Texture page)
+        internal static Color32[] Read(Texture page)
         {
             // sRGB target: the sampled colour is re-encoded, so the copy keeps the page's sRGB values (a linear
             // target stored linear values in an sRGB texture and darkened the copy).

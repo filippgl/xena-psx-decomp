@@ -10,7 +10,7 @@ namespace Xena.Assets
 {
     internal sealed class PrototypePresentationSmoke : MonoBehaviour
     {
-        [Serializable] private sealed class Report { public string result = "FAIL", error; public int highResolutionPages, stpTexels, originalTriangles, remasterTriangles; public float maxTerrainOffset, maxWalkableOffset; public int seamEdges, curtains, foams, bandits; public List<string> checks = new List<string>(), wallSpots = new List<string>(); public int wallSpotsTested, wallLensBehind; public float gateCopyMean, outerFrameMs, noOuterFrameMs; }
+        [Serializable] private sealed class Report { public string result = "FAIL", error; public int highResolutionPages, stpTexels, originalTriangles, remasterTriangles; public float maxTerrainOffset, maxWalkableOffset; public int seamEdges, curtains, foams, bandits; public List<string> checks = new List<string>(), wallSpots = new List<string>(); public int wallSpotsTested, wallLensBehind; public float gateCopyMean, outerFrameMs, noOuterFrameMs; public int floatingTrees; }
         private readonly Report report = new Report();
         private string output; private bool finished; private Gamepad pad;
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -85,6 +85,7 @@ namespace Xena.Assets
             Require(sky.LandscapeActive && Shader.GetGlobalVector("_XenaLandscapeParams").w > 0.5f, "Remaster painted 360-degree landscape inactive");
             report.checks.Add("Remaster sky and far fog show the painted 360-degree landscape");
             yield return SkyViews(motor, orbit, camera, "presentation-sky-remaster.png");
+            yield return PerimeterTour(motor, orbit, camera);
             // Outer world cost: mean frame time looking back from the spawn (180 deg), with and without it.
             {
                 var outer = FindFirstObjectByType<PrototypeRemasterOuterWorld>(); orbit.enabled = false; int keepRate = Application.targetFrameRate; Application.targetFrameRate = -1;
@@ -437,7 +438,42 @@ namespace Xena.Assets
                 var outer = FindFirstObjectByType<PrototypeRemasterOuterWorld>(); var geo = FindFirstObjectByType<PrototypeRemasterGeometry>();
                 Require(outer != null && geo != null && geo.DroppedBackdropTriangles > 0 && outer.BandTriangles > 0 && outer.Trees > 0 && outer.Plants > 0 && outer.Tufts > 0 && outer.PathSegments > 0,
                     "Outer world: dropped " + (geo != null ? geo.DroppedBackdropTriangles : 0) + ", band " + (outer != null ? outer.BandTriangles : 0) + ", trees " + (outer != null ? outer.Trees : 0) + ", path " + (outer != null ? outer.PathSegments : 0));
-                report.checks.Add("Remaster outer world: " + geo.DroppedBackdropTriangles + " painted wall tris hidden; band " + outer.BandTriangles + " tris, " + outer.Trees + " trees, " + outer.Plants + " plants, " + outer.Tufts + " tufts, path " + outer.PathSegments + " segments");
+                report.checks.Add("Remaster outer world: " + geo.DroppedBackdropTriangles + " painted wall tris hidden; band " + outer.BandTriangles + " tris, " + outer.Trees + " trees, " + outer.Plants + " plants, " + outer.Tufts + " tufts, path " + outer.PathSegments + " segments, " + outer.GroundCrops + " ground crops, " + outer.Blocked + " plants skipped under colliders; forest pages by colour: " + string.Join(" ", PrototypeRemasterOuterWorld.ForestPages) + "; " + PrototypeRemasterOuterWorld.PartialPanels + " faces kept with their panel; paths from " + string.Join(" ", outer.PathStarts.ConvertAll(x => x.ToString("F1"))));
+                // Each continued path: a view from 5 m inside, along the path, both modes.
+                int pathIndex = 0; var keepOrbit = FindFirstObjectByType<PrototypeCamera>(); keepOrbit.enabled = false; var cam = Camera.main;
+                foreach (var start in outer.PathStarts)
+                {
+                    var wall = PrototypeRemasterOuterWorld.Walls.Find(w => w.path && Vector3.Distance((w.a + w.b + w.c) / 3, start) < 8);
+                    Vector3 o = wall.outward; cam.transform.position = start - o * 5 + Vector3.up * 1.7f; cam.transform.LookAt(start + o * 6 + Vector3.up * 1.2f);
+                    foreach (var m in new[] { XenaVisualMode.Original, XenaVisualMode.Remaster })
+                    { PrototypeGraphics.Active.SetMode(m); yield return null; yield return null; yield return new WaitForEndOfFrame(); Capture("path-" + pathIndex + "-" + m.ToString().ToLowerInvariant() + ".png"); }
+                    pathIndex++;
+                }
+                keepOrbit.enabled = true;
+            }
+            // Remaster level trees must stand on the ground under their trunk (user: two trees float over a rock).
+            {
+                var floating = new List<string>(); var outOfBounds = new List<string>(); int checkedTrees = 0;
+                foreach (var t in FindObjectsByType<MeshFilter>(FindObjectsSortMode.None))
+                {
+                    bool outerTree = t.name == "OuterTree";
+                    if (!t.name.StartsWith("Tree_") && !outerTree) continue; checkedTrees++;
+                    Vector3 b = t.transform.position; var groundQuery = FindFirstObjectByType<PrototypeMotor>(); float g = groundQuery.GroundHeight(b + Vector3.up * 0.6f);
+                    float hit = float.NegativeInfinity;
+                    foreach (var h in Physics.RaycastAll(b + Vector3.up * 0.6f, Vector3.down, 6, ~0, QueryTriggerInteraction.Ignore)) if (h.collider.GetComponentInParent<PrototypeMotor>() == null) hit = Mathf.Max(hit, h.point.y);
+                    float support = Mathf.Max(g, hit);
+                    // Trees on the outer band (no collider): the band's own height under the trunk.
+                    var outerW = FindFirstObjectByType<PrototypeRemasterOuterWorld>();
+                    if (outerW != null && outerW.BandHeightAt(b, out float band)) support = Mathf.Max(support, band);
+                    if (outerTree && !float.IsNegativeInfinity(hit) && hit > b.y + 0.3f) { floating.Add(t.name + " under a collider at " + b.ToString("F1")); continue; }
+                    // A tree over nothing at all is an original backdrop tree beyond the walls (as in Original):
+                    // listed, not a failure; any tree above existing ground is.
+                    if (float.IsNegativeInfinity(support)) { outOfBounds.Add(t.name + " " + b.ToString("F1")); continue; }
+                    if (b.y - support > 0.3f) floating.Add(t.name + " base " + b.ToString("F1") + " support " + support.ToString("F2"));
+                }
+                report.floatingTrees = floating.Count; File.WriteAllText(Path.Combine(output, "floating-trees.txt"), string.Join(System.Environment.NewLine, floating));
+                Require(floating.Count == 0, "Remaster trees float above their ground: " + string.Join("; ", floating));
+                report.checks.Add("all " + checkedTrees + " Remaster trees (level + outer world) stand on their ground, none under a collider; beyond the level (original backdrop trees): " + string.Join(", ", outOfBounds));
             }
             // Remaster gate: both leaves get volume (rounded planks), at most thickness + grain deep per side.
             var gate = FindFirstObjectByType<PrototypeRemasterGate>();
@@ -489,6 +525,56 @@ namespace Xena.Assets
                     { PrototypeGraphics.Active.SetMode(m); yield return null; yield return new WaitForEndOfFrame(); Capture("prop-" + prop.Trim('@') + (v == 1 ? "-b" : v == 2 ? "-c" : "") + "-" + m.ToString().ToLowerInvariant() + ".png"); }
                 }
             }
+            orbit.enabled = true;
+        }
+        // Perimeter tour: painted walls grouped within 10 m; per group the lens stands on the corridor ground
+        // 6 m inside (eye height), looking at the wall, in both modes: perimeter-<n>-{original,remaster}.png;
+        // perimeter.json lists the groups.
+        private IEnumerator PerimeterTour(PrototypeMotor motor, PrototypeCamera orbit, Camera camera)
+        {
+            var walls = PrototypeRemasterOuterWorld.Walls; if (walls == null) yield break;
+            orbit.enabled = false;
+            var groups = new List<(Vector3 c, Vector3 o, int n)>();
+            foreach (var w in walls)
+            {
+                Vector3 c = (w.a + w.b + w.c) / 3; int g = groups.FindIndex(x => Vector3.Distance(x.c, c) < 10);
+                if (g < 0) groups.Add((c, w.outward, 1)); else { var x = groups[g]; groups[g] = ((x.c * x.n + c) / (x.n + 1), x.o + w.outward, x.n + 1); }
+            }
+            var lines = new List<string>();
+            for (int i = 0; i < groups.Count; i++)
+            {
+                Vector3 c = groups[i].c, o = groups[i].o; o.y = 0; o.Normalize();
+                Vector3 eye = Vector3.zero; bool found = false;
+                foreach (float back in new[] { 6f, 4f, 8f, 3f })
+                {
+                    Vector3 q = c - o * back; float g = motor.GroundHeight(new Vector3(q.x, c.y + 4, q.z));
+                    if (!float.IsNegativeInfinity(g)) { eye = new Vector3(q.x, g + 1.7f, q.z); found = true; break; }
+                }
+                if (!found) { lines.Add(i + " no ground " + c.ToString("F1")); continue; }
+                camera.transform.position = eye; camera.transform.LookAt(new Vector3(c.x, eye.y - 0.3f, c.z) + o * 4);
+                foreach (var m in new[] { XenaVisualMode.Original, XenaVisualMode.Remaster })
+                { PrototypeGraphics.Active.SetMode(m); yield return null; yield return null; yield return new WaitForEndOfFrame(); Capture("perimeter-" + i + "-" + m.ToString().ToLowerInvariant() + ".png"); }
+                var outerWorld = FindFirstObjectByType<PrototypeRemasterOuterWorld>();
+                outerWorld.ApplyVisualMode(XenaVisualMode.Original); yield return null; yield return new WaitForEndOfFrame(); Capture("perimeter-" + i + "-remaster-noouter.png"); outerWorld.ApplyVisualMode(XenaVisualMode.Remaster);
+                lines.Add(i + " walls " + groups[i].n + " centre " + c.ToString("F1") + " eye " + eye.ToString("F1"));
+            }
+            // Around the light shafts (user: the right wall there let the view out of bounds): four headings each.
+            int shaftIndex = 0;
+            foreach (var r in FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None))
+            {
+                if (!r.name.Contains("@sunbm")) continue;
+                Vector3 c = r.bounds.center; float g = motor.GroundHeight(new Vector3(c.x, c.y + 2, c.z));
+                if (float.IsNegativeInfinity(g)) g = r.bounds.min.y;
+                for (int h = 0; h < 4; h++)
+                {
+                    camera.transform.SetPositionAndRotation(new Vector3(c.x, g + 1.7f, c.z), Quaternion.Euler(0, h * 90, 0));
+                    foreach (var m in new[] { XenaVisualMode.Original, XenaVisualMode.Remaster })
+                    { PrototypeGraphics.Active.SetMode(m); yield return null; yield return null; yield return new WaitForEndOfFrame(); Capture("shaft-" + shaftIndex + "-" + h * 90 + "-" + m.ToString().ToLowerInvariant() + ".png"); }
+                }
+                lines.Add("shaft " + shaftIndex + " at " + c.ToString("F1")); shaftIndex++;
+            }
+            File.WriteAllText(Path.Combine(output, "perimeter.txt"), string.Join(System.Environment.NewLine, lines));
+            report.checks.Add("perimeter tour: " + groups.Count + " painted-wall groups captured");
             orbit.enabled = true;
         }
         // Sky views: lens at Xena's eye height, 12 deg up, four headings (painted landscape check).
