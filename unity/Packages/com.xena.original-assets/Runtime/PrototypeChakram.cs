@@ -48,6 +48,14 @@ namespace Xena.Assets
             projectile = Instantiate(original); projectile.name = "OriginalChakramProjectile";
             foreach (Transform part in projectile.GetComponentsInChildren<Transform>(true)) part.gameObject.layer = 2;
             projectile.GetComponent<XenaAssetPreview>().enabled = false;
+            // CHAKRAM.TMD object 0 is a single flat grey 6-unit triangle at the disc centre (hierarchy root marker). At the
+            // PS1 camera distance and 320 px it is below a pixel; in the close flight camera it showed as a white triangle
+            // inside the hole (user 2026-10-26). The mesh stays; only untextured geometry inside the hole is not drawn.
+            foreach (MeshFilter part in projectile.GetComponentsInChildren<MeshFilter>(true))
+            {
+                bool inHole = true; foreach (Vector3 v in part.sharedMesh.vertices) inHole &= new Vector2(v.x, v.z).magnitude < 0.05f;
+                if (inHole) part.GetComponent<MeshRenderer>().enabled = false;
+            }
             var trailObject = new GameObject("ChakramSpinHalo"); trailObject.layer = 2;
             trailObject.transform.SetParent(projectile.transform, false);
             Material effectMaterial = Resources.Load<Material>("Chakram/FlightTrail");

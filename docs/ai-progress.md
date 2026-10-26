@@ -5,6 +5,23 @@ One issue per task. Nothing here is a claim without the command/measurement that
 
 ## Current task — Unity combat and original collision audit (2026-10-24)
 
+- CLAUDE 2026-10-27 01:20 build `claude-v244` (worktree `decomp-claude`, DLL 00:45):
+  - Water bed: an opaque bed 0.9 m under every Remaster water surface, so no models show through
+    under the waterfall.
+  - `PrototypeSfx`: `Start(int, ...)` is renamed `StartVoice`. Unity rejects a `Start` that takes
+    parameters.
+  - Bandit smoke uses event-based waits (sword until `combat.Busy`, New game, lark).
+  - Chakram: `CHAKRAM.TMD` object 0 is a 6-unit grey root-marker triangle at the disc centre. It is
+    below a pixel at the PS1 camera, but showed as a white triangle in the close flight camera. Its
+    renderer is now off; the mesh stays and the 46-triangle source check still passes. The chakram
+    smoke now checks that nothing is drawn inside the hole.
+  - Grass tufts (level and outer world): the base edge now lies in the surface plane and the blades
+    lean toward the normal. Presentation reports 2075 slope tufts, max base gap 0.0000 m.
+  - Tests: all 8 suites and the aggregate PASS (logs `build/unity-import/claude-v244-*.txt` in the
+    worktree).
+  - Open: the waterfall-curtain/rock seam at eye (-2.315,-0.9775,38.38) heading 90 reported by Codex;
+    a sword floating near the light shaft in `presentation-gameplay-remaster-90.png`.
+
 - CLAUDE 2026-10-26 08:03 build (DLL 08:03:48 local): weapon CONTACT POINTS ported.
   `tools/install_contact_points.py` flattens build/contact-points/contact_points.json (from
   tools/export_contact_points.mjs) into Resources/Combat/contact_points.json (both projects, ignored).

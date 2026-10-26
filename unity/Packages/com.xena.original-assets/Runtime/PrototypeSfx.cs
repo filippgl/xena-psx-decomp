@@ -64,9 +64,9 @@ namespace Xena.Assets
         public int Rand(int a, int b) => random.Next(a, b + 1); // func_800B4350 inclusive
 
         // 2D (func_80084A34); ui: also plays while the menus pause the listener.
-        public static void Play2D(int id, int note = 60, int vol = 127, bool ui = false) => Instance.Start(id, note, vol, false, Vector3.zero, null, ui);
-        public static void PlayAt(int id, Vector3 position, int note = 60, int vol = 127) => Instance.Start(id, note, vol, true, position, null, false);
-        public static void PlayOn(int id, Transform follow, int note = 60, int vol = 127) => Instance.Start(id, note, vol, true, follow.position, follow, false);
+        public static void Play2D(int id, int note = 60, int vol = 127, bool ui = false) => Instance.StartVoice(id, note, vol, false, Vector3.zero, null, ui);
+        public static void PlayAt(int id, Vector3 position, int note = 60, int vol = 127) => Instance.StartVoice(id, note, vol, true, position, null, false);
+        public static void PlayOn(int id, Transform follow, int note = 60, int vol = 127) => Instance.StartVoice(id, note, vol, true, follow.position, follow, false);
         public static void PlayRandAt(int a, int b, Vector3 position, int note = 60, int vol = 127) => PlayAt(Instance.Rand(a, b), position, note, vol);
         public static bool IsPlaying(int first, int last)
         {
@@ -86,7 +86,7 @@ namespace Xena.Assets
         public static void Stop(int id) { foreach (var v in Instance.voices) if (v.id == id) { v.source.Stop(); v.id = -1; } }
         public static void StopAll() { foreach (var v in Instance.voices) { v.source.Stop(); v.id = -1; } }
 
-        private void Start(int id, int note, int vol, bool positional, Vector3 position, Transform follow, bool ui)
+        private void StartVoice(int id, int note, int vol, bool positional, Vector3 position, Transform follow, bool ui)
         {
             if (!entries.TryGetValue(id, out var e)) return;
             bool xa = (id & 0x1000) != 0;

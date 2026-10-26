@@ -98,7 +98,13 @@ namespace Xena.Assets
             MeshFilter[] meshes = Array.FindAll(projectile.GetComponentsInChildren<MeshFilter>(), item => item.GetComponent<PrototypeSpinHalo>() == null); int triangles = 0;
             foreach (MeshFilter mesh in meshes) triangles += mesh.sharedMesh.triangles.Length / 3;
             Require(meshes.Length == 2 && triangles == 46, "Projectile is not standalone original46-triangle Chakram");
+            foreach (MeshFilter mesh in meshes)
+            {
+                if (!mesh.GetComponent<MeshRenderer>().enabled) continue;
+                foreach (Vector3 vertex in mesh.sharedMesh.vertices) Require(new Vector2(vertex.x, vertex.z).magnitude > 0.1f, "Geometry drawn inside the disc hole (centre marker triangle)");
+            }
             report.checks.Add("standalone original2-mesh46-triangle textured chakram launches once");
+            report.checks.Add("nothing is drawn inside the disc hole (root marker triangle hidden)");
             yield return Ticks(18);
             Vector3 normal = chakram.DiscNormal, rim = projectile.transform.right;
             for (int i = 0; i < 6; i++)

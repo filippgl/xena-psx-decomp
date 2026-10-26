@@ -149,6 +149,8 @@ namespace Xena.Assets
             var grass = motor.GetComponent<PrototypeRemasterGrass>();
             Require(grass.Tufts > 1000 && grass.Chunks > 0 && grass.RemasterShown, "Remaster grass missing: " + grass.Tufts);
             report.checks.Add("Remaster grass: " + grass.Tufts + " tufts in " + grass.Chunks + " chunks on " + grass.GrassArea.ToString("F0") + " m2, " + grass.Ferns + " extra ferns");
+            Require(grass.SlopeTufts > 0 && grass.MaxBaseGap < 0.01f, "Grass on slopes does not sit on the surface: " + grass.SlopeTufts + " slope tufts, base gap " + grass.MaxBaseGap + " m");
+            report.checks.Add("Remaster grass on slopes follows the surface: " + grass.SlopeTufts + " slope tufts, max base gap " + grass.MaxBaseGap.ToString("F4") + " m");
             yield return VegetationViews(orbit, camera, level);
             yield return OrthoReferences(orbit, camera, level);
             // Pause menu (docs/xena-pause-menu.md): opens on the main page, no wrap, confirm starts on Нет,
@@ -540,6 +542,11 @@ namespace Xena.Assets
                 report.floatingTrees = floating.Count; File.WriteAllText(Path.Combine(output, "floating-trees.txt"), string.Join(System.Environment.NewLine, floating));
                 Require(floating.Count == 0, "Remaster trees float above their ground: " + string.Join("; ", floating));
                 report.checks.Add("all " + checkedTrees + " Remaster trees (level + outer world) stand on their ground, none under a collider; beyond the level (original backdrop trees): " + string.Join(", ", outOfBounds));
+            }
+            {
+                var env = FindFirstObjectByType<PrototypeRemasterEnvironment>();
+                Require(env != null && env.BedTriangles > 0, "Remaster water has no opaque bed");
+                report.checks.Add("Remaster water bed: " + env.BedTriangles + " opaque tris " + PrototypeRemasterEnvironment.BedDepth + " m under every water surface");
             }
             // Remaster gate: both leaves get volume (rounded planks), at most thickness + grain deep per side.
             var gate = FindFirstObjectByType<PrototypeRemasterGate>();

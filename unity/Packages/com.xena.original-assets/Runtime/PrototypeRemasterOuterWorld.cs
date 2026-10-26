@@ -468,7 +468,8 @@ namespace Xena.Assets
                     var key = new Vector2Int(Mathf.FloorToInt(p.x / 12), Mathf.FloorToInt(p.z / 12));
                     if (!chunks.TryGetValue(key, out var chunk)) chunks[key] = chunk = (new List<Vector3>(), new List<Vector2>(), new List<Color>(), new List<int>(), new List<Vector2>());
                     float h = 0.35f + 0.5f * (float)random.NextDouble(); var light = Walls[w].footSub >= 0 ? Walls[w].footLight : new Color(0.5f, 0.5f, 0.5f);
-                    PrototypeRemasterGrass.Tuft(chunk, p - new Vector3(key.x * 12, 0, key.y * 12), h, h * 1.1f, (float)random.NextDouble() * 180, new[] { 0, 2, 3 }[random.Next(3)], light, 0.02f + 0.98f * (float)random.NextDouble());
+                    var slope = new Vector3(Height(p - Vector3.right * 0.25f) - Height(p + Vector3.right * 0.25f), 0.5f, Height(p - Vector3.forward * 0.25f) - Height(p + Vector3.forward * 0.25f)).normalized;
+                    PrototypeRemasterGrass.Tuft(chunk, p - new Vector3(key.x * 12, 0, key.y * 12), h, h * 1.1f, (float)random.NextDouble() * 180, new[] { 0, 2, 3 }[random.Next(3)], light, 0.02f + 0.98f * (float)random.NextDouble(), slope);
                     Tufts++;
                 }
                 foreach (var pair in chunks)

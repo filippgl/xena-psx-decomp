@@ -158,9 +158,32 @@ namespace Xena.Assets
             AddWater("RemasterHorizonWater", new Mesh { name = "RemasterHorizonWater", indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 }, v, uv, tri, extraMaterial);
             ApplyVisualMode(AppliedMode);
         }
+        // Water bed (user 2026-10-26: the transparent water showed the models and the void under the waterfall pools):
+        // every Remaster water surface gets an opaque bed BedDepth below it (dark silt: the CC0 forest ground tinted),
+        // so only what lies between the surface and the bed (the level's own shore and rocks) shows through.
+        public const float BedDepth = 0.9f;
+        public int BedTriangles { get; private set; }
+        private Material bedMaterial;
+        private void AddBed(string name, List<Vector3> v, List<Vector2> uv, List<int> tri)
+        {
+            if (bedMaterial == null)
+            {
+                var template = Resources.Load<Material>("Remaster/LevelLit"); var tex = Resources.Load<Texture2D>("Remaster/Vegetation/ForestGround");
+                if (template == null) return;
+                bedMaterial = new Material(template) { name = "RemasterWaterBed" }; if (tex != null) bedMaterial.SetTexture("_MainTex", tex);
+                bedMaterial.SetFloat("_Cutoff", 0); bedMaterial.SetFloat("_UseVertexLighting", 0); bedMaterial.SetFloat("_RockDetail", 0); bedMaterial.SetFloat("_Cull", 0);
+                bedMaterial.SetColor("_Color", new Color(0.12f, 0.16f, 0.14f, 1));
+            }
+            var bv = new List<Vector3>(v.Count); foreach (var p in v) bv.Add(p + Vector3.down * BedDepth);
+            var mesh = new Mesh { name = name, indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
+            mesh.SetVertices(bv); mesh.SetUVs(0, uv); mesh.SetTriangles(tri, 0); mesh.RecalculateNormals(); mesh.RecalculateBounds();
+            var go = new GameObject(name); go.AddComponent<MeshFilter>().sharedMesh = mesh; go.AddComponent<MeshRenderer>().sharedMaterial = bedMaterial;
+            go.SetActive(false); extraWater.Add(go); BedTriangles += tri.Count / 3;
+        }
         private void AddWater(string name, Mesh mesh, List<Vector3> v, List<Vector2> uv, List<int> tri, Material material)
         {
             if (tri.Count == 0) return;
+            AddBed(name + "Bed", v, uv, tri);
             mesh.SetVertices(v); mesh.SetUVs(0, uv); mesh.SetTriangles(tri, 0); mesh.RecalculateNormals(); mesh.RecalculateBounds();
             var go = new GameObject(name); go.AddComponent<MeshFilter>().sharedMesh = mesh; go.AddComponent<MeshRenderer>().sharedMaterial = material;
             go.SetActive(false); extraWater.Add(go); ExtraWaterTriangles += tri.Count / 3;

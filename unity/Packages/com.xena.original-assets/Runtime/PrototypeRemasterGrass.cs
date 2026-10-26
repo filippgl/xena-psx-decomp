@@ -63,8 +63,11 @@ namespace Xena.Assets
                         int cell = random.Next(10) < 9 ? new[] { 0, 2, 3 }[random.Next(3)] : 1; // atlas: v=0 row = clover (0), fern sprout (1, rarer); top row = meadow (2), seed heads (3)
                         float height = 0.3f + 0.45f * (float)random.NextDouble(), width = height * (0.9f + 0.4f * (float)random.NextDouble());
                         float turn = (float)random.NextDouble() * 180;
-                        Tuft(chunk, p - new Vector3(key.x * Chunk, 0, key.y * Chunk), height, width, turn, cell, light, 0.02f + 0.98f * (float)random.NextDouble());
-                        Tufts++;
+                        Tuft(chunk, p - new Vector3(key.x * Chunk, 0, key.y * Chunk), height, width, turn, cell, light, 0.02f + 0.98f * (float)random.NextDouble(), normal.normalized);
+                        Tufts++; if (Vector3.Dot(normal.normalized, Vector3.up) < 0.95f) SlopeTufts++;
+                        // Base corners on the face plane (verification of the surface-following base).
+                        for (int corner = chunk.v.Count - 8; corner < chunk.v.Count; corner += 4)
+                            for (int e = 0; e < 2; e++) MaxBaseGap = Mathf.Max(MaxBaseGap, Mathf.Abs(Vector3.Dot(chunk.v[corner + e] + new Vector3(key.x * Chunk, 0, key.y * Chunk) - a, normal.normalized)));
                     }
                     int ferns = (int)(area * FernsPerSquareMetre + random.NextDouble());
                     for (int k = 0; k < ferns; k++)
@@ -97,16 +100,21 @@ namespace Xena.Assets
                 }
             ApplyVisualMode(PrototypeGraphics.Active == null ? XenaVisualMode.Remaster : PrototypeGraphics.Active.Mode);
         }
-        // Two crossed quads; base alpha 0, tip alpha 1 (wind weight).
-        internal static void Tuft((List<Vector3> v, List<Vector2> uv, List<Color> c, List<int> tri, List<Vector2> h) chunk, Vector3 at, float height, float width, float turn, int cell, Color light, float keep)
+        // Two crossed quads; base alpha 0, tip alpha 1 (wind weight). On a slope (user 2026-10-26: grass hung in the air on
+        // rocks) the base edge lies in the surface plane and the blades lean toward the surface normal.
+        public int SlopeTufts { get; private set; }
+        public float MaxBaseGap { get; private set; }
+        internal static void Tuft((List<Vector3> v, List<Vector2> uv, List<Color> c, List<int> tri, List<Vector2> h) chunk, Vector3 at, float height, float width, float turn, int cell, Color light, float keep, Vector3 surface = default)
         {
+            if (surface.sqrMagnitude < 1e-6f || surface.y <= 0) surface = Vector3.up;
+            Vector3 blade = Vector3.Slerp(Vector3.up, surface, 0.7f).normalized;
             // Atlas padded by tools/clean_grass_atlas.py: each tuft fills the bottom-centred 72 % of its cell.
             const float content = 0.72f;
             Vector2 uv0 = new Vector2((cell % 2) * 0.5f + 0.25f * (1 - content), (cell / 2) * 0.5f + 0.001f), span = new Vector2(0.5f * content, 0.5f * content - 0.002f);
             for (int q = 0; q < 2; q++)
             {
-                Vector3 right = Quaternion.Euler(0, turn + q * 90, 0) * Vector3.right * width * 0.5f; int i = chunk.v.Count;
-                chunk.v.Add(at - right); chunk.v.Add(at + right); chunk.v.Add(at + right + Vector3.up * height); chunk.v.Add(at - right + Vector3.up * height);
+                Vector3 right = Vector3.ProjectOnPlane(Quaternion.Euler(0, turn + q * 90, 0) * Vector3.right, surface).normalized * width * 0.5f; int i = chunk.v.Count;
+                chunk.v.Add(at - right); chunk.v.Add(at + right); chunk.v.Add(at + right + blade * height); chunk.v.Add(at - right + blade * height);
                 chunk.uv.Add(uv0); chunk.uv.Add(uv0 + new Vector2(span.x, 0)); chunk.uv.Add(uv0 + span); chunk.uv.Add(uv0 + new Vector2(0, span.y));
                 Color b = new Color(light.r, light.g, light.b, 0), top = new Color(light.r, light.g, light.b, 1);
                 chunk.c.Add(b); chunk.c.Add(b); chunk.c.Add(top); chunk.c.Add(top);

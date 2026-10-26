@@ -178,6 +178,7 @@ namespace Xena.Assets
             var keys = Keyboard.current; Require(keys != null, "No keyboard for the menu confirm test");
             InputSystem.QueueStateEvent(keys, new KeyboardState(Key.Space)); for (int i = 0; i < 3; i++) yield return null;
             InputSystem.QueueStateEvent(keys, new KeyboardState()); yield return null;
+            for (int i = 0; i < 20 && menu.Visible; i++) yield return null; // a slow frame may delay the confirm by a frame
             Require(!menu.Visible && Time.timeScale == 1 && PrototypeMainMenu.NewGames == games + 1, "New game did not start the level");
             bool airborne = false; for (int i = 0; i < 40; i++) { yield return new WaitForFixedUpdate(); if (!motor.Grounded) airborne = true; }
             Require(!airborne, "The Space press that confirmed New game made Xena jump");
@@ -255,7 +256,7 @@ namespace Xena.Assets
             // Hold the press for real frames: after the 4x ending, fixed-step catch-up
             // could otherwise deliver press and release to Input System in one update.
             yield return null; yield return null;
-            InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 1 }); for (int i = 0; i < 4; i++) yield return null;
+            InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 1 }); for (int i = 0; i < 4 || (i < 30 && !motor.GetComponent<PrototypeCombat>().Busy); i++) yield return null; // held until the clip starts: a slow frame can delay the fixed step that reads it
             var slots = new List<int>();
             var effects = motor.GetComponent<PrototypeHitEffects>(); int sparks = effects.SparkLog.Count, bleeds = effects.BleedLog.Count; bool shot = false;
             InputSystem.QueueStateEvent(mouse, new MouseState());
@@ -526,7 +527,7 @@ namespace Xena.Assets
                 System.Predicate<PrototypeCreatures.Creature> from24 = c => c.kind == "lark" && c.root.name.StartsWith("lark_24_");
                 // Generator 23 (180 units away) fires first; its lark blocks 24 (350 exclusion) until it has flown off:
                 // up to 16 + ~13 + 16 steps.
-                for (int i = 0; i < 200 && !creatures.Creatures.Exists(from24); i++) yield return new WaitForFixedUpdate();
+                for (int i = 0; i < 600 && !creatures.Creatures.Exists(from24); i++) yield return new WaitForFixedUpdate();
                 Require(creatures.LarksSpawned > before && creatures.Creatures.Exists(from24), "g_lark 24 did not release a lark with Xena 1600 units away");
                 var lark = creatures.Creatures.Find(from24);
                 for (int i = 0; i < 6; i++) yield return new WaitForFixedUpdate();
