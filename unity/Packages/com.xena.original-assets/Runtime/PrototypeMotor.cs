@@ -58,6 +58,7 @@ namespace Xena.Assets
             if (GetComponent<PrototypeHitEffects>() == null) gameObject.AddComponent<PrototypeHitEffects>();
             if (GetComponent<PrototypeLightShafts>() == null) gameObject.AddComponent<PrototypeLightShafts>();
             if (GetComponent<PrototypeFire>() == null) gameObject.AddComponent<PrototypeFire>();
+            if (GetComponent<PrototypeWaterOriginal>() == null) gameObject.AddComponent<PrototypeWaterOriginal>();
             if (GetComponent<PrototypePauseMenu>() == null) gameObject.AddComponent<PrototypePauseMenu>();
             if (GetComponent<PrototypeRemasterVegetation>() == null) gameObject.AddComponent<PrototypeRemasterVegetation>();
             if (GetComponent<PrototypeRemasterTrees>() == null) gameObject.AddComponent<PrototypeRemasterTrees>();

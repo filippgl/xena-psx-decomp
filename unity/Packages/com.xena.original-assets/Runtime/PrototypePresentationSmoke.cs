@@ -84,6 +84,22 @@ namespace Xena.Assets
             report.checks.Add("Remaster sky and far fog show the painted 360-degree landscape");
             yield return SkyViews(motor, orbit, camera, "presentation-sky-remaster.png");
             yield return WallCamera(motor, orbit, camera, level);
+            // Original water motion (docs/xena-water-animation.md): CLUT cycling, stream wave, splashes.
+            {
+                var ow = motor.GetComponent<PrototypeWaterOriginal>();
+                graphics.SetMode(XenaVisualMode.Original); yield return null;
+                int o0 = ow.CycleOffset; float y0 = ow.SampleWaveY(5);
+                for (int i = 0; i < 20; i++) yield return new WaitForFixedUpdate();
+                Require(ow.CycledTextures == 2 && ow.CycleOffset != o0 && ow.WaveVertices > 1000 && Mathf.Abs(ow.SampleWaveY(5) - y0) > 1e-4f && ow.Splashes == 2,
+                    "Original water motion missing: textures " + ow.CycledTextures + " wave " + ow.WaveVertices + " splashes " + ow.Splashes);
+                // Ghosting rule: the drawn stream vertices change every render frame while waving.
+                // The first frame after a held (non-moving) step rightly starts from rest: not counted.
+                int frames = 0, stalls = 0; float last = ow.SampleWaveY(5); bool wasMoving = ow.WaveMoving(5);
+                for (int i = 0; i < 30; i++) { yield return null; float now = ow.SampleWaveY(5); bool moving = ow.WaveMoving(5); frames++; if (moving && wasMoving && Mathf.Abs(now - last) < 1e-7f) stalls++; last = now; wasMoving = moving; }
+                report.checks.Add("Original water: CLUT cycling on 2 falling-water textures, stream vertex wave (" + stalls + "/" + frames + " stalled frames), 2 splash emitters");
+                Require(stalls == 0, "Stream wave stalls between steps: " + stalls + "/" + frames);
+                graphics.SetMode(XenaVisualMode.Remaster); yield return null;
+            }
             var fires = motor.GetComponent<PrototypeFire>();
             Require(fires.Fires == 6 && fires.RemasterFires == 6 && fires.RemasterShown, "Level fires missing (5 gate fires + fire2): " + fires.Fires);
             report.checks.Add("level fires: 6 original animated additive sprites (5 at the gate), Remaster particle fires in their place");
