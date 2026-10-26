@@ -33,20 +33,27 @@ namespace Xena.Assets
         public bool HasRootMotion => Busy && rootClips != null && rootClips.ContainsKey(slot);
         public float RootTravel { get; private set; }
         public Vector3 TakeRootMotion() { var r = pendingRoot; pendingRoot = Vector3.zero; return r; }
+        // Root step of SMA frame f; frames missing from the list move 0 (native 0x88: frame 27 absent -> 0).
+        public bool RootStep(int clip, int f, out Vector3 step)
+        {
+            step = Vector3.zero;
+            if (rootClips == null || !rootClips.TryGetValue(clip, out var data)) return false;
+            foreach (var m in data.moves)
+                if (m.frame == f && m.speed != 0)
+                {
+                    float angle = transform.eulerAngles.y * Mathf.PI / 180 + (m.direction - 2048) / 4096f * 2 * Mathf.PI;
+                    step = new Vector3((int)(m.speed * Mathf.Sin(angle)), 0, (int)(m.speed * Mathf.Cos(angle))) / 400f;
+                    return true;
+                }
+            return false;
+        }
         private void StepRootMotion()
         {
             if (!HasRootMotion) { rootStart = -1; return; }
             int frame = Mathf.Min(Frame, rootClips[slot].frames - 1);
             if (rootStart != Starts) { rootStart = Starts; rootFrame = frame - 1; }
             for (int f = rootFrame + 1; f <= frame; f++)
-            {
-                int speed = 0, direction = 2048;
-                foreach (var m in rootClips[slot].moves) if (m.frame <= f) { speed = m.speed; direction = m.direction; }
-                if (speed == 0) continue;
-                float angle = transform.eulerAngles.y * Mathf.PI / 180 + (direction - 2048) / 4096f * 2 * Mathf.PI;
-                var step = new Vector3((int)(speed * Mathf.Sin(angle)), 0, (int)(speed * Mathf.Cos(angle))) / 400f;
-                pendingRoot += step; RootTravel += step.magnitude;
-            }
+                if (RootStep(slot, f, out Vector3 step)) { pendingRoot += step; RootTravel += step.magnitude; }
             rootFrame = Mathf.Max(rootFrame, frame);
         }
         public bool Busy => slot >= 0;

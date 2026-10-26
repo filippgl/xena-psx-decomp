@@ -87,7 +87,14 @@ namespace Xena.Assets
         public int ReactionFrame { get; private set; }
         public int Reactions { get; private set; }
         private int freeze, pushUnits; private Vector3 pushDirection; private bool getUp;
-        private static readonly Dictionary<int, int> ReactionFrames = new Dictionary<int, int> { { 0x66, 13 }, { 0x67, 22 }, { 0x70, 41 }, { 0x72, 14 }, { 0x74, 14 }, { 0x75, 14 }, { 0x7C, 26 }, { 0x88, 37 } };
+        // Clip frame counts (SMA). Native RAM (scratchpad knock2/knock3, xena-console 2026-10-22): a pushed reaction
+        // holds frame 1 for the 4 push steps plus one step, then frames 2..N (0x72: 14 steps in all); the
+        // knockdown 0x7C plays frames 1..26 with its SMA root motion (moves[n-1] at frame n: 478, 156, ... =
+        // ~2460 units back), then the get-up 0x88 frames 1..37 (root motion from frame 24), then idle.
+        private static readonly Dictionary<int, int> ReactionFrames = new Dictionary<int, int> { { 0x66, 9 }, { 0x67, 18 }, { 0x70, 37 }, { 0x72, 10 }, { 0x74, 10 }, { 0x75, 10 }, { 0x7C, 26 }, { 0x88, 37 } };
+        private bool reactionFresh; private int rootFrame = -1;
+        public float ReactionTravel { get; private set; }
+        public int ReactionSteps { get; private set; }
         private readonly System.Random random = new System.Random(5);
         public int LastReactionHeight { get; private set; }
         public static readonly int[] KnockdownVoices = { 0x105C, 0x105E, 0x1062, 0x10AD, 0x10AE, 0x10B4, 0x10B5 };
@@ -106,7 +113,7 @@ namespace Xena.Assets
             int slot = sector < 0x400 ? (damage >= 30 ? 0x7C : low ? 0x70 : (random.Next(3) < 2 ? 0x66 : 0x67))
                 : sector < 0x800 ? (low ? 0x70 : 0x74) : sector < 0xC00 ? 0x72 : (low ? 0x74 : 0x75);
             if (combat != null) combat.Interrupt();
-            Reacting = true; ReactionSlot = slot; ReactionFrame = 1; getUp = slot == 0x7C; Reactions++;
+            Reacting = true; ReactionSlot = slot; ReactionFrame = 1; getUp = slot == 0x7C; Reactions++; reactionFresh = true; rootFrame = -1; ReactionSteps = 0;
             // Big front hit by a bandit class 0x95..0x98 (0x80038184): D_800C142C voice list, 50 %, at Xena.
             if (slot == 0x7C && banditAttacker) PrototypeSfx.PlayListAt(KnockdownVoices, transform.position, 2048);
             freeze = slot == 0x7C ? 0 : 4; pushUnits = Mathf.Min(damage, 30); pushDirection = away.sqrMagnitude > 0.0001f ? away.normalized : -transform.forward;
@@ -119,12 +126,17 @@ namespace Xena.Assets
             while (reactionClock >= 1f / 30 && Reacting)
             {
                 reactionClock -= 1f / 30;
-                if (freeze > 0) { freeze--; controller.Move(pushDirection * pushUnits / 400f); }
-                else if (++ReactionFrame >= ReactionFrames[ReactionSlot])
+                ReactionSteps++;
+                if (freeze > 0) { freeze--; controller.Move(pushDirection * pushUnits / 400f); continue; }
+                if (reactionFresh) reactionFresh = false;
+                else if (++ReactionFrame > ReactionFrames[ReactionSlot])
                 {
-                    if (getUp && ReactionSlot != 0x88) { ReactionSlot = 0x88; ReactionFrame = 0; }
-                    else { Reacting = false; ReactionSlot = -1; }
+                    if (getUp && ReactionSlot != 0x88) { ReactionSlot = 0x88; ReactionFrame = 1; rootFrame = -1; }
+                    else { Reacting = false; ReactionSlot = -1; break; }
                 }
+                if (ReactionFrame != rootFrame && combat != null && combat.RootStep(ReactionSlot, ReactionFrame - 1, out Vector3 step))
+                { controller.Move(step); ReactionTravel += step.magnitude; }
+                rootFrame = ReactionFrame;
             }
             if (Reacting) visual.SampleSlotFrame(ReactionSlot, ReactionFrame);
         }

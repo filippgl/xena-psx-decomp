@@ -16,7 +16,7 @@ namespace Xena.Assets
         [Serializable] private sealed class Report
         {
             public string result = "FAIL", error; public List<string> checks = new List<string>();
-            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError, deathLensHeight, gameOverVideoSeconds; public int gameOverMenuStep; public string gameOverVideo; public int hitFlashLife, hitDiscs, hitTriangles, remasterDroplets, discFrames, discStalls; public string strikeState; public int fallDamage, banditBlocks, contactHits, banditContactHits, lowReaction, midReaction, rearReaction; public string sfxLog, sfxAttenuation; public int butterflies, frogs, butterflyFrames, butterflyStalls, butterflyTeleports, patrolSightings, wingFrames, wingStalls, wingShapes, larkMode; public float patrolWalked, patrolFlatness, avoidProgress, avoidFlatness; public int avoidEntries; public Vector3 larkVelocity; public Vector3 contactPoint; public List<string> discTrace = new List<string>(); public int menuBolts; public List<string> runTrace = new List<string>();
+            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError, deathLensHeight, gameOverVideoSeconds; public int gameOverMenuStep; public string gameOverVideo; public int hitFlashLife, hitDiscs, hitTriangles, remasterDroplets, discFrames, discStalls; public string strikeState; public int fallDamage, banditBlocks, contactHits, banditContactHits, lowReaction, midReaction, rearReaction; public string sfxLog, sfxAttenuation; public int rearReactionSteps, knockdownSlot, knockdownSteps; public float knockdownTravel; public int butterflies, frogs, butterflyFrames, butterflyStalls, butterflyTeleports, patrolSightings, wingFrames, wingStalls, wingShapes, larkMode; public float patrolWalked, patrolFlatness, avoidProgress, avoidFlatness; public int avoidEntries; public Vector3 larkVelocity; public Vector3 contactPoint; public List<string> discTrace = new List<string>(); public int menuBolts; public List<string> runTrace = new List<string>();
         }
         private readonly Report report = new Report();
         private string output; private bool finished;
@@ -439,6 +439,20 @@ namespace Xena.Assets
                 feet = motor.transform.position;
                 damage.TakeHit(15, feet - motor.transform.forward, feet - motor.transform.forward * 0.3f + Vector3.up); report.rearReaction = damage.ReactionSlot;
                 Require(report.rearReaction == 0x72, "A hit from behind did not play the rear reaction 0x72: " + report.rearReaction.ToString("X"));
+                // Native RAM (knock2): the pushed rear reaction lasts 14 steps (4 push + frame 1 + frames 2..10).
+                for (int i = 0; i < 120 && damage.Reacting; i++) yield return new WaitForFixedUpdate();
+                report.rearReactionSteps = damage.ReactionSteps - 1;
+                Require(report.rearReactionSteps == 14, "Rear reaction 0x72 did not last the native 14 steps: " + report.rearReactionSteps);
+                // Native RAM (knock3): a 40-damage front hit knocks Xena down (0x7C, 26 frames, ~2449 units back by
+                // its SMA root motion), then the get-up 0x88 (37 frames, ~368 units forward): 63 steps in all.
+                damage.ResetState(); feet = motor.transform.position; float travel0 = damage.ReactionTravel;
+                damage.TakeHit(40, feet + motor.transform.forward, feet + motor.transform.forward * 0.3f + Vector3.up, 0x3C);
+                report.knockdownSlot = damage.ReactionSlot;
+                for (int i = 0; i < 200 && damage.Reacting; i++) yield return new WaitForFixedUpdate();
+                report.knockdownSteps = damage.ReactionSteps - 1; report.knockdownTravel = (damage.ReactionTravel - travel0) * 400;
+                Require(report.knockdownSlot == 0x7C && report.knockdownSteps == 63 && Mathf.Abs(report.knockdownTravel - 2817) < 60,
+                    "Knockdown differs from native: slot " + report.knockdownSlot.ToString("X") + ", steps " + report.knockdownSteps + ", travel " + report.knockdownTravel.ToString("F0") + " (native 63 steps, 2449 + 368 units)");
+                report.checks.Add("reactions: rear 0x72 lasts 14 steps; knockdown 0x7C + get-up 0x88 = 63 steps with the native root motion");
                 Require(report.lowReaction == 0x70 && (report.midReaction == 0x66 || report.midReaction == 0x67),
                     "Hit height did not pick the original reaction: low " + report.lowReaction.ToString("X") + ", mid " + report.midReaction.ToString("X"));
                 report.checks.Add("hit height from the contact point: low < 250 -> 0x70, mid -> 0x66/0x67; front/rear sectors (rear 0x72)");

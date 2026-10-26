@@ -77,7 +77,15 @@ One issue per task. Nothing here is a claim without the command/measurement that
   switch 0x15 -> 0x16). Smoke: blocked approach -> 1 entry, blocker woken, exit, 3.56 m progress.
   Note: with a blocker that walks the same way, the documented exit (|lat| >= 850) can keep a bandit in
   mode 6 for a long time (as the algorithm reads). All suites PASS (build/unity-import/claude-v170-*.txt).
-  Next: reaction root motion (needs a native knockdown capture), level 02 / save on the stats screen.
+- claude-v171: REACTIONS vs NATIVE. Forced hits on xena-console by poking Xena's intake (+0x12 = 40,
+  +0x18..0x20 hit point, +0x24 attacker = bandit 0x80151270 moved in front; Xena rotY via actor+0xA8 -> +0x18
+  -> +0xE = 2450, facing (-sin, -cos) confirmed by the 0x51 path). 0x72: 4 push steps of 30 + frame 1 + frames
+  2..10 = 14 steps (port had 17); 0x7C: frames 1..26 with SMA root motion (2449 units back), get-up 0x88
+  frames 1..37 (368 forward) = 63 steps. Missing frames in the SMA move list mean 0 (0x88 frame 27).
+  Port: reaction lengths = SMA frame counts, fresh-frame step, root motion via PrototypeCombat.RootStep
+  (exact frame). Smoke: rear 14 steps, knockdown 63 steps / 2816 units. All suites PASS (claude-v171-*).
+  User chose option 2 (finish level 1 first). Next: main menu Load / Training arena / original Options,
+  gate Remaster model.
 - CLAUDE 2026-10-25 10:50 build (DLL 10:50:29), all 8 suites + aggregate PASS
   (build/unity-import/claude-v32-*.txt), bandit 6/6 runs 0 stalled.
   GAME OVER (native capture build/gameover, --poke 8700:0x8014E4F2:600:2 = Xena +0x12):
