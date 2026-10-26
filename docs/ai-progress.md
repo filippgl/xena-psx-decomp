@@ -146,8 +146,11 @@ One issue per task. Nothing here is a claim without the command/measurement that
   allowed) not done.
 - TODO (user 2026-10-26): after level 2 is ported, return to level 1 and rebuild (Remaster) the part of level 2
   that should be visible through the gaps of the burning gate (@2doors).
-- TODO (user 2026-10-26): "many trees in the level look inside out" (Remaster trees) - check after the outer
-  world fixes (bark/leaf winding or _Cull, normals).
+- claude-v213: "trees inside out" FIXED: PrototypeRemasterTrees.Tube wound every bark quad inward (100 % of bark
+  faces disagreed with the outward normals); with back-face culling each trunk showed its inside. Winding
+  reversed; presentation smoke now requires 0 inward bark faces (leaves are double-sided). Close-ups
+  build/unity-import/tree-sheet-fixed.png. All suites PASS (claude-v213-*). Also seen: a kept green grass-strip
+  wall panel behind outer trees (panel rule) - with the two thin strips, next outer-world polish item.
 - CLAUDE 2026-10-25 10:50 build (DLL 10:50:29), all 8 suites + aggregate PASS
   (build/unity-import/claude-v32-*.txt), bandit 6/6 runs 0 stalled.
   GAME OVER (native capture build/gameover, --poke 8700:0x8014E4F2:600:2 = Xena +0x12):

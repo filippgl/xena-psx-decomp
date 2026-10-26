@@ -98,7 +98,9 @@ namespace Xena.Assets
                     for (int s = 0; s < sides; s++)
                     {
                         int a = start + i * (sides + 1) + s, c = a + sides + 1;
-                        bark.AddRange(new[] { a, c, a + 1, a + 1, c, c + 1 });
+                        // Clockwise seen from outside (Unity front face): the faces agree with the outward normals.
+                        // The old order faced inward, so with back-face culling every trunk showed its inside.
+                        bark.AddRange(new[] { a, a + 1, c, a + 1, c + 1, c });
                     }
             }
             // Two crossed leaf quads; normals point away from the crown centre (soft volume light).

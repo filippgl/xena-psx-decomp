@@ -10,7 +10,7 @@ namespace Xena.Assets
 {
     internal sealed class PrototypePresentationSmoke : MonoBehaviour
     {
-        [Serializable] private sealed class Report { public string result = "FAIL", error; public int highResolutionPages, stpTexels, originalTriangles, remasterTriangles; public float maxTerrainOffset, maxWalkableOffset; public int seamEdges, curtains, foams, bandits; public List<string> checks = new List<string>(), wallSpots = new List<string>(); public int wallSpotsTested, wallLensBehind; public float gateCopyMean, outerFrameMs, noOuterFrameMs; public int floatingTrees; }
+        [Serializable] private sealed class Report { public string result = "FAIL", error; public int highResolutionPages, stpTexels, originalTriangles, remasterTriangles; public float maxTerrainOffset, maxWalkableOffset; public int seamEdges, curtains, foams, bandits; public List<string> checks = new List<string>(), wallSpots = new List<string>(); public int wallSpotsTested, wallLensBehind; public float gateCopyMean, outerFrameMs, noOuterFrameMs; public int floatingTrees, treeFlippedFaces, treeFaces; }
         private readonly Report report = new Report();
         private string output; private bool finished; private Gamepad pad;
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -450,6 +450,49 @@ namespace Xena.Assets
                     pathIndex++;
                 }
                 keepOrbit.enabled = true;
+            }
+            // Winding vs normals of the Remaster tree meshes: a front face (Unity: cross(b-a, c-a) toward the viewer)
+            // must agree with its vertex normals, else the tree shows its inside.
+            {
+                int checkedMeshes = 0, flipped = 0, faces = 0; var worst = new List<string>();
+                foreach (var t in FindObjectsByType<MeshFilter>(FindObjectsSortMode.None))
+                {
+                    if (!(t.name.StartsWith("Tree_") || t.name == "OuterTree") || t.sharedMesh == null) continue;
+                    var mesh = t.sharedMesh; var v = mesh.vertices; var nrm = mesh.normals; checkedMeshes++;
+                    for (int sub = 0; sub < mesh.subMeshCount; sub++)
+                    {
+                        int[] tri = mesh.GetTriangles(sub); int bad = 0;
+                        for (int i = 0; i < tri.Length; i += 3)
+                        {
+                            Vector3 w = Vector3.Cross(v[tri[i + 1]] - v[tri[i]], v[tri[i + 2]] - v[tri[i]]);
+                            if (Vector3.Dot(w, nrm[tri[i]] + nrm[tri[i + 1]] + nrm[tri[i + 2]]) < 0) bad++;
+                        }
+                        faces += tri.Length / 3; flipped += bad;
+                        if (bad * 10 > tri.Length / 3 && worst.Count < 5) worst.Add(t.name + " sub " + sub + " " + bad + "/" + tri.Length / 3);
+                    }
+                }
+                report.treeFlippedFaces = flipped; report.treeFaces = faces;
+                // Bark (submesh 0) is drawn with back-face culling: none of its faces may disagree.
+                int barkBad = 0; foreach (var t in FindObjectsByType<MeshFilter>(FindObjectsSortMode.None))
+                {
+                    if (!(t.name.StartsWith("Tree_") || t.name == "OuterTree") || t.sharedMesh == null) continue;
+                    var mesh = t.sharedMesh; var v = mesh.vertices; var nrm = mesh.normals; int[] tri = mesh.GetTriangles(0);
+                    for (int i = 0; i < tri.Length; i += 3) if (Vector3.Dot(Vector3.Cross(v[tri[i + 1]] - v[tri[i]], v[tri[i + 2]] - v[tri[i]]), nrm[tri[i]] + nrm[tri[i + 1]] + nrm[tri[i + 2]]) < 0) barkBad++;
+                }
+                Require(barkBad == 0, "Tree bark faces inward (shows the inside of the trunks): " + barkBad);
+                report.checks.Add("tree winding vs normals: " + flipped + " of " + faces + " faces disagree in " + checkedMeshes + " tree meshes" + (worst.Count > 0 ? " (" + string.Join("; ", worst) + ")" : ""));
+            }
+            // Close-ups of Remaster trees (user: "many trees look inside out").
+            {
+                var cam = Camera.main; var orbit2 = FindFirstObjectByType<PrototypeCamera>(); orbit2.enabled = false; int shot = 0;
+                foreach (var t in FindObjectsByType<MeshFilter>(FindObjectsSortMode.None))
+                {
+                    if (!(t.name.StartsWith("Tree_") || t.name == "OuterTree") || shot >= 6) continue;
+                    if (t.name == "OuterTree" && shot < 4) continue;
+                    Vector3 b0 = t.transform.position; cam.transform.position = b0 + new Vector3(2.5f, 1.6f, 2.5f); cam.transform.LookAt(b0 + Vector3.up * 2.5f);
+                    PrototypeGraphics.Active.SetMode(XenaVisualMode.Remaster); yield return null; yield return new WaitForEndOfFrame(); Capture("tree-close-" + shot + ".png"); shot++;
+                }
+                orbit2.enabled = true;
             }
             // Remaster level trees must stand on the ground under their trunk (user: two trees float over a rock).
             {
