@@ -20,8 +20,17 @@ namespace Xena.Assets
         public Page Current { get; private set; } = Page.Main;
         public int Cursor { get; private set; }
         public static float MusicVolume = 1, EffectsVolume = 1;
+        // Original options screen items (docs/xena-pause-menu.md "Options screen"): Аудио Моно/Стерео (mono = centred
+        // pan) and Движения Ходьба/Бег (D_800F278C; read here as the default gait that the run key inverts:
+        // INFERRED). The screen is shared with the main menu (OpenFromMainMenu).
+        public static bool Stereo = true, AlwaysRun;
+        public bool Standalone { get; private set; }
+        public static PrototypePauseMenu Active { get; private set; }
+        public void OpenFromMainMenu() { Standalone = true; Current = Page.Options; Cursor = 0; Opened++; }
+        private bool Shown => input != null && (input.Paused || Standalone);
         public static readonly string[] Items = { "Продолжить", "Повтор уровня", "Опции", "Выход" };
-        private static readonly string[] OptionItems = { "Музыка", "Эффекты", "Графика", "Чувствительность мыши", "Инверсия камеры", "Управление", "Назад" };
+        private static readonly string[] OptionItems = { "Музыка", "Эффекты", "Аудио", "Движения", "Графика", "Чувствительность мыши", "Инверсия камеры", "Управление", "Назад" };
+        private const int OptControls = 7, OptBack = 8;
         private PrototypeInput input; private PrototypeLevelScripts scripts; private bool wasPaused;
         private readonly Dictionary<string, Texture2D> labels = new Dictionary<string, Texture2D>(); private Texture2D shield, sword, scroll, hdShield, hdSword, hdScroll;
         [Serializable] private sealed class Label { public string name; public int[] originOffset; public int extent; }
@@ -43,6 +52,7 @@ namespace Xena.Assets
             var json = Resources.Load<TextAsset>("PauseMenu/pause_menu");
             if (json != null) foreach (var l in JsonUtility.FromJson<LabelFile>(json.text).labels) if (l != null && l.name != null) layout[l.name] = l;
             MusicVolume = PlayerPrefs.GetFloat("xena.music", 1); EffectsVolume = PlayerPrefs.GetFloat("xena.effects", 1);
+            Stereo = PlayerPrefs.GetInt("xena.stereo", 1) != 0; AlwaysRun = PlayerPrefs.GetInt("xena.alwaysRun", 0) != 0; Active = this;
         }
 
         private void Update()
@@ -52,7 +62,7 @@ namespace Xena.Assets
             wasPaused = input.Paused;
             // Esc inside a sub-page goes back instead of resuming (the input only toggles on the main page).
             input.PauseLocked = input.Paused && Current != Page.Main;
-            if (!input.Paused || input.IsRebinding) return;
+            if (!Shown || input.IsRebinding) return;
             var k = Keyboard.current; var pad = Gamepad.current;
             bool up = k != null && (k.upArrowKey.wasPressedThisFrame || k.wKey.wasPressedThisFrame) || pad != null && pad.dpad.up.wasPressedThisFrame;
             bool down = k != null && (k.downArrowKey.wasPressedThisFrame || k.sKey.wasPressedThisFrame) || pad != null && pad.dpad.down.wasPressedThisFrame;
@@ -69,7 +79,8 @@ namespace Xena.Assets
         public void Move(int delta) { int was = Cursor; Cursor = Mathf.Clamp(Cursor + delta, 0, Count - 1); if (Cursor != was) PrototypeSfx.Play2D(0x39, ui: true); } // no wrap; menu move 0x39
         public void Back()
         {
-            if (Current == Page.Controls) { Current = Page.Options; Cursor = 5; }
+            if (Current == Page.Controls) { Current = Page.Options; Cursor = OptControls; }
+            else if (Standalone) { Standalone = false; input.SaveSettings(); Current = Page.Main; Cursor = 0; }
             else { Current = Page.Main; Cursor = 0; }
         }
         private void Adjust(int delta)
@@ -77,9 +88,11 @@ namespace Xena.Assets
             if (Current != Page.Options) return;
             if (Cursor == 0) { MusicVolume = Mathf.Clamp01(MusicVolume + delta * 0.05f); PlayerPrefs.SetFloat("xena.music", MusicVolume); }
             if (Cursor == 1) { EffectsVolume = Mathf.Clamp01(EffectsVolume + delta * 0.05f); PlayerPrefs.SetFloat("xena.effects", EffectsVolume); PrototypeSfx.Play2D(0x26, ui: true); } // volume test sound 0x26
-            if (Cursor == 2) ToggleGraphics();
-            if (Cursor == 3) input.Preferences.Data.mouseSensitivity = Mathf.Clamp(input.Preferences.Data.mouseSensitivity + delta * 0.01f, 0.03f, 0.3f);
-            if (Cursor == 4) input.Preferences.Data.invertY = !input.Preferences.Data.invertY;
+            if (Cursor == 2) { Stereo = delta > 0; PlayerPrefs.SetInt("xena.stereo", Stereo ? 1 : 0); PrototypeSfx.Play2D(0x39, ui: true); } // LEFT mono, RIGHT stereo
+            if (Cursor == 3) { AlwaysRun = delta > 0; PlayerPrefs.SetInt("xena.alwaysRun", AlwaysRun ? 1 : 0); PrototypeSfx.Play2D(0x39, ui: true); }
+            if (Cursor == 4) ToggleGraphics();
+            if (Cursor == 5) input.Preferences.Data.mouseSensitivity = Mathf.Clamp(input.Preferences.Data.mouseSensitivity + delta * 0.01f, 0.03f, 0.3f);
+            if (Cursor == 6) input.Preferences.Data.invertY = !input.Preferences.Data.invertY;
         }
         private static void ToggleGraphics() { if (PrototypeGraphics.Active != null) PrototypeGraphics.Active.SetMode(PrototypeGraphics.Active.Mode == XenaVisualMode.Original ? XenaVisualMode.Remaster : XenaVisualMode.Original); }
         public void Select()
@@ -103,9 +116,11 @@ namespace Xena.Assets
                     input.SetPaused(false); var flow = GetComponent<PrototypeGameOver>(); if (flow != null) flow.PlayGameOverFromMenu();
                     break;
                 case Page.Options:
-                    if (Cursor == 2 || Cursor == 4) Adjust(1);
-                    else if (Cursor == 5) { Current = Page.Controls; Cursor = 0; }
-                    else if (Cursor == 6) { input.SaveSettings(); Back(); }
+                    if (Cursor == 4 || Cursor == 6) Adjust(1);
+                    else if (Cursor == 2) Adjust(Stereo ? -1 : 1);
+                    else if (Cursor == 3) Adjust(AlwaysRun ? -1 : 1);
+                    else if (Cursor == OptControls) { Current = Page.Controls; Cursor = 0; }
+                    else if (Cursor == OptBack) { input.SaveSettings(); Back(); }
                     break;
                 case Page.Controls:
                     int keys = PrototypeInput.BindingKeys.Length;
@@ -119,12 +134,12 @@ namespace Xena.Assets
         private static bool Remaster => PrototypeGraphics.Active == null || PrototypeGraphics.Active.Mode == XenaVisualMode.Remaster;
         private void OnGUI()
         {
-            GUI.depth = -900;
-            if (input == null || !input.Paused || Event.current.type != EventType.Repaint) return;
+            GUI.depth = Standalone ? -1150 : -900; // over the main menu (-1100) when opened from it
+            if (!Shown || Event.current.type != EventType.Repaint) return;
             float scale = Screen.height / 240f, left = (Screen.width - 320 * scale) / 2;
             Rect R(float x, float y, float w, float h) => new Rect(left + x * scale, y * scale, w * scale, h * scale);
             // Darken: Original subtracts grey 22 (about 9 %); Remaster a deeper soft vignette.
-            var c = GUI.color; GUI.color = new Color(0, 0, 0, Remaster ? 0.55f : 0.09f * 3.2f); GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture); GUI.color = c;
+            var c = GUI.color; GUI.color = new Color(0, 0, 0, Standalone ? 0.88f : Remaster ? 0.55f : 0.09f * 3.2f); GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture); GUI.color = c;
             float pulse = 0.55f + 0.45f * Mathf.Sin(Time.unscaledTime * Mathf.PI * 2 * 60f / 64f);
             if (Current == Page.Options || Current == Page.Controls) { DrawOptions(R, scale, pulse); return; }
             // Title, underline, separator.
@@ -151,11 +166,12 @@ namespace Xena.Assets
             {
                 Text(R, 160, 40, "ОПЦИИ", null, Color.white, false, scale, pulse);
                 string[] values = { Mathf.RoundToInt(MusicVolume * 100) == 0 ? "Вык" : Mathf.RoundToInt(MusicVolume * 100) + "%", Mathf.RoundToInt(EffectsVolume * 100) == 0 ? "Вык" : Mathf.RoundToInt(EffectsVolume * 100) + "%",
+                    Stereo ? "Стерео" : "Моно", AlwaysRun ? "Бег" : "Ходьба",
                     Remaster ? "Ремастер" : "Оригинал", input.Preferences.Data.mouseSensitivity.ToString("0.00"), input.Preferences.Data.invertY ? "Вкл" : "Вык", "", "" };
                 for (int i = 0; i < OptionItems.Length; i++)
                 {
-                    Text(R, 160, 66 + 20 * i, OptionItems[i], null, grey, i == Cursor, scale, pulse);
-                    if (values[i] != "") Text(R, 260, 66 + 20 * i, values[i], null, grey, i == Cursor, scale, pulse);
+                    Text(R, 160, 62 + 18 * i, OptionItems[i], null, grey, i == Cursor, scale, pulse);
+                    if (values[i] != "") Text(R, 260, 62 + 18 * i, values[i], null, grey, i == Cursor, scale, pulse);
                 }
                 return;
             }

@@ -35,7 +35,7 @@ namespace Xena.Assets
         public bool MenuOwnsInput { get => menuOwnsInput; set { if (menuOwnsInput && !value) waitRelease = true; menuOwnsInput = value; } }
         public bool Automated { get; set; }
         public Vector2 Move => Paused ? Vector2.zero : Vector2.ClampMagnitude(move.ReadValue<Vector2>(), 1);
-        public bool Sprint => !Paused && sprint.IsPressed();
+        public bool Sprint => !Paused && (sprint.IsPressed() != PrototypePauseMenu.AlwaysRun); // options Движения: Бег inverts the run key
         public Vector2 MouseLook => Paused ? Vector2.zero : mouse.ReadValue<Vector2>();
         public Vector2 StickLook => Paused ? Vector2.zero : stick.ReadValue<Vector2>();
         public void Configure(InputActionAsset profile) { source = profile; }

@@ -129,7 +129,7 @@ namespace Xena.Assets
                 var cam = Camera.main; Attenuate(v.position, cam != null ? cam.transform : null, out dist, out pan);
             }
             v.source.volume = Mathf.Clamp01(dist / 127f * v.vol / 127f * v.gain * PrototypePauseMenu.EffectsVolume);
-            v.source.panStereo = (pan - 64) / 64f;
+            v.source.panStereo = PrototypePauseMenu.Stereo ? (pan - 64) / 64f : 0; // options Аудио: Моно centres every voice
         }
         private void LateUpdate()
         {

@@ -137,6 +137,8 @@ namespace Xena.Assets
         {
             if (!Visible) return;
             if (PrototypeBootVideos.Playing || PrototypeBootVideos.ChangedFrame == Time.frameCount) return; // boot videos own the screen and keys
+            if (PrototypePauseMenu.Active != null && PrototypePauseMenu.Active.Standalone) { optionsFrame = Time.frameCount; return; } // the shared options screen owns the keys
+            if (optionsFrame >= Time.frameCount - 1) return; // the closing press is not a menu press
             int move = 0; bool confirm = false;
             if (Pressed(Key.UpArrow) || Pressed(Key.W) || Gamepad.current?.dpad.up.wasPressedThisFrame == true) move = -1;
             if (Pressed(Key.DownArrow) || Pressed(Key.S) || Gamepad.current?.dpad.down.wasPressedThisFrame == true) move = 1;
@@ -153,11 +155,15 @@ namespace Xena.Assets
         }
         private static bool Pressed(Key key) => Keyboard.current != null && Keyboard.current[key].wasPressedThisFrame;
         public void MoveCursor(int delta) { if (Visible) { int was = Cursor; Cursor = Mathf.Clamp(Cursor + delta, 0, 3); Idle = 900; if (was != Cursor) PrototypeSfx.Play2D(0x39, ui: true); Compose(); } }
+        private int optionsFrame = -10;
+        public int OptionsOpened { get; private set; }
         public void Select()
         {
             if (!Visible || ConfirmDelay > 0) return;
             PrototypeSfx.Play2D(0, ui: true); // confirm 0x00
             if (Cursor == 0) { NewGames++; Hide(); return; }
+            // Опции: the shared options screen (func_8006E1EC), drawn over the menu.
+            if (Cursor == 3 && PrototypePauseMenu.Active != null) { PrototypePauseMenu.Active.OpenFromMainMenu(); OptionsOpened++; return; }
             Note = "Пока недоступно в прототипе"; noteUntil = Time.unscaledTime + 2;
         }
         // One menu tick (func_8006AC88 + main's counters), RNG call order: bolts 0..3, then hair.

@@ -166,7 +166,14 @@ namespace Xena.Assets
             for (int i = 0; i < 8; i++) menu.Tick(); yield return null; yield return new WaitForEndOfFrame(); Capture("menu-remaster-b.png");
             menu.MoveCursor(1); yield return null; yield return new WaitForEndOfFrame(); Capture("menu-remaster-load.png");
             menu.Select(); Require(menu.Visible && menu.Note != null, "Unported Load game did not stay in the menu with a note");
-            menu.MoveCursor(-1); int games = PrototypeMainMenu.NewGames;
+            // Опции opens the shared options screen over the menu; Back returns to the menu.
+            menu.MoveCursor(2); menu.Select(); var shared = PrototypePauseMenu.Active;
+            Require(shared != null && shared.Standalone && shared.Current == PrototypePauseMenu.Page.Options && menu.OptionsOpened == 1, "Main menu Опции did not open the options screen");
+            yield return null; yield return new WaitForEndOfFrame(); Capture("menu-options.png");
+            shared.Back(); Require(!shared.Standalone && menu.Visible, "Options Back did not return to the main menu");
+            for (int i = 0; i < 3; i++) yield return null;
+            report.checks.Add("main menu Опции opens the shared original options screen and returns");
+            menu.MoveCursor(-3); int games = PrototypeMainMenu.NewGames;
             // Confirm with a real Space press (Space is also jump): the level must start without a jump.
             var keys = Keyboard.current; Require(keys != null, "No keyboard for the menu confirm test");
             InputSystem.QueueStateEvent(keys, new KeyboardState(Key.Space)); for (int i = 0; i < 3; i++) yield return null;

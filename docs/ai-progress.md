@@ -84,8 +84,15 @@ One issue per task. Nothing here is a claim without the command/measurement that
   frames 1..37 (368 forward) = 63 steps. Missing frames in the SMA move list mean 0 (0x88 frame 27).
   Port: reaction lengths = SMA frame counts, fresh-frame step, root motion via PrototypeCombat.RootStep
   (exact frame). Smoke: rear 14 steps, knockdown 63 steps / 2816 units. All suites PASS (claude-v171-*).
-  User chose option 2 (finish level 1 first). Next: main menu Load / Training arena / original Options,
-  gate Remaster model.
+  User chose option 2 (finish level 1 first).
+- claude-v174: main menu Опции opens the shared options screen (as func_8006E1EC), drawn at depth -1150 over a
+  0.88 dim; Back returns to the menu. Added the original items Аудио Моно/Стерео (mono centres SFX pan) and
+  Движения Ходьба/Бег (D_800F278C read as the default gait the run key inverts: INFERRED). Load game and
+  Training arena stay "not available" (both need further levels). All suites PASS; first run had two
+  flakes, both PASS on rerun: advanced-moves PNG sharing violation (file lock) and bandit "Blocked bandit hit
+  did not deal 1: 25" (likely a second bandit's unblocked hit in the block wait; not reproduced) —
+  build/unity-import/claude-v174-*.txt and *-rerun.txt.
+  Next: gate Remaster model, the bandit block-test flake, note overlapping the menu prompt.
 - CLAUDE 2026-10-25 10:50 build (DLL 10:50:29), all 8 suites + aggregate PASS
   (build/unity-import/claude-v32-*.txt), bandit 6/6 runs 0 stalled.
   GAME OVER (native capture build/gameover, --poke 8700:0x8014E4F2:600:2 = Xena +0x12):
