@@ -92,7 +92,10 @@ One issue per task. Nothing here is a claim without the command/measurement that
   flakes, both PASS on rerun: advanced-moves PNG sharing violation (file lock) and bandit "Blocked bandit hit
   did not deal 1: 25" (likely a second bandit's unblocked hit in the block wait; not reproduced) —
   build/unity-import/claude-v174-*.txt and *-rerun.txt.
-  Next: gate Remaster model, the bandit block-test flake, note overlapping the menu prompt.
+- claude-v175: bandit block-test flake addressed: the intake/block checks pause every other bandit (a second
+  bandit's side hit mixed into LastIntake / reactions / blood), and the check reads LastBlockedIntake.
+  Bandit smoke 3/3 PASS (unblockedDuringBlock 0), all suites PASS (build/unity-import/claude-v175-*.txt).
+  Next: gate Remaster model (show the user), note overlapping the menu prompt.
 - CLAUDE 2026-10-25 10:50 build (DLL 10:50:29), all 8 suites + aggregate PASS
   (build/unity-import/claude-v32-*.txt), bandit 6/6 runs 0 stalled.
   GAME OVER (native capture build/gameover, --poke 8700:0x8014E4F2:600:2 = Xena +0x12):

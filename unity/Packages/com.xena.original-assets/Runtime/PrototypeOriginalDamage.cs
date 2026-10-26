@@ -38,6 +38,7 @@ namespace Xena.Assets
         public int HitsTaken { get; private set; }
         public int LastIntake { get; private set; }
         public bool LastIntakeBlocked { get; private set; }
+        public int LastBlockedIntake { get; private set; }
         public int BlockedHits { get; private set; }
         public int HitsDealt { get; private set; }
         public int LastDamageDealt { get; private set; }
@@ -309,6 +310,7 @@ namespace Xena.Assets
             else if (attackerSlot >= 0) ConnectSound(attackerSlot, transform.position);
             if (damage >= 2 && !PrototypeSfx.IsPlaying(9, 14)) PrototypeSfx.PlayOn(PrototypeSfx.Instance.Rand(9, 14), transform);
             Health = Mathf.Max(0, Health - damage); HitsTaken++; LastIntake = damage; LastIntakeBlocked = combat != null && combat.IsBlocking && facing;
+            if (LastIntakeBlocked) LastBlockedIntake = damage;
             if (Health > 0 && Health < PotionThreshold && scripts != null && scripts.UsePotion()) Health = Mathf.Min(MaxHealth, Health + MaxHealth * 30 / 100);
             if (Health == 0) { Dead = true; deathFrame = 0; motor.enabled = false; Reacting = false; }
             banditAttacker = attackerSlot >= 0;

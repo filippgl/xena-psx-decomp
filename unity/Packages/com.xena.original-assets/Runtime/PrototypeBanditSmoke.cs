@@ -16,7 +16,7 @@ namespace Xena.Assets
         [Serializable] private sealed class Report
         {
             public string result = "FAIL", error; public List<string> checks = new List<string>();
-            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError, deathLensHeight, gameOverVideoSeconds; public int gameOverMenuStep; public string gameOverVideo; public int hitFlashLife, hitDiscs, hitTriangles, remasterDroplets, discFrames, discStalls; public string strikeState; public int fallDamage, banditBlocks, contactHits, banditContactHits, lowReaction, midReaction, rearReaction; public string sfxLog, sfxAttenuation; public int rearReactionSteps, knockdownSlot, knockdownSteps; public float knockdownTravel; public int butterflies, frogs, butterflyFrames, butterflyStalls, butterflyTeleports, patrolSightings, wingFrames, wingStalls, wingShapes, larkMode; public float patrolWalked, patrolFlatness, avoidProgress, avoidFlatness; public int avoidEntries; public Vector3 larkVelocity; public Vector3 contactPoint; public List<string> discTrace = new List<string>(); public int menuBolts; public List<string> runTrace = new List<string>();
+            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError, deathLensHeight, gameOverVideoSeconds; public int gameOverMenuStep; public string gameOverVideo; public int hitFlashLife, hitDiscs, hitTriangles, remasterDroplets, discFrames, discStalls; public string strikeState; public int fallDamage, banditBlocks, contactHits, banditContactHits, lowReaction, midReaction, rearReaction; public string sfxLog, sfxAttenuation; public int unblockedDuringBlock, rearReactionSteps, knockdownSlot, knockdownSteps; public float knockdownTravel; public int butterflies, frogs, butterflyFrames, butterflyStalls, butterflyTeleports, patrolSightings, wingFrames, wingStalls, wingShapes, larkMode; public float patrolWalked, patrolFlatness, avoidProgress, avoidFlatness; public int avoidEntries; public Vector3 larkVelocity; public Vector3 contactPoint; public List<string> discTrace = new List<string>(); public int menuBolts; public List<string> runTrace = new List<string>();
         }
         private readonly Report report = new Report();
         private string output; private bool finished;
@@ -394,6 +394,8 @@ namespace Xena.Assets
             // Intake: an attacking bandit next to Xena (back at the spawn: the sword root motion moved her on).
             damage.ResetState(); motor.ResetToSpawn(); for (int i = 0; i < 4; i++) yield return new WaitForFixedUpdate();
             var attacker = bandits.SpawnForTest(motor.transform.position + motor.transform.forward * 1.2f); Require(attacker != null, "No pending bandit for intake test");
+            // Only this attacker may hit Xena in the intake/block checks (a second bandit's side hit would mix in).
+            var paused = new List<PrototypeBanditBrain>(); foreach (var other in bandits.Brains) if (other != null && other != attacker && other.Active) { other.Active = false; paused.Add(other); }
             attacker.transform.rotation = Quaternion.LookRotation(-motor.transform.forward); attacker.Configure(attacker.GetComponentInChildren<XenaAssetPreview>(), motor, Motion(attacker), 75, 90, 11);
             for (int i = 0; i < 60 * 15 && damage.HitsTaken == 0; i++) yield return new WaitForFixedUpdate();
             report.firstIntake = damage.LastIntake;
@@ -416,14 +418,15 @@ namespace Xena.Assets
             PrototypeGraphics.Active.SetMode(XenaVisualMode.Original); for (int i = 0; i < 3; i++) yield return null; yield return new WaitForEndOfFrame(); Capture("hud-original.png");
             PrototypeGraphics.Active.SetMode(XenaVisualMode.Remaster);
             for (int i = 0; i < 90 && damage.Reacting; i++) yield return new WaitForFixedUpdate();
-            int health = damage.Health, blocked = damage.BlockedHits, reactionsBefore = damage.Reactions;
+            int health = damage.Health, blocked = damage.BlockedHits, reactionsBefore = damage.Reactions; int hitsBeforeBlock = damage.HitsTaken;
             Vector3 at = attacker.transform.position - motor.transform.position; at.y = 0; motor.transform.rotation = Quaternion.LookRotation(at);
             int bleedsBefore = motor.GetComponent<PrototypeHitEffects>().BloodEmitters;
             InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 2 });
             for (int i = 0; i < 60 * 15 && damage.BlockedHits == blocked; i++) { yield return new WaitForFixedUpdate(); Vector3 t = attacker.transform.position - motor.transform.position; t.y = 0; if (t.sqrMagnitude > 0.01f) motor.transform.rotation = Quaternion.LookRotation(t); }
             InputSystem.QueueStateEvent(mouse, new MouseState());
-            report.blockedIntake = damage.LastIntake;
-            Require(damage.BlockedHits > blocked && damage.LastIntakeBlocked && report.blockedIntake == 1, "Blocked bandit hit did not deal original 1 damage: " + report.blockedIntake);
+            // Another bandit may land an unblocked side/rear hit in the same wait; check the blocked hit itself.
+            report.blockedIntake = damage.LastBlockedIntake; report.unblockedDuringBlock = damage.HitsTaken - hitsBeforeBlock - (damage.BlockedHits - blocked);
+            Require(damage.BlockedHits > blocked && report.blockedIntake == 1, "Blocked bandit hit did not deal original 1 damage: " + report.blockedIntake);
             Require(damage.Reactions == reactionsBefore, "A 1-damage blocked hit staggered Xena");
             var blockFx = motor.GetComponent<PrototypeHitEffects>();
             Require(blockFx.LastType == PrototypeHitEffects.Type.Block && blockFx.BloodEmitters == bleedsBefore, "Blocked hit did not flash blue without blood");
@@ -432,7 +435,7 @@ namespace Xena.Assets
             for (int i = 0; i < 6; i++) yield return new WaitForFixedUpdate(); yield return new WaitForEndOfFrame(); Capture("hit-effects-original.png");
             PrototypeGraphics.Active.SetMode(XenaVisualMode.Remaster);
             report.checks.Add("blocked bandit hits deal d>40 ? d-40 : 1 (=1) and do not stagger Xena");
-            attacker.Active = false;
+            attacker.Active = false; foreach (var other in paused) other.Active = true;
             // Hit height (docs/xena-hit-reactions.md): a front contact < 250 units above the feet plays the low
             // reaction 0x70; 400 units (mid) plays 0x66/0x67.
             {
