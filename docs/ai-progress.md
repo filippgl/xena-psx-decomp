@@ -163,6 +163,13 @@ One issue per task. Nothing here is a claim without the command/measurement that
   with the holes hatched; build/inspect/inspect-sheet.png + inspect-summary.txt, per-view PNGs deleted.
   First run: 1040 Remaster views, 1 flagged: (-8.3,-2,32.4) heading 0, a gap at the waterfall pool edge.
   Detects see-through holes only (not hanging edges or style issues).
+- claude-v229: REMASTER ROCK WALLS (user: local neural net for shapes, Codex for looks). 3 cliff-rock concepts
+  (Codex, from the level rock texture) -> Hunyuan3D shapes (1600 faces) -> PrototypeRemasterRockWalls: universal
+  rock-wall detection (steep, opaque, non-forest, non-red, non-fall faces; corridor side by standing ground), cladding
+  on a 2.2 m grid, 2.2..3.2 m pieces, 0.5 m proud (the Remaster terrain bulge hid 0.15 m), never above the face top,
+  wall texture/light by the face's affine UV map. 502 faces, 565 pieces, 904k tris; outer-world view 1.78 vs 0.77 ms.
+  Close-ups build/unity-import/rockwall-*-{original,remaster}.png. PENDING user verdict (prominent). All suites PASS
+  (claude-v229-*; presentation water-motion check flaked once, passed on rerun).
 - QUEUE (user 2026-10-26, in order): lake covered by the outer world (fix in test: water = level hull);
   {icon 4}/Р1 in texts -> bound keys (done v215); remove on-screen moves panel (done v214); chakram artifact in
   the centre when thrown; Original-mode level background (user: not ported to Unity Original); grass on slopes

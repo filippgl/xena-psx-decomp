@@ -1,0 +1,8 @@
+Use your built-in image_gen tool (imagegen skill, built-in mode, not the CLI). The attached image is the ORIGINAL rock texture of the
+cliff walls of level 1 of the PS1 game "Xena: Warrior Princess" (dark weathered grey stone with green moss and lichen).
+Paint ONE standalone 3D rock piece for a modern remaster of that game: a wide, low cliff-face slab about twice as wide as tall, with a roughly flat back and a bulging, ledged, cracked front.
+The rock must be made of exactly this stone: the same dark grey colour, the same moss and lichen colours and amount as the attached
+texture, painterly-realistic like a modern remaster of a 1999 game, not a product photo, no bright or saturated colours.
+Front view (seen straight from the front, slightly from above), the whole rock visible with margin, centred, soft even light,
+plain pure white background, no shadow, no ground, no plants, no text. Output 1024x1024.
+Save the final selected image into this workspace as out/cliffrock1-concept.png (copy it from CODEX_HOME/generated_images). Do nothing else.

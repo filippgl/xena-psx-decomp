@@ -541,6 +541,21 @@ namespace Xena.Assets
                 Require(floating.Count == 0, "Remaster trees float above their ground: " + string.Join("; ", floating));
                 report.checks.Add("all " + checkedTrees + " Remaster trees (level + outer world) stand on their ground, none under a collider; beyond the level (original backdrop trees): " + string.Join(", ", outOfBounds));
             }
+            // Remaster rock walls: generated rock pieces clad the rock walls.
+            {
+                var rocks = FindFirstObjectByType<PrototypeRemasterRockWalls>();
+                Require(rocks != null && rocks.Faces > 0 && rocks.Pieces > 0, "Rock walls not clad: faces " + (rocks != null ? rocks.Faces : 0) + ", pieces " + (rocks != null ? rocks.Pieces : 0));
+                var camR = Camera.main; var orbR = camR.GetComponent<PrototypeCamera>(); orbR.enabled = false;
+                for (int k = 0; k < 6 && k < rocks.CladFaces.Count; k++)
+                {
+                    var (cc, nn) = rocks.CladFaces[k * rocks.CladFaces.Count / 6]; Vector3 h = new Vector3(nn.x, 0, nn.z).normalized;
+                    camR.transform.position = cc + h * 4.5f + Vector3.up * 0.3f; camR.transform.LookAt(cc);
+                    foreach (var m in new[] { XenaVisualMode.Original, XenaVisualMode.Remaster })
+                    { PrototypeGraphics.Active.SetMode(m); yield return null; yield return null; yield return new WaitForEndOfFrame(); Capture("rockwall-" + k + "-" + m.ToString().ToLowerInvariant() + ".png"); }
+                }
+                orbR.enabled = true;
+                report.checks.Add("Remaster rock walls: " + rocks.Faces + " wall faces clad with " + rocks.Pieces + " generated rock pieces (" + rocks.Triangles + " tris), " + rocks.Flipped + " faces turned to the corridor");
+            }
             // Remaster gate: both leaves get volume (rounded planks), at most thickness + grain deep per side.
             var gate = FindFirstObjectByType<PrototypeRemasterGate>();
             Require(gate != null && gate.Leaf == 2 && gate.SmoothedPages == 1 && gate.RemasterTriangles > 0 && gate.MaxDepthMeters > 0.02f && gate.MaxDepthMeters <= PrototypeRemasterGate.ThicknessMeters + PrototypeRemasterGate.GrainMeters + 1e-4f,
