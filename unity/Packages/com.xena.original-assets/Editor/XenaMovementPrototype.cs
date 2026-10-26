@@ -222,7 +222,7 @@ namespace Xena.Assets.Editor
             }
             // Original pixel art (pause menu labels/icons, fire and smoke frames): exact size (no NPOT
             // rescale: 82x24 labels became 128x32 and shifted), point sampled, uncompressed, no mips.
-            foreach (string pixelFolder in new[] { "Assets/Imported/Resources/PauseMenu", "Assets/Imported/Resources/Effects" })
+            foreach (string pixelFolder in new[] { "Assets/Imported/Resources/PauseMenu", "Assets/Imported/Resources/Effects", "Assets/Imported/Resources/MessageWindow" })
                 if (Directory.Exists(pixelFolder))
                     foreach (string pixelPath in Directory.GetFiles(pixelFolder, "*.png", SearchOption.AllDirectories))
                         if (AssetImporter.GetAtPath(pixelPath.Replace(Path.DirectorySeparatorChar, '/')) is TextureImporter pixelImporter)

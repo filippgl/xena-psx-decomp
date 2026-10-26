@@ -135,14 +135,42 @@ namespace Xena.Assets
             return Metric(xena, at) < radius + XenaRadius && dy > -height && dy < 750 + height;
         }
 
+        // Message window (docs/xena-message-window.md): pauses the game; held CROSS closes it once the
+        // 15-pass delay (~0.5 s) is over, START closes it at any time. The keys belong to the message
+        // while it is open (no jump from the closing press, no pause menu).
+        public const float MessageDelay = 0.5f;
+        private bool ownsInput;
         private void Update()
         {
-            if (!Modal) return;
-            // Modal message: close after a short delay on confirm/start.
-            if (Time.unscaledTime - shownAt > 0.4f && (UnityEngine.InputSystem.Keyboard.current?.enterKey.wasPressedThisFrame == true
-                || UnityEngine.InputSystem.Keyboard.current?.spaceKey.wasPressedThisFrame == true
-                || UnityEngine.InputSystem.Gamepad.current?.buttonSouth.wasPressedThisFrame == true)) Close();
+            bool own = Modal || (LevelComplete && !levelEndDone);
+            if (input != null && own != ownsInput) { input.MenuOwnsInput = own; ownsInput = own; }
+            var k = UnityEngine.InputSystem.Keyboard.current; var pad = UnityEngine.InputSystem.Gamepad.current;
+            bool crossHeld = k?.enterKey.isPressed == true || k?.spaceKey.isPressed == true || pad?.buttonSouth.isPressed == true;
+            bool start = k?.escapeKey.wasPressedThisFrame == true || pad?.startButton.wasPressedThisFrame == true;
+            bool anyPress = k?.anyKey.wasPressedThisFrame == true || pad?.buttonSouth.wasPressedThisFrame == true;
+            if (Modal) { if (start || (Time.unscaledTime - shownAt > MessageDelay && crossHeld)) Close(); return; }
+            if (LevelComplete && !levelEndDone)
+            {
+                if (levelEndStart < 0) { levelEndStart = Time.unscaledTime; levelTime = Time.timeSinceLevelLoad; }
+                float t = Time.unscaledTime - levelEndStart;
+                // Rows appear every 30 vblanks after a 10-pass delay; any press skips to the end; CROSS continues.
+                if (anyPress && t > 0.35f && LevelEndRows < 6) { LevelEndRows = 6; skipAt = Time.unscaledTime; }
+                else LevelEndRows = Mathf.Max(LevelEndRows, Mathf.Clamp(Mathf.FloorToInt((t - 0.35f) / 0.5f) + 1, 0, 6));
+                if (LevelEndRows >= 6 && Time.unscaledTime - skipAt > 0.3f && (k?.enterKey.wasPressedThisFrame == true || k?.spaceKey.wasPressedThisFrame == true || pad?.buttonSouth.wasPressedThisFrame == true))
+                {
+                    // Original: CROSS loads level 02 (not ported) -> the main menu.
+                    levelEndDone = true; if (input != null) { input.MenuOwnsInput = false; ownsInput = false; }
+                    PrototypeMainMenu.PendingShow = true;
+                    UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
+                }
+            }
         }
+        private float levelEndStart = -1, levelTime, skipAt = -10; private bool levelEndDone;
+        // Tests continue in the same scene after the ending: leave the level-complete screen.
+        public void ResetLevelEndForTest() { LevelComplete = false; levelEndStart = -1; LevelEndRows = 0; levelEndDone = false; if (input != null) input.MenuOwnsInput = false; ownsInput = false; }
+        public int LevelEndRows { get; private set; }
+        public int ItemsCollected { get; private set; }
+        public int ScrollsOnLevel { get { int n = 0; foreach (var t in triggers) if (t.actor.name == "scroll") n++; return n; } }
         public void Close() { Shown = null; ShownIndex = -1; Time.timeScale = 1; }
         private void Show(int index)
         {
@@ -178,6 +206,7 @@ namespace Xena.Assets
                         if (trigger.actor.name == "scroll") { Show(Level * 2 + trigger.actor.@params[0]); ScrollsRead++; }
                         else
                         {
+                            ItemsCollected++;
                             if (trigger.actor.name == "health2") { Potions++; GetComponent<PrototypeOriginalDamage>()?.OnPotionPicked(); }
                             if (trigger.actor.name == "up_sword") SwordLevel = Mathf.Min(4, SwordLevel + 1);
                             if (firstPickupShown.Add(trigger.actor.name)) Show(trigger.actor.name == "health2" ? 54 : 69);
@@ -220,14 +249,64 @@ namespace Xena.Assets
         public IEnumerable<Vector3> TriggerPositions(string behaviour)
         { foreach (var t in triggers) if (t.actor.behaviour == behaviour) yield return Unity(t.actor.position); }
 
-        private GUIStyle style;
+        private static bool Remaster => PrototypeGraphics.Active == null || PrototypeGraphics.Active.Mode == XenaVisualMode.Remaster;
         private void OnGUI()
         {
-            if (!Modal && !LevelComplete) return;
-            if (style == null) style = new GUIStyle(GUI.skin.box) { fontSize = Mathf.Max(18, Screen.height / 30), alignment = TextAnchor.MiddleCenter, wordWrap = true };
-            string text = Modal ? string.Join("\n", Array.ConvertAll(Shown, line => line.TrimEnd())) : "Уровень пройден";
-            float w = Screen.width * 0.6f, h = Screen.height * 0.3f;
-            GUI.Box(new Rect((Screen.width - w) / 2, Screen.height * 0.6f, w, h), text, style);
+            GUI.depth = -800;
+            if ((!Modal && !LevelComplete) || Event.current.type != EventType.Repaint) return;
+            float scale = Screen.height / 240f, left = (Screen.width - 320 * scale) / 2;
+            Rect R(float x, float y, float w, float h) => new Rect(left + x * scale, y * scale, w * scale, h * scale);
+            if (Modal)
+            {
+                // Darkened frozen scene (subtractive grey 22); lines centred at x 160 from y 114 - 8n, 17 px apart,
+                // colour (50,150,150), half-dark shadow; prompt after the delay at y 194 in (64,200,64).
+                Overlay(Remaster ? 0.5f : 0.22f);
+                int n = Shown.Length; float top = 114 - 8 * n;
+                bool prompt = Time.unscaledTime - shownAt > MessageDelay;
+                if (!Remaster && PrototypePs1Text.Available)
+                {
+                    for (int i = 0; i < n; i++) PrototypePs1Text.Draw(R, Shown[i], 160, top + 17 * i, 2, new Color32(50, 150, 150, 255));
+                    if (prompt) PrototypePs1Text.Draw(R, "Нажми ⓧдля продолж", 160, 194, 2, new Color32(64, 200, 64, 255));
+                }
+                else
+                {
+                    var band = GUI.color; GUI.color = new Color(0, 0, 0, 0.35f); GUI.DrawTexture(R(0, top - 14, 320, 17 * n + 24), Texture2D.whiteTexture); GUI.color = band;
+                    for (int i = 0; i < n; i++) PrototypeMenuText.Draw(R(0, top + 17 * i - 2, 320, 18), Shown[i].Trim(), Mathf.RoundToInt(11 * scale), new Color(0.6f, 0.92f, 0.9f), TextAnchor.MiddleCenter);
+                    if (prompt) PrototypeMenuText.Draw(R(0, 192, 320, 16), "Нажми Enter, чтобы продолжить", Mathf.RoundToInt(9 * scale), new Color(0.55f, 0.95f, 0.45f), TextAnchor.MiddleCenter);
+                }
+                return;
+            }
+            // Level complete (state 14): grey fade to 32 over 32 passes, title (125,125,70) centred at (160,34),
+            // rows (100,100,100) from y 68 every 17 px: labels left at x 45, values right at x 270.
+            float fade = levelEndStart < 0 ? 0 : Mathf.Clamp01((Time.unscaledTime - levelEndStart) / (32 / 30f));
+            Overlay((Remaster ? 0.55f : 0.32f) * fade);
+            int seconds = Mathf.FloorToInt(levelTime); int found = ScrollsRead, total = ScrollsOnLevel;
+            var bandits = GetComponent<PrototypeBandits>();
+            var rows = new List<(string label, string value)> { ("Время", (seconds / 60) + ":" + (seconds % 60).ToString("00")), ("Убито врагов    :", (bandits != null ? bandits.Kills : 0).ToString()),
+                ("Собрано вешеи   :", ItemsCollected.ToString()), ("Свитки          :", found + "  " + total), ("", ""), ("Всего свитков:", found + "  " + total) };
+            Color32 grey = new Color32(100, 100, 100, 255), gold = new Color32(125, 125, 70, 255);
+            bool ps1 = !Remaster && PrototypePs1Text.Available;
+            void Line(string text, float x, float y, int align, Color32 c)
+            {
+                if (ps1) PrototypePs1Text.Draw(R, text, x, y, align, c);
+                else PrototypeMenuText.Draw(align == 1 ? R(x - 300, y - 2, 300, 18) : align == 2 ? R(x - 150, y - 2, 300, 18) : R(x, y - 2, 300, 18), (x < 160 ? text.Replace("вешеи", "вещей").Replace(":", "") : text).Trim(),
+                    Mathf.RoundToInt(11 * scale), new Color(c.r / 110f, c.g / 110f, c.b / 110f), align == 1 ? TextAnchor.MiddleRight : align == 2 ? TextAnchor.MiddleCenter : TextAnchor.MiddleLeft);
+            }
+            Line("Путь к Обалусу", 160, 34, 2, gold);
+            for (int i = 0; i < rows.Count && i < LevelEndRows; i++)
+            {
+                if (rows[i].label == "") continue;
+                Color32 c = i == rows.Count - 1 ? gold : grey;
+                Line(rows[i].label, 45, 68 + 17 * i, 3, c); Line(rows[i].value, 270, 68 + 17 * i, 1, c);
+            }
+            if (LevelEndRows >= 6)
+            {
+                float pulse = 0.6f + 0.4f * Mathf.Sin(Time.unscaledTime * Mathf.PI * 2 * 60f / 64f);
+                var prompt = new Color32((byte)(175 * pulse), (byte)(200 * pulse), (byte)(50 * pulse), 255);
+                if (ps1) PrototypePs1Text.Draw(R, "Нажми ⓧдля продолж", 160, 210, 2, prompt);
+                else PrototypeMenuText.Draw(R(0, 208, 320, 16), "Нажми Enter, чтобы продолжить", Mathf.RoundToInt(9 * scale), new Color(0.7f, 0.85f, 0.25f) * (0.7f + 0.3f * pulse), TextAnchor.MiddleCenter);
+            }
         }
+        private static void Overlay(float alpha) { var c = GUI.color; GUI.color = new Color(0, 0, 0, alpha); GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture); GUI.color = c; }
     }
 }

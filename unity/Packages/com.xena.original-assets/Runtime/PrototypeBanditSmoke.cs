@@ -363,7 +363,7 @@ namespace Xena.Assets
             yield return Visit(motor, signs[0]);
             Require(scripts.Modal && scripts.ShownIndex == 0x46 && Time.timeScale == 0, "Sign 0 did not show message 0x46 modally: " + scripts.ShownIndex);
             Camera.main.GetComponent<PrototypeCamera>().enabled = false; Camera.main.transform.position = signs[0] + new Vector3(1.6f, 1.6f, 1.6f); Camera.main.transform.LookAt(signs[0] + Vector3.up * 0.8f); yield return null;
-            report.firstSign = string.Join("|", scripts.Shown); yield return new WaitForEndOfFrame(); Capture("script-sign.png");
+            report.firstSign = string.Join("|", scripts.Shown); yield return new WaitForEndOfFrame(); Capture("script-sign.png"); PrototypeGraphics.Active.SetMode(XenaVisualMode.Original); yield return null; yield return new WaitForEndOfFrame(); Capture("script-sign-original.png"); PrototypeGraphics.Active.SetMode(XenaVisualMode.Remaster);
             Camera.main.GetComponent<PrototypeCamera>().enabled = true;
             scripts.Close(); for (int i = 0; i < 60; i++) yield return new WaitForFixedUpdate();
             Require(!scripts.Modal, "Sign repeated while Xena stayed within 400 units"); report.checks.Add("sign shows message param+0x46 modally and does not repeat while Xena stays near");
@@ -411,6 +411,15 @@ namespace Xena.Assets
             while (scripts.CutsceneActive && guard++ < 60 * 30) { yield return new WaitForFixedUpdate(); if (!captured && scripts.CutsceneFrame > 200) { captured = true; yield return new WaitForEndOfFrame(); Capture("script-ending.png"); } }
             Time.timeScale = 1;
             Require(scripts.LevelComplete && !scripts.CutsceneActive, "Ending camera path did not finish into level end"); report.checks.Add("Siras within 1450 plays the original 563-frame camera path, then ends the level");
+            // Level-complete screen (docs/xena-message-window.md): rows reveal, input owned, CROSS continues.
+            float rowsStart = Time.unscaledTime; while (scripts.LevelEndRows < 6 && Time.unscaledTime - rowsStart < 6) yield return null;
+            Require(scripts.LevelEndRows == 6 && motor.GetComponent<PrototypeInput>().MenuOwnsInput, "Level-complete stats did not reveal all rows / own the input");
+            yield return new WaitForEndOfFrame(); Capture("level-complete-" + (PrototypeGraphics.Active.Mode == XenaVisualMode.Remaster ? "remaster" : "original") + ".png");
+            PrototypeGraphics.Active.SetMode(PrototypeGraphics.Active.Mode == XenaVisualMode.Remaster ? XenaVisualMode.Original : XenaVisualMode.Remaster); yield return null;
+            yield return new WaitForEndOfFrame(); Capture("level-complete-" + (PrototypeGraphics.Active.Mode == XenaVisualMode.Remaster ? "remaster" : "original") + ".png");
+            PrototypeGraphics.Active.SetMode(XenaVisualMode.Remaster);
+            report.checks.Add("level-complete screen: original rows/timing, both modes");
+            scripts.ResetLevelEndForTest();
         }
         private static Dictionary<int, PrototypeBanditBrain.MotionClip> Motion(PrototypeBanditBrain brain)
         {
