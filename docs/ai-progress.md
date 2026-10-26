@@ -163,6 +163,15 @@ One issue per task. Nothing here is a claim without the command/measurement that
   with the holes hatched; build/inspect/inspect-sheet.png + inspect-summary.txt, per-view PNGs deleted.
   First run: 1040 Remaster views, 1 flagged: (-8.3,-2,32.4) heading 0, a gap at the waterfall pool edge.
   Detects see-through holes only (not hanging edges or style issues).
+- REJECTED (user 2026-10-26, "полное говно"): Hunyuan cliff-rock cladding of the rock walls (commit 9429a97,
+  reverted in 5233abb). Next: thorough wall review with the inspector (wall views Original vs Remaster).
+- claude-v233: lake + low river faces drawn by one water surface (lake mesh hidden in Remaster; cells cover the
+  lake footprint and river faces < 0.35 m above it) -> the lake/horizon seam is gone; a few lighter flat patches
+  remain at stream edges. Inspector WALL TOUR (43 wall groups x front/left/right, Original|Remaster sheets
+  build/inspect/walls-sheet-*.jpg). Findings: (1) @tritree canopy cards stayed as pixel blocks in Remaster ->
+  FIXED: crown-only generated canopies fitted to the cards (5); (2) kept painted-wall wedges with hard edges next
+  to the outer forest (walls 006/012/031); (3) waterfall sheets / pool edges hard-edged (021/034/035/037);
+  (4) a floating dark-green rectangle (005). All suites PASS (claude-v233-*).
 - QUEUE (user 2026-10-26, in order): lake covered by the outer world (fix in test: water = level hull);
   {icon 4}/Р1 in texts -> bound keys (done v215); remove on-screen moves panel (done v214); chakram artifact in
   the centre when thrown; Original-mode level background (user: not ported to Unity Original); grass on slopes

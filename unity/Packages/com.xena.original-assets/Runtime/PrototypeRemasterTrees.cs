@@ -18,6 +18,7 @@ namespace Xena.Assets
         public int Replaced => trees.Count;
         public int Triangles { get; private set; }
         public int MatchedTrunks { get; private set; }
+        public int Canopies { get; private set; }
         public bool RemasterShown { get; private set; }
         public Material Bark { get; private set; }
         public Material Leaves { get; private set; }
@@ -63,6 +64,26 @@ namespace Xena.Assets
                 go.AddComponent<MeshFilter>().sharedMesh = mesh;
                 go.AddComponent<MeshRenderer>().sharedMaterials = new[] { bark, leaves };
                 Triangles += mesh.triangles.Length / 3;
+                trees.Add((renderer, go));
+            }
+            // Canopy cards (@tritree: three foliage cards hanging over the path, no trunk, no collision; they read as
+            // pixel blocks in Remaster): a crown-only generated tree (leaf clusters of a tree fitted to the card bounds).
+            foreach (var renderer in FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None))
+            {
+                if (!renderer.name.Contains("@tritree")) continue;
+                Bounds b = renderer.bounds; int seed = Mathf.Abs(Mathf.RoundToInt(b.center.x * 131 + b.center.z * 197));
+                var full = Build(b.size.y * 2.2f, Mathf.Max(b.size.x, b.size.z), seed, 0);
+                var crown = new Mesh { name = "Canopy_" + renderer.name, indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
+                crown.vertices = full.vertices; crown.normals = full.normals; crown.uv = full.uv; if (full.colors.Length > 0) crown.colors = full.colors;
+                crown.subMeshCount = 1; crown.SetTriangles(full.GetTriangles(1), 0); crown.RecalculateBounds();
+                // Fit the leaf clusters' own bounds to the cards' bounds.
+                var leafVerts = new HashSet<int>(crown.GetTriangles(0)); Vector3 lo = Vector3.positiveInfinity, hi = Vector3.negativeInfinity; var cv = crown.vertices;
+                foreach (int i in leafVerts) { lo = Vector3.Min(lo, cv[i]); hi = Vector3.Max(hi, cv[i]); }
+                Vector3 size = hi - lo, scale = new Vector3(b.size.x / Mathf.Max(0.1f, size.x), b.size.y / Mathf.Max(0.1f, size.y), b.size.z / Mathf.Max(0.1f, size.z));
+                var go = new GameObject("Canopy_" + renderer.name); go.transform.SetParent(root.transform, false);
+                go.transform.localScale = scale; go.transform.position = b.center - Vector3.Scale((lo + hi) / 2, scale);
+                go.AddComponent<MeshFilter>().sharedMesh = crown; go.AddComponent<MeshRenderer>().sharedMaterial = leaves;
+                Triangles += crown.triangles.Length / 3; Canopies++;
                 trees.Add((renderer, go));
             }
             ApplyVisualMode(PrototypeGraphics.Active == null ? XenaVisualMode.Remaster : PrototypeGraphics.Active.Mode);

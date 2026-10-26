@@ -93,6 +93,53 @@ namespace Xena.Assets
                         if (report.views % 16 == 0) yield return null;
                     }
             }
+            // Wall tour: every steep terrain face (> 1 m2) grouped within 8 m; per group, from the standing ground 5 m in
+            // front (corridor side) at eye height, straight and 35 deg to either side, Original and Remaster stills
+            // (wall-<n>-<view>-<mode>.png, listed in walls.txt) for a careful review of every wall.
+            {
+                var collider = Array.Find(FindObjectsByType<MeshCollider>(FindObjectsSortMode.None), c => c.sharedMesh != null && c.sharedMesh.name == "level-01-object-1");
+                var groups = new List<(Vector3 c, Vector3 n, float area)>();
+                if (collider != null)
+                {
+                    var tm = collider.sharedMesh; var tv = tm.vertices; var tt = tm.triangles; var tr = collider.transform;
+                    for (int i = 0; i < tt.Length; i += 3)
+                    {
+                        Vector3 a = tr.TransformPoint(tv[tt[i]]), b = tr.TransformPoint(tv[tt[i + 1]]), c = tr.TransformPoint(tv[tt[i + 2]]);
+                        Vector3 n = Vector3.Cross(b - a, c - a); float area = n.magnitude / 2; if (area < 1) continue; n.Normalize(); if (Mathf.Abs(n.y) > 0.5f) continue;
+                        Vector3 mid = (a + b + c) / 3; int g = groups.FindIndex(x => Vector3.Distance(x.c, mid) < 8);
+                        if (g < 0) groups.Add((mid, n * area, area)); else { var x = groups[g]; groups[g] = ((x.c * x.area + mid * area) / (x.area + area), x.n + n * area, x.area + area); }
+                    }
+                }
+                var lines = new List<string>(); var big = new RenderTexture(960, 540, 24, RenderTextureFormat.ARGB32); var bigRead = new Texture2D(960, 540, TextureFormat.RGB24, false);
+                for (int k = 0; k < groups.Count; k++)
+                {
+                    Vector3 c = groups[k].c, h = groups[k].n; h.y = 0; if (h.sqrMagnitude < 1e-6f) continue; h.Normalize();
+                    // Corridor side: standing ground in front.
+                    Vector3 eye = Vector3.zero; bool found = false;
+                    foreach (float side in new[] { 1f, -1f })
+                        foreach (float back in new[] { 5f, 3.5f, 7f })
+                        {
+                            if (found) break; Vector3 q = c + h * side * back; float gq = motor.GroundHeight(new Vector3(q.x, c.y + 3, q.z));
+                            if (!float.IsNegativeInfinity(gq) && gq < c.y + 1.5f) { eye = new Vector3(q.x, gq + 1.7f, q.z); found = true; if (side < 0) h = -h; }
+                        }
+                    if (!found) { lines.Add(k + " no ground in front " + c.ToString("F1")); continue; }
+                    lines.Add(k + " wall area " + groups[k].area.ToString("F0") + " centre " + c.ToString("F1") + " eye " + eye.ToString("F1"));
+                    foreach (var (tag, turn) in new[] { ("front", 0f), ("left", -35f), ("right", 35f) })
+                    {
+                        Vector3 look = Quaternion.Euler(0, turn, 0) * (new Vector3(c.x, eye.y - 0.4f, c.z) - eye);
+                        cam.transform.SetPositionAndRotation(eye, Quaternion.LookRotation(look));
+                        foreach (var mode in new[] { XenaVisualMode.Original, XenaVisualMode.Remaster })
+                        {
+                            if (PrototypeGraphics.Active.Mode != mode) { PrototypeGraphics.Active.SetMode(mode); yield return null; yield return null; }
+                            cam.targetTexture = big; cam.Render(); RenderTexture.active = big; bigRead.ReadPixels(new Rect(0, 0, 960, 540), 0, 0); bigRead.Apply(false);
+                            File.WriteAllBytes(Path.Combine(output, string.Format("wall-{0:000}-{1}-{2}.png", k, tag, mode.ToString().ToLowerInvariant())), bigRead.EncodeToJPG(85));
+                            RenderTexture.active = null; cam.targetTexture = keepTarget;
+                        }
+                    }
+                    if (k % 4 == 0) yield return null;
+                }
+                File.WriteAllText(Path.Combine(output, "walls.txt"), string.Join(Environment.NewLine, lines));
+            }
             report.views_.Sort((a, b) => (b.holes - b.originalHoles).CompareTo(a.holes - a.originalHoles));
             report.result = "PASS";
             File.WriteAllText(Path.Combine(output, "inspect.json"), JsonUtility.ToJson(report, true));

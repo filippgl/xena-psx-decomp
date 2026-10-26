@@ -107,8 +107,13 @@ namespace Xena.Assets
                 return false;
             }
             float Cross(Vector2 p, Vector2 a, Vector2 b) => (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+            var lowRiver = new List<Vector2[]>();
+            bool InTri(Vector2 p, Vector2[] t) { float d1 = Cross(p, t[0], t[1]), d2 = Cross(p, t[1], t[2]), d3 = Cross(p, t[2], t[0]); return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0)); }
+            bool OnLowRiver(float px, float pz) { var p = new Vector2(px, pz); foreach (var t in lowRiver) if (InTri(p, t)) return true; return false; }
             var mesh = new Mesh { name = "RemasterRiverSurface", indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
             var v = new List<Vector3>(); var uv = new List<Vector2>(); var tri = new List<int>();
+            float lakeLevel = float.MaxValue; foreach (var q in sv) lakeLevel = Mathf.Min(lakeLevel, streamFilter.transform.TransformPoint(q).y);
+            const float LakeBand = 0.35f; // river faces this close to the lake level are drawn by the lake cells
             foreach (var (filter, triangles) in riverFaces)
             {
                 Vector3[] src = filter.sharedMesh.vertices;
@@ -117,6 +122,7 @@ namespace Xena.Assets
                     Vector3 a = filter.transform.TransformPoint(src[triangles[i]]), b = filter.transform.TransformPoint(src[triangles[i + 1]]), c = filter.transform.TransformPoint(src[triangles[i + 2]]);
                     Vector3 n = Vector3.Cross(b - a, c - a).normalized; if (Mathf.Abs(n.y) < 0.75f) continue;
                     Vector3 mid = (a + b + c) / 3; if (InsideLake(mid.x, mid.z)) continue;
+                    if (Mathf.Max(a.y, Mathf.Max(b.y, c.y)) < lakeLevel + LakeBand) { lowRiver.Add(new[] { new Vector2(a.x, a.z), new Vector2(b.x, b.z), new Vector2(c.x, c.z) }); continue; }
                     foreach (var p in new[] { a, b, c }) { tri.Add(v.Count); v.Add(p + Vector3.up * 0.01f); uv.Add(new Vector2(p.x, p.z) / 8f); }
                 }
             }
@@ -131,7 +137,7 @@ namespace Xena.Assets
             v = new List<Vector3>(); uv = new List<Vector2>(); tri = new List<int>();
             void Quad(float x0, float z0, float x1, float z1)
             {
-                int i = v.Count; float y = level - 0.03f;
+                int i = v.Count; float y = level; // the cells are the lake surface now
                 foreach (var p in new[] { new Vector3(x0, y, z0), new Vector3(x0, y, z1), new Vector3(x1, y, z1), new Vector3(x1, y, z0) }) { v.Add(p); uv.Add(new Vector2(p.x, p.z) / 8f); }
                 tri.AddRange(new[] { i, i + 1, i + 2, i, i + 2, i + 3 });
             }
@@ -142,7 +148,11 @@ namespace Xena.Assets
                 {
                     // Water wherever the level has no ground (out of bounds below the lake).
                     Vector3 c = new Vector3(x + cell / 2, level + 30, z + cell / 2); float g = motor.GroundHeight(c);
-                        if (float.IsNegativeInfinity(g)) Quad(x, z, x + cell, z + cell);
+                    // The lake itself is drawn by these cells too (its own mesh is hidden in Remaster): one surface,
+                    // one UV space, so no seam where the lake mesh met the horizon cells (user 2026-10-26).
+                    bool lakeCell = InsideLake(x + cell / 2, z + cell / 2) || InsideLake(x, z) || InsideLake(x + cell, z) || InsideLake(x, z + cell) || InsideLake(x + cell, z + cell)
+                        || OnLowRiver(x + cell / 2, z + cell / 2) || OnLowRiver(x, z) || OnLowRiver(x + cell, z) || OnLowRiver(x, z + cell) || OnLowRiver(x + cell, z + cell);
+                    if (float.IsNegativeInfinity(g) || lakeCell) Quad(x, z, x + cell, z + cell);
                 }
             Quad(ax0 - far, az0 - far, ax0, az1 + far); Quad(ax1, az0 - far, ax1 + far, az1 + far); Quad(ax0, az0 - far, ax1, az0); Quad(ax0, az1, ax1, az1 + far);
             AddWater("RemasterHorizonWater", new Mesh { name = "RemasterHorizonWater", indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 }, v, uv, tri, extraMaterial);
@@ -325,6 +335,7 @@ namespace Xena.Assets
                 }
             bool active = mode == XenaVisualMode.Remaster;
             foreach (GameObject water in extraWater) water.SetActive(active);
+            if (streamFilter != null && extraWater.Count > 0) { var lakeRenderer = streamFilter.GetComponent<MeshRenderer>(); if (lakeRenderer != null) lakeRenderer.enabled = !active; }
             foreach (GameObject sheet in curtains)
             {
                 Material sheetMaterial = sheet.GetComponent<MeshRenderer>().sharedMaterial;
