@@ -16,7 +16,7 @@ namespace Xena.Assets
         [Serializable] private sealed class Report
         {
             public string result = "FAIL", error; public List<string> checks = new List<string>();
-            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError, deathLensHeight, gameOverVideoSeconds; public int gameOverMenuStep; public string gameOverVideo; public int hitFlashLife, hitDiscs, hitTriangles, remasterDroplets, discFrames, discStalls; public string strikeState; public int fallDamage, banditBlocks, contactHits, banditContactHits, lowReaction, midReaction, rearReaction; public string sfxLog, sfxAttenuation; public int butterflies, frogs, butterflyFrames, butterflyStalls, butterflyTeleports, patrolSightings, wingFrames, wingStalls, wingShapes, larkMode; public float patrolWalked, patrolFlatness; public Vector3 larkVelocity; public Vector3 contactPoint; public List<string> discTrace = new List<string>(); public int menuBolts; public List<string> runTrace = new List<string>();
+            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError, deathLensHeight, gameOverVideoSeconds; public int gameOverMenuStep; public string gameOverVideo; public int hitFlashLife, hitDiscs, hitTriangles, remasterDroplets, discFrames, discStalls; public string strikeState; public int fallDamage, banditBlocks, contactHits, banditContactHits, lowReaction, midReaction, rearReaction; public string sfxLog, sfxAttenuation; public int butterflies, frogs, butterflyFrames, butterflyStalls, butterflyTeleports, patrolSightings, wingFrames, wingStalls, wingShapes, larkMode; public float patrolWalked, patrolFlatness, avoidProgress, avoidFlatness; public int avoidEntries; public Vector3 larkVelocity; public Vector3 contactPoint; public List<string> discTrace = new List<string>(); public int menuBolts; public List<string> runTrace = new List<string>();
         }
         private readonly Report report = new Report();
         private string output; private bool finished;
@@ -123,6 +123,7 @@ namespace Xena.Assets
             yield return Damage(motor, bandits);
             yield return Creatures(motor);
             yield return Patrol(motor, bandits);
+            yield return AvoidTest(motor, bandits);
             yield return GameOver(motor);
             report.result = "PASS"; Finish(null);
         }
@@ -559,6 +560,38 @@ namespace Xena.Assets
             }
             report.checks.Add("bandits spawn facing the original (-sin rotY, -cos rotY)");
             foe.Active = false;
+        }
+        // Mode 6 (docs/xena-bandit-avoid.md): a bandit approaching Xena from >= 3001 units bumps into an idle
+        // bandit standing in its path: it enters avoid, wakes the blocker, steers round it and returns to mode 1.
+        private IEnumerator AvoidTest(PrototypeMotor motor, PrototypeBandits bandits)
+        {
+            motor.ResetToSpawn(); for (int i = 0; i < 6; i++) yield return new WaitForFixedUpdate();
+            Vector3 o = motor.transform.position, f = Vector3.forward; float best = float.MaxValue;
+            for (int k = 0; k < 16; k++)
+            {
+                Vector3 dir = Quaternion.Euler(0, k * 22.5f, 0) * Vector3.forward; float g0 = motor.GroundHeight(o + dir * 9 + Vector3.up * 1.5f), spread = 0;
+                for (int m = 5; m <= 14; m++) { float gm = motor.GroundHeight(o + dir * m + Vector3.up * 1.5f); spread = float.IsNegativeInfinity(gm) || float.IsNegativeInfinity(g0) ? float.MaxValue : Mathf.Max(spread, Mathf.Abs(gm - g0)); }
+                if (spread < best) { best = spread; f = dir; }
+            }
+            var mover = bandits.SpawnForTest(o + f * 13); var blocker = bandits.SpawnForTest(o + f * 11);
+            Require(mover != null && blocker != null, "No pending bandits for the avoid test");
+            mover.transform.rotation = Quaternion.LookRotation(-f); mover.Configure(mover.GetComponentInChildren<XenaAssetPreview>(), motor, Motion(mover), 75, 0, 21);
+            blocker.transform.rotation = Quaternion.LookRotation(f); blocker.Configure(blocker.GetComponentInChildren<XenaAssetPreview>(), motor, Motion(blocker), 75, 0, 23);
+            mover.ConfigureDefence(false, 0); blocker.ConfigureDefence(false, 0); mover.Active = true; blocker.Active = false; mover.ForceStateForTest(PrototypeBanditBrain.Mode.Approach);
+            // The blocker stands still (as in native run B); its mode is still set to 1 when it is woken.
+            float startDistance = Vector3.Distance(mover.transform.position, o); bool woke = false, left = false;
+            for (int i = 0; i < 60 * 12; i++)
+            {
+                yield return new WaitForFixedUpdate();
+                if (blocker.State != PrototypeBanditBrain.Mode.Idle) woke = true;
+                if (mover.AvoidEntries > 0 && mover.State != PrototypeBanditBrain.Mode.Avoid) left = true;
+                if (left && woke && Vector3.Distance(mover.transform.position, o) < startDistance - 3.5f) break;
+            }
+            report.avoidEntries = mover.AvoidEntries; report.avoidProgress = startDistance - Vector3.Distance(mover.transform.position, o); report.avoidFlatness = best;
+            Require(mover.AvoidEntries >= 1 && woke && left && mover.LastContact == blocker && report.avoidProgress > 3.5f,
+                "Mode 6 avoid: entries " + mover.AvoidEntries + ", woke " + woke + ", left " + left + ", progress " + report.avoidProgress.ToString("F2") + " m");
+            report.checks.Add("mode 6: a far-from-goal bandit blocked by another enters avoid, wakes it, steers round and returns to mode 1");
+            mover.Active = blocker.Active = false;
         }
         private IEnumerator Visit(PrototypeMotor motor, Vector3 at)
         {

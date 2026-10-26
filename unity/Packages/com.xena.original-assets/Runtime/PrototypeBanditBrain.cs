@@ -22,7 +22,18 @@ namespace Xena.Assets
         [Serializable] public sealed class MotionFile { public MotionClip[] clips; }
         [Serializable] public sealed class MotionClip { public int slot, frames; public Move[] moves; }
         [Serializable] public sealed class Move { public int frame, speed, direction; }
-        public enum Mode { Idle = 0, Hold = 1, Approach = 2, Wait = 3, Block = 4, Attack = 5 }
+        public enum Mode { Idle = 0, Hold = 1, Approach = 2, Wait = 3, Block = 4, Attack = 5, Avoid = 6 }
+        // Mode 6 avoid (docs/xena-bandit-avoid.md, VERIFIED on native RAM unless noted). The mover drops a step
+        // that would end within r + r = 300 units of another live bandit (unless already overlapping it) and keeps
+        // that bandit as the sticky last contact. Entry (0x80020048, outside hit/attack/death clips): the mover
+        // was blocked by a non-target actor and the goal (Xena, or the patrol waypoint) is >= 3001 away -> mode 6
+        // (nothing when the blocker itself avoids); that step does nothing else. Action (0x8002103C), R = 850:
+        // blocker behind (dot < 0) and d > R -> turn to the goal (+-64); else |lat| < R -> turn 64 away from the
+        // blocker's side; else turn to the goal and back to mode 1. Walk below 1700 from the blocker, else run.
+        // A blocker idling or patrolling is woken (mode 1). The push on the blocker is INFERRED: not ported.
+        public PrototypeBanditBrain LastContact { get; private set; }
+        public int AvoidEntries { get; private set; }
+        private bool moverBlocked;
         public const int BlockStart = 0x80, BlockHold = 0x82;
         public bool CanBlock { get; private set; }
         public int BlockPercent { get; private set; }
@@ -42,6 +53,7 @@ namespace Xena.Assets
         public string SightBlocker { get; private set; } // last collider that failed the line test (diagnostics)
         public void ConfigurePatrol(bool patrol, Vector3 target) { Patrolling = patrol; PatrolTarget = target; }
         public void ForcePatrolHoldForTest() { State = Mode.Hold; Patrolling = true; }
+        public void ForceStateForTest(Mode mode) { State = mode; }
         private bool SeesTarget(int distance, int relative)
         {
             if (!((distance < 6000 && Mathf.Abs(relative) <= 398) || (distance < 1000 && Mathf.Abs(relative) <= 1024))) return false;
@@ -205,6 +217,8 @@ namespace Xena.Assets
             if (IsReaction(Slot) && !ClipFinished()) { Advance(); return; }
             if (Cooldown > 0) Cooldown--;
             int distance = Distance(out int relative);
+            if (AvoidEntry(distance)) { Advance(); return; }
+            if (State == Mode.Avoid) { Avoid(distance, relative); Advance(); return; }
             bool busy = Array.IndexOf(Attacks, Slot) >= 0 || Slot == Backstep || Slot == SideLeft || Slot == SideRight;
             if (Fleeing)
             {
@@ -318,6 +332,52 @@ namespace Xena.Assets
             }
             soundSlot = Slot; soundFrame = Frame; soundState = State;
         }
+        private static int Metric(Vector3 a, Vector3 b)
+        {
+            int dx = Mathf.Abs(Mathf.RoundToInt((a.x - b.x) * 400)), dz = Mathf.Abs(Mathf.RoundToInt((a.z - b.z) * 400));
+            return Mathf.Max(dx, dz) + 3 * Mathf.Min(dx, dz) / 8;
+        }
+        // func_80070BD4: first live bandit whose span overlaps and that the step would touch (< 300), unless it
+        // already overlaps at the current position (escape rule).
+        private PrototypeBanditBrain BanditAt(Vector3 next)
+        {
+            foreach (var other in all)
+            {
+                if (other == this || other == null || other.Removed || other.Dying || other.Health <= 0 || !other.gameObject.activeInHierarchy) continue;
+                if (Mathf.Abs(other.transform.position.y - next.y) * 400 >= 750) continue;
+                if (Metric(next, other.transform.position) < 2 * Radius && Metric(transform.position, other.transform.position) >= 2 * Radius) return other;
+            }
+            return null;
+        }
+        private bool SkipAvoidCheck => IsReaction(Slot) || Dying || (Slot >= 0x3A && Slot <= 0x65);
+        private bool AvoidEntry(int targetDistance)
+        {
+            bool blocked = moverBlocked; moverBlocked = false;
+            if (SkipAvoidCheck || !blocked || LastContact == null || LastContact.Removed) return false;
+            int goal = Patrolling ? Metric(transform.position, PatrolTarget) : targetDistance;
+            if (goal < 3001) return false;
+            if (LastContact.State == Mode.Avoid) return true;
+            // Already avoiding: the original stays frozen until the walk family switches clip (0x15 -> 0x16, trigger
+            // UNKNOWN, docs/xena-bandit-avoid.md 3); the port lets the avoid action steer instead (APPROXIMATED).
+            if (State == Mode.Avoid) return false;
+            if (LastContact.State == Mode.Idle || LastContact.Patrolling) { LastContact.State = Mode.Hold; LastContact.Patrolling = false; } // woken (CODE)
+            if (State != Mode.Avoid) AvoidEntries++;
+            State = Mode.Avoid; return true;
+        }
+        private void Avoid(int targetDistance, int relative)
+        {
+            var b = LastContact; if (b == null || b.Removed) { State = Mode.Hold; return; }
+            Vector3 toB = (b.transform.position - transform.position) * 400; toB.y = 0;
+            float h = heading / 4096f * 2 * Mathf.PI; var f = new Vector3(Mathf.Sin(h), 0, Mathf.Cos(h)); var l = new Vector3(Mathf.Cos(h), 0, -Mathf.Sin(h));
+            float dot = Vector3.Dot(toB, f), lat = Vector3.Dot(toB, l); int d = Metric(transform.position, b.transform.position);
+            int goal = relative;
+            if (Patrolling) { Vector3 w = (PatrolTarget - transform.position) * 400; goal = ((Mathf.RoundToInt(Mathf.Atan2(w.x, w.z) / (2 * Mathf.PI) * 4096) - heading + 2048) & 4095) - 2048; }
+            const int R = Radius + 700;
+            if (dot < 0 && d > R) TurnToward(goal);
+            else if (Mathf.Abs(lat) < R) heading = (heading + (lat < 0 ? Turn : -Turn)) & 4095;
+            else { TurnToward(goal); State = Mode.Hold; }
+            Play(d < Engage ? Walk : Run);
+        }
         private void Contacts()
         {
             // Clip frame n (step counter) uses SMA frame n - 1 at the root before this step's movement.
@@ -370,6 +430,9 @@ namespace Xena.Assets
                 float ground = target.GroundHeight(next + Vector3.up * 0.5f);
                 Vector3 offset = next - target.transform.position; offset.y = 0;
                 bool blocked = float.IsNegativeInfinity(ground) || ground - transform.position.y > 0.75f || offset.magnitude < 2 * Radius / 400f;
+                var contact = BanditAt(next);
+                if (contact != null) { LastContact = contact; blocked = true; }
+                moverBlocked = blocked;
                 if (!blocked) transform.position = new Vector3(next.x, ground, next.z);
             }
             transform.rotation = Quaternion.Euler(0, heading * 360f / 4096, 0);

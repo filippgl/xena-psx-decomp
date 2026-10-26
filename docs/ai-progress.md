@@ -70,7 +70,14 @@ One issue per task. Nothing here is a claim without the command/measurement that
   (native 481.6 at another yaw). All suites PASS (build/unity-import/claude-v167-*.txt).
   NOT yet: reaction clips' root motion (0x67 373 u back, 0x7C knockdown 2464 u back, 0x88 377 u) — INFERRED,
   no native capture with a knockdown. Mode 6 avoid research merged: docs/xena-bandit-avoid.md (port next).
-  Next: port mode 6 + bandit-bandit contact, reaction root motion (capture first), level 02 / save.
+- claude-v170: MODE 6 AVOID ported (docs/xena-bandit-avoid.md): bandit-bandit mover contact (300, escape
+  rule, sticky LastContact), entry when blocked by a non-target and goal >= 3001, three steering branches
+  (R 850, turn 64), wake idle/patrolling blocker, exit to mode 1. APPROXIMATED: while already in mode 6 the
+  action steers even if the step is still blocked (original freezes until an UNKNOWN walk-family clip
+  switch 0x15 -> 0x16). Smoke: blocked approach -> 1 entry, blocker woken, exit, 3.56 m progress.
+  Note: with a blocker that walks the same way, the documented exit (|lat| >= 850) can keep a bandit in
+  mode 6 for a long time (as the algorithm reads). All suites PASS (build/unity-import/claude-v170-*.txt).
+  Next: reaction root motion (needs a native knockdown capture), level 02 / save on the stats screen.
 - CLAUDE 2026-10-25 10:50 build (DLL 10:50:29), all 8 suites + aggregate PASS
   (build/unity-import/claude-v32-*.txt), bandit 6/6 runs 0 stalled.
   GAME OVER (native capture build/gameover, --poke 8700:0x8014E4F2:600:2 = Xena +0x12):
