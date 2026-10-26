@@ -182,6 +182,14 @@ namespace Xena.Assets.Editor
                 var material = new Material(shader); material.SetFloat("_SrcBlend", (float)src); material.SetFloat("_DstBlend", (float)dst);
                 AssetDatabase.CreateAsset(material, path);
             }
+            // Original level background (Xena/OriginalHorizon, PrototypeSky): a material asset keeps the shader in the build.
+            {
+                string path = "Assets/Imported/Resources/Original/OriginalHorizon.mat";
+                Shader shader = Shader.Find("Xena/OriginalHorizon"); if (shader == null) throw new InvalidDataException("Xena/OriginalHorizon unavailable");
+                Directory.CreateDirectory("Assets/Imported/Resources/Original");
+                if (AssetDatabase.LoadAssetAtPath<Material>(path) != null) AssetDatabase.DeleteAsset(path);
+                AssetDatabase.CreateAsset(new Material(shader), path);
+            }
             CreateVegetationPrefabs();
             CreateGeneratedPrefabs();
             const string puffPath = "Assets/Imported/Resources/Remaster/MistPuff.asset";
@@ -222,7 +230,7 @@ namespace Xena.Assets.Editor
             }
             // Original pixel art (pause menu labels/icons, fire and smoke frames): exact size (no NPOT
             // rescale: 82x24 labels became 128x32 and shifted), point sampled, uncompressed, no mips.
-            foreach (string pixelFolder in new[] { "Assets/Imported/Resources/PauseMenu", "Assets/Imported/Resources/Effects", "Assets/Imported/Resources/MessageWindow" })
+            foreach (string pixelFolder in new[] { "Assets/Imported/Resources/PauseMenu", "Assets/Imported/Resources/Effects", "Assets/Imported/Resources/MessageWindow", "Assets/Imported/Resources/Original" })
                 if (Directory.Exists(pixelFolder))
                     foreach (string pixelPath in Directory.GetFiles(pixelFolder, "*.png", SearchOption.AllDirectories))
                         if (AssetImporter.GetAtPath(pixelPath.Replace(Path.DirectorySeparatorChar, '/')) is TextureImporter pixelImporter)

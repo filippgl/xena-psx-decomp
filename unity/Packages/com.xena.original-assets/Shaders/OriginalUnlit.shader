@@ -33,12 +33,32 @@ Shader "Xena/OriginalUnlit"
                 float _UseVertexLighting;
                 float _LightBias;
             CBUFFER_END
+            // Original depth cueing (docs/xena-level-background.md, VERIFIED code): f = saturate(A - A*N/z),
+            // z = view depth (m), A = F/(F-N); colour = lerp(colour, far, f) in encoded RGB. Set by PrototypeSky
+            // (x enabled, y A, z A*N); per vertex like the level renderer.
+            float4 _XenaOriginalFog; float4 _XenaOriginalFogColor;
+            float XenaOriginalFogFactor(float3 positionOS)
+            {
+                if (_XenaOriginalFog.x < 0.5) return 0;
+                float z = max(0.01, -TransformWorldToView(TransformObjectToWorld(positionOS)).z);
+                return saturate(_XenaOriginalFog.y - _XenaOriginalFog.z / z);
+            }
+            half3 XenaOriginalFogApply(half3 color, float f)
+            {
+                if (f <= 0) return color;
+                #if defined(UNITY_COLORSPACE_GAMMA)
+                return lerp(color, _XenaOriginalFogColor.rgb, f);
+                #else
+                return SRGBToLinear(lerp(LinearToSRGB(color), _XenaOriginalFogColor.rgb, f));
+                #endif
+            }
             struct Attributes { float4 positionOS : POSITION; float2 uv : TEXCOORD0; float4 color : COLOR; };
-            struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; float3 lighting : TEXCOORD1; };
+            struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; float3 lighting : TEXCOORD1; float fog : TEXCOORD2; };
             Varyings Vert(Attributes input)
             {
                 Varyings output;
                 output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
+                output.fog = XenaOriginalFogFactor(input.positionOS.xyz);
                 output.uv = TRANSFORM_TEX(input.uv, _MainTex);
                 output.lighting = clamp(round(input.color.rgb * 255.0) + _LightBias, 0.0, 255.0) / 128.0;
                 return output;
@@ -57,6 +77,7 @@ Shader "Xena/OriginalUnlit"
                     color.rgb = SRGBToLinear(saturate(LinearToSRGB(color.rgb) * input.lighting));
                     #endif
                 }
+                color.rgb = XenaOriginalFogApply(color.rgb, input.fog);
                 return color;
             }
             ENDHLSL

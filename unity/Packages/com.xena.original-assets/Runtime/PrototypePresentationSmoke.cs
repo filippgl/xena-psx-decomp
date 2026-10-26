@@ -48,6 +48,22 @@ namespace Xena.Assets
             foreach (var item in level.GetComponentsInChildren<MeshRenderer>()) foreach (var material in item.sharedMaterials)
                 if (material.mainTexture != null) Require(material.mainTexture.width == 256, "Original environment has replacement texture");
             yield return new WaitForEndOfFrame(); Capture("presentation-original.png");
+            // Original background + depth cue (docs/xena-level-background.md oracle): fog 0 at 24 m, 0.57 at 28.6 m,
+            // 1 beyond 32.77 m; the horizon strip is drawn.
+            {
+                var skyOriginal = FindFirstObjectByType<PrototypeSky>();
+                Require(skyOriginal != null && skyOriginal.HorizonActive, "Original horizon strip is not drawn");
+                Require(PrototypeSky.OriginalFogFactor(24) == 0 && Mathf.Abs(PrototypeSky.OriginalFogFactor(28.6f) - 0.57f) < 0.02f && PrototypeSky.OriginalFogFactor(33) == 1,
+                    "Original fog curve differs: " + PrototypeSky.OriginalFogFactor(28.6f));
+                // Orientation oracle: looking 20 deg down the strip leaves the screen top (s5 < 0, top row = strip/fog),
+                // looking 20 deg up the top rows are the sky fill (21,97,214).
+                var cam0 = Camera.main; var orb = cam0.GetComponent<PrototypeCamera>(); orb.enabled = false; var keepP = cam0.transform.position; var keepR = cam0.transform.rotation;
+                cam0.transform.SetPositionAndRotation(new Vector3(0, 300, 0), Quaternion.Euler(-20, 0, 0)); yield return null; yield return new WaitForEndOfFrame();
+                var shotUp = ScreenCapture.CaptureScreenshotAsTexture(); Color32 upTop = shotUp.GetPixel(shotUp.width / 2, shotUp.height - 3); Destroy(shotUp);
+                Require(Mathf.Abs(upTop.r - 21) <= 3 && Mathf.Abs(upTop.g - 97) <= 3 && Mathf.Abs(upTop.b - 214) <= 3, "Original horizon orientation: looking up the top row is not the sky fill (21,97,214): " + upTop);
+                cam0.transform.SetPositionAndRotation(keepP, keepR); orb.enabled = true;
+                report.checks.Add("Original: HORIZ.STM horizon strip + hyperbolic depth cue 24.45..32.77 m to RGB(0,74,97)");
+            }
             InputSystem.QueueStateEvent(keyboard, new KeyboardState()); yield return null; yield return null;
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.F10)); yield return null; yield return null;
             // Pages by name; the gate's smoothed copy counts as its source page.
@@ -257,8 +273,8 @@ namespace Xena.Assets
             Require(!geometry.RemasterActive && geometry.LitSlots == 0 && terrain.sharedMesh.triangles.Length / 3 == 2290 && terrain.GetComponent<MeshRenderer>().sharedMaterials[0].shader.name == "Xena/OriginalUnlit", "Original did not restore original terrain mesh");
             report.checks.Add("Original restores original terrain and prop meshes");
             Color32 background = camera.backgroundColor;
-            Require(camera.clearFlags == CameraClearFlags.SolidColor && background.r == 0 && background.g == 72 && background.b == 95, "Original background is not measured RGB(0,72,95)");
-            report.checks.Add("Original clears to the measured native background RGB(0,72,95)");
+            Require(camera.clearFlags == CameraClearFlags.SolidColor && background.r == 0 && background.g == 74 && background.b == 97, "Original background is not the level fog colour RGB(0,74,97) (ENVIRO.BIN +0x4C, docs/xena-level-background.md)");
+            report.checks.Add("Original clears to the level fog colour RGB(0,74,97)");
             Require(!sky.PostActive && !sky.SkyFogActive && !sky.SunActive && !UnityEngine.Rendering.Universal.CameraExtensions.GetUniversalAdditionalCameraData(camera).renderPostProcessing, "Original kept Remaster post/fog");
             report.checks.Add("Original disables post-processing and fog");
             yield return Gameplay(motor, orbit, "presentation-gameplay-original.png");

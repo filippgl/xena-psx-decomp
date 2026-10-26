@@ -4,14 +4,39 @@ using UnityEngine.Rendering.Universal;
 
 namespace Xena.Assets
 {
-    // Original: the level01 background is a flat clear colour; the native
-    // frame 9200 sky region measures RGB(0,72,95). Original fog/depth cueing
-    // is not decoded yet and is not imitated; no post-processing.
+    // Original (docs/xena-level-background.md, VERIFIED on the native port): the camera clears to the level fog
+    // colour (ENVIRO.BIN +0x4C, level 01 RGB(0,74,97)); a screen-space background (Xena/OriginalHorizon) draws the
+    // sky fill (21,97,214), the HORIZ.STM strip (tools/export_horizon.mjs) and the fog fill; level surfaces fade
+    // to the fog colour by the hyperbolic depth cue between N = 9780 and F = 13108 units (24.45..32.77 m).
+    // No post-processing.
     // Remaster: CC0 HDRI sky dome, horizon-coloured depth fog, global post
     // volume (bloom, ACES, grading, vignette) and SMAA.
     public sealed class PrototypeSky : MonoBehaviour, IXenaVisualModeTarget
     {
-        public static readonly Color32 OriginalBackground = new Color32(0, 72, 95, 255);
+        public static readonly Color32 OriginalBackground = new Color32(0, 74, 97, 255), OriginalSky = new Color32(21, 97, 214, 255);
+        public const float OriginalFogNear = 9780 / 400f, OriginalFogFar = 13108 / 400f;
+        private MeshRenderer horizon; private Material horizonMaterial;
+        public bool HorizonActive => horizon != null && horizon.enabled;
+        // Original fog factor at view depth z (m): the shaders' formula (test oracle).
+        public static float OriginalFogFactor(float z) { float a = OriginalFogFar / (OriginalFogFar - OriginalFogNear); return Mathf.Clamp01(a - a * OriginalFogNear / Mathf.Max(0.01f, z)); }
+        private void EnsureHorizon(Camera view)
+        {
+            if (horizon != null) return;
+            var tex = Resources.Load<Texture2D>("Original/Horizon01"); var template = Resources.Load<Material>("Original/OriginalHorizon"); if (tex == null || template == null) return;
+            horizonMaterial = new Material(template) { name = "OriginalHorizon" }; horizonMaterial.SetTexture("_MainTex", tex);
+            horizonMaterial.SetColor("_SkyColor", OriginalSky); horizonMaterial.SetColor("_FogColor", OriginalBackground);
+            var go = new GameObject("OriginalHorizon"); go.transform.SetParent(view.transform, false);
+            var mesh = new Mesh { name = "OriginalHorizon" }; mesh.vertices = new Vector3[3]; mesh.triangles = new[] { 0, 1, 2 }; mesh.bounds = new Bounds(Vector3.zero, Vector3.one * 1e6f);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh; horizon = go.AddComponent<MeshRenderer>(); horizon.sharedMaterial = horizonMaterial;
+            horizon.shadowCastingMode = ShadowCastingMode.Off; horizon.receiveShadows = false;
+        }
+        private void LateUpdate()
+        {
+            if (!HorizonActive) return;
+            var view = Camera.main; if (view == null) return;
+            Vector3 e = view.transform.eulerAngles; float pitch = e.x > 180 ? e.x - 360 : e.x;
+            Shader.SetGlobalVector("_XenaHorizonView", new Vector4(e.y * 4096 / 360f, pitch * 4096 / 360f, 0, 0));
+        }
         public const float FogStart = 37, FogEnd = 85; // user: 15 m farther than 22/70 (Silent Hill feel)
         public bool SkyFogActive { get; private set; }
         private Material remasterSky;
@@ -66,10 +91,15 @@ namespace Xena.Assets
                 Shader.SetGlobalVector("_XenaRockParams", new Vector4(0.33f, 1f, 1f, 1f));
             }
             RockActive = remaster && rockAlbedo != null;
+            float fogA = OriginalFogFar / (OriginalFogFar - OriginalFogNear);
+            Shader.SetGlobalVector("_XenaOriginalFog", new Vector4(remaster ? 0 : 1, fogA, fogA * OriginalFogNear, 0));
+            Shader.SetGlobalVector("_XenaOriginalFogColor", new Vector4(OriginalBackground.r / 255f, OriginalBackground.g / 255f, OriginalBackground.b / 255f, 1)); // encoded RGB
+            EnsureHorizon(view); if (horizon != null) horizon.enabled = !remaster;
             if (!remaster)
             {
                 Shader.SetGlobalVector("_XenaLandscapeParams", Vector4.zero); LandscapeActive = false;
                 view.clearFlags = CameraClearFlags.SolidColor; view.backgroundColor = OriginalBackground;
+                LateUpdate();
                 return;
             }
             if (remasterSky == null) remasterSky = Resources.Load<Material>("Remaster/Sky");

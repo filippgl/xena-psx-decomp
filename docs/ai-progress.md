@@ -151,6 +151,11 @@ One issue per task. Nothing here is a claim without the command/measurement that
   background/fog researched: docs/xena-level-background.md (HORIZ.STM screen strip, hyperbolic depth fog
   24.45..32.77 m, oracle). All suites PASS (claude-v219-*; one bandit "AI 30 steps/s: 367" flake on v214, passed
   on rerun).
+- claude-v223: ORIGINAL BACKGROUND + FOG ported (docs/xena-level-background.md): tools/export_horizon.mjs ->
+  Resources/Original/Horizon01.png (HORIZ.STM, 512x128); Xena/OriginalHorizon screen pass (sky fill, strip at
+  s5 = trunc(-pitch*45/64) scrolling with heading/2, fog fill; URP-flip aware), clear RGB(0,74,97); OriginalUnlit/
+  SemiTransparent per-vertex hyperbolic depth cue N 24.45 / F 32.77 m in encoded RGB. Smoke: curve oracle,
+  orientation oracle (looking up -> top row (21,97,214)). All suites PASS (claude-v223-*).
 - QUEUE (user 2026-10-26, in order): lake covered by the outer world (fix in test: water = level hull);
   {icon 4}/Р1 in texts -> bound keys (done v215); remove on-screen moves panel (done v214); chakram artifact in
   the centre when thrown; Original-mode level background (user: not ported to Unity Original); grass on slopes
