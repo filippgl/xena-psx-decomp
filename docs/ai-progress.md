@@ -96,7 +96,13 @@ One issue per task. Nothing here is a claim without the command/measurement that
   bandit's side hit mixed into LastIntake / reactions / blood), and the check reads LastBlockedIntake.
   Bandit smoke 3/3 PASS (unblockedDuringBlock 0), all suites PASS (build/unity-import/claude-v175-*.txt).
 - claude-v176: main menu "Пока недоступно" note moved to the top (it overlapped the Enter prompt).
-  Next: gate Remaster model (show the user before it counts as done).
+- claude-v178: REMASTER GATE = PrototypeRemasterGate (image-to-3D dropped for the flat leaves): each original
+  leaf triangle subdivided 24x, front/back layers pushed apart by a rounded profile of the distance to the
+  nearest transparent texel (3.5 cm + 0.6 cm grain per side), same outline/UV/HD texture, original
+  collision; visible from behind too (the original one-sided leaves vanish from the back). 50688 tris.
+  Style check captures: build/unity-import/gate-{front,oblique,close}-{original,remaster}.png. PENDING the
+  user's verdict (prominent object). Known: stair-stepped gap edges from the HD page alpha. All suites PASS
+  (claude-v178-*). Next: user verdict on the gate; then smooth the alpha edges if wanted.
 - CLAUDE 2026-10-25 10:50 build (DLL 10:50:29), all 8 suites + aggregate PASS
   (build/unity-import/claude-v32-*.txt), bandit 6/6 runs 0 stalled.
   GAME OVER (native capture build/gameover, --poke 8700:0x8014E4F2:600:2 = Xena +0x12):

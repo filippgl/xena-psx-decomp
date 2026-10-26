@@ -412,6 +412,25 @@ namespace Xena.Assets
                 camera.transform.position = b.center + new Vector3(0.7f, 0.35f, 0.7f).normalized * (extent * 1.6f + 1.5f); camera.transform.LookAt(b.center);
                 yield return null; yield return new WaitForEndOfFrame(); Capture("veg-" + kind.Trim('@') + ".png");
             }
+            // Remaster gate: both leaves get volume (rounded planks), at most thickness + grain deep per side.
+            var gate = FindFirstObjectByType<PrototypeRemasterGate>();
+            Require(gate != null && gate.Leaf == 2 && gate.RemasterTriangles > 0 && gate.MaxDepthMeters > 0.02f && gate.MaxDepthMeters <= PrototypeRemasterGate.ThicknessMeters + PrototypeRemasterGate.GrainMeters + 1e-4f,
+                "Remaster gate relief: leaves " + (gate != null ? gate.Leaf : 0) + ", depth " + (gate != null ? gate.MaxDepthMeters : 0).ToString("F3"));
+            // Front-oblique views at eye height (the original leaves are one-sided: front = their normal side).
+            {
+                var leaf = System.Array.Find(FindObjectsByType<MeshFilter>(FindObjectsSortMode.None), f => f.name.Contains("@2doors"));
+                PrototypeGraphics.Active.SetMode(XenaVisualMode.Original); yield return null;
+                Vector3 n = Vector3.zero; foreach (var v in leaf.sharedMesh.normals) n += v; n = leaf.transform.TransformDirection(n); n.y = 0; n.Normalize();
+                Bounds gb = leaf.GetComponent<Renderer>().bounds; foreach (var f in FindObjectsByType<MeshFilter>(FindObjectsSortMode.None)) if (f.name.Contains("@2doors")) gb.Encapsulate(f.GetComponent<Renderer>().bounds);
+                Vector3 side = Vector3.Cross(Vector3.up, n);
+                foreach (var (tag, offset) in new[] { ("front", n * 4.5f), ("oblique", n * 3f + side * 2.2f), ("close", n * 1.6f + side * 0.9f) })
+                {
+                    camera.transform.position = new Vector3(gb.center.x, gb.min.y + 1.6f, gb.center.z) + offset; camera.transform.LookAt(gb.center + Vector3.up * 0.2f);
+                    foreach (var m in new[] { XenaVisualMode.Original, XenaVisualMode.Remaster })
+                    { PrototypeGraphics.Active.SetMode(m); yield return null; yield return new WaitForEndOfFrame(); Capture("gate-" + tag + "-" + m.ToString().ToLowerInvariant() + ".png"); }
+                }
+            }
+            report.checks.Add("Remaster gate: 2 leaves with rounded plank volume (" + gate.RemasterTriangles + " tris, max depth " + gate.MaxDepthMeters.ToString("F3") + " m per side), original outline and collision");
             // Props for the image-to-3D trial: first signpost and the bridge, both modes.
             foreach (string prop in new[] { "Sign_pt", "@u_brg", "@2doors", "@rck_cx" })
             {
@@ -422,12 +441,14 @@ namespace Xena.Assets
                 float ext = Mathf.Max(pb.size.x, Mathf.Max(pb.size.y, pb.size.z));
                 // Thin objects (doors): look along the thin axis from both sides; others from a corner.
                 Vector3 thin = pb.size.x < pb.size.z * 0.4f ? Vector3.right : pb.size.z < pb.size.x * 0.4f ? Vector3.forward : Vector3.zero;
-                var views = thin == Vector3.zero ? new[] { new Vector3(0.8f, 0.3f, 0.6f).normalized * (ext * 1.4f + 0.6f) } : new[] { thin * (ext * 1.2f) + Vector3.up * 0.3f, -thin * (ext * 1.2f) + Vector3.up * 0.3f };
+                // Thin objects also get an oblique view (-c) that shows their depth.
+                var views = thin == Vector3.zero ? new[] { new Vector3(0.8f, 0.3f, 0.6f).normalized * (ext * 1.4f + 0.6f) }
+                    : new[] { thin * (ext * 1.2f) + Vector3.up * 0.3f, -thin * (ext * 1.2f) + Vector3.up * 0.3f, (thin + Vector3.Cross(thin, Vector3.up)).normalized * (ext * 0.9f) + Vector3.up * 0.4f };
                 for (int v = 0; v < views.Length; v++)
                 {
                     camera.transform.position = pb.center + views[v]; camera.transform.LookAt(pb.center);
                     foreach (var m in new[] { XenaVisualMode.Original, XenaVisualMode.Remaster })
-                    { PrototypeGraphics.Active.SetMode(m); yield return null; yield return new WaitForEndOfFrame(); Capture("prop-" + prop.Trim('@') + (v > 0 ? "-b" : "") + "-" + m.ToString().ToLowerInvariant() + ".png"); }
+                    { PrototypeGraphics.Active.SetMode(m); yield return null; yield return new WaitForEndOfFrame(); Capture("prop-" + prop.Trim('@') + (v == 1 ? "-b" : v == 2 ? "-c" : "") + "-" + m.ToString().ToLowerInvariant() + ".png"); }
                 }
             }
             orbit.enabled = true;

@@ -19,9 +19,8 @@ namespace Xena.Assets
         {
             // Sign_pt: the Hunyuan model garbled the letters and painted the post white (user: "inside
             // out"); Remaster keeps the original sign model with a Codex HD texture (Sign_pt page-0-4x).
-            // @2doors: v1 rejected (catalogue red doors with iron the original lacks); v2 concept passed
-            // the silhouette check (IoU 0.86) and is used pending the 3D model check.
-            ("@2doors", "gate", Kind.Level, 0),
+            // @2doors: image-to-3D rejected twice (v1 catalogue red doors with iron the original lacks; v2
+            // footprint +33 %, Hunyuan folded the flat leaves). The gate is PrototypeRemasterGate instead.
             ("@rck_cx", "boulder", Kind.Level, 0),
         };
         private readonly List<(Renderer[] original, GameObject generated)> props = new List<(Renderer[], GameObject)>();
