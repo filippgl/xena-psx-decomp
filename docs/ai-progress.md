@@ -144,6 +144,18 @@ One issue per task. Nothing here is a claim without the command/measurement that
   beyond the level as in Original). 69 tris hidden, 1 path, frame 1.70 vs 0.77 ms. All suites PASS (claude-v210-*).
   Known left: thin dark strips of kept wall at two group edges (4, 5); rocks for kept cliff pockets (user: rocks
   allowed) not done.
+- claude-v219: lake no longer covered (water surfaces count as level hull for the outer world); band edges never
+  hang: the outer 14 m run down to the water level like a shore and every open band edge gets an earth skirt to
+  below the water; no plants under the water level; texts: {icon 4}/Р1/Л1 -> bound keys (ButtonText);
+  on-screen moves panel removed; scratchpad cleaned (4 GB -> 18 MB), merged agent worktrees removed. Original
+  background/fog researched: docs/xena-level-background.md (HORIZ.STM screen strip, hyperbolic depth fog
+  24.45..32.77 m, oracle). All suites PASS (claude-v219-*; one bandit "AI 30 steps/s: 367" flake on v214, passed
+  on rerun).
+- QUEUE (user 2026-10-26, in order): lake covered by the outer world (fix in test: water = level hull);
+  {icon 4}/Р1 in texts -> bound keys (done v215); remove on-screen moves panel (done v214); chakram artifact in
+  the centre when thrown; Original-mode level background (user: not ported to Unity Original); grass on slopes
+  must tilt to the surface (not stand vertical / float); moss-rock boundary walls -> real 3D rocks (all levels,
+  universal); clean up captures/dumps after use (done: scratchpad 4 GB -> 18 MB).
 - TODO (user 2026-10-26): after level 2 is ported, return to level 1 and rebuild (Remaster) the part of level 2
   that should be visible through the gaps of the burning gate (@2doors).
 - claude-v213: "trees inside out" FIXED: PrototypeRemasterTrees.Tube wound every bark quad inward (100 % of bark

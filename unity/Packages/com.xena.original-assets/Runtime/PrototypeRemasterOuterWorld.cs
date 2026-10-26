@@ -41,6 +41,7 @@ namespace Xena.Assets
         public static List<Wall> Walls { get; private set; }
         public static List<string> ForestPages { get; private set; }
         public static int PartialPanels { get; private set; }
+        public static int WaterCells { get; private set; }
         public int BandTriangles { get; private set; }
         public int Trees { get; private set; }
         public int Plants { get; private set; }
@@ -80,6 +81,21 @@ namespace Xena.Assets
                             float y = a.y - (n.x * (x + 0.25f - a.x) + n.z * (z + 0.25f - a.z)) / n.y;
                             if (!walk.TryGetValue(key, out var old) || y > old.y) walk[key] = (y, s, i);
                         }
+                }
+            }
+            // Water surfaces (PrototypeRemasterEnvironment) belong to the level like its ground: no band on a lake and
+            // no wall dropped in front of one.
+            foreach (var f in Object.FindObjectsByType<MeshFilter>(FindObjectsSortMode.None))
+            {
+                if (!PrototypeRemasterEnvironment.IsWaterSurface(f.sharedMesh)) continue;
+                var wv = f.sharedMesh.vertices; var wt = f.sharedMesh.triangles;
+                for (int i = 0; i < wt.Length; i += 3)
+                {
+                    Vector3 a = f.transform.TransformPoint(wv[wt[i]]), b = f.transform.TransformPoint(wv[wt[i + 1]]), c = f.transform.TransformPoint(wv[wt[i + 2]]);
+                    float x0 = Mathf.Min(a.x, Mathf.Min(b.x, c.x)), x1 = Mathf.Max(a.x, Mathf.Max(b.x, c.x)), z0 = Mathf.Min(a.z, Mathf.Min(b.z, c.z)), z1 = Mathf.Max(a.z, Mathf.Max(b.z, c.z));
+                    for (float x = Mathf.Floor(x0 * 2) / 2 - 0.5f; x <= x1 + 0.5f; x += 0.5f)
+                        for (float z = Mathf.Floor(z0 * 2) / 2 - 0.5f; z <= z1 + 0.5f; z += 0.5f)
+                            if (InTriangle(new Vector2(x + 0.25f, z + 0.25f), a, b, c)) { covered.Add(new Vector2Int(Mathf.FloorToInt(x * 2), Mathf.FloorToInt(z * 2))); WaterCells++; }
                 }
             }
             bool Inside(Vector3 p)
@@ -224,12 +240,19 @@ namespace Xena.Assets
             if (Walls == null) Detect(collider.sharedMesh, terrain.sharedMaterials, collider.transform);
             if (Walls.Count == 0) yield break;
             root = new GameObject("RemasterOuterWorld");
+            waterLevel = float.MaxValue;
+            foreach (var f in FindObjectsByType<MeshFilter>(FindObjectsSortMode.None))
+                if (PrototypeRemasterEnvironment.IsWaterSurface(f.sharedMesh)) foreach (var v in f.sharedMesh.vertices) waterLevel = Mathf.Min(waterLevel, f.transform.TransformPoint(v).y);
+            if (waterLevel == float.MaxValue) { waterLevel = float.MaxValue; foreach (var w in Walls) waterLevel = Mathf.Min(waterLevel, w.baseY); waterLevel -= 5; }
             BuildBand();
             ApplyVisualMode(PrototypeGraphics.Active == null ? XenaVisualMode.Remaster : PrototypeGraphics.Active.Mode);
         }
 
         private static float Noise(float x, float z) => Mathf.PerlinNoise(x * 0.07f + 13.1f, z * 0.07f + 7.3f) + 0.5f * Mathf.PerlinNoise(x * 0.17f + 3.7f, z * 0.17f + 1.9f);
         private readonly List<Vector3> path = new List<Vector3>();
+        // Level water level (lowest water-surface vertex; else 5 m below the lowest wall foot): band shores end there.
+        private float waterLevel;
+        public int SkirtQuads { get; private set; }
         private float PathDistance(Vector3 p) { float best = float.MaxValue; foreach (var s in path) best = Mathf.Min(best, new Vector2(p.x - s.x, p.z - s.z).magnitude); return best; }
         // Band height at p; false outside the band. nearest = index of the nearest wall (its foot ground is used).
         private bool OnBand(Vector3 p, out float height, out float distance, out int nearest)
@@ -250,6 +273,8 @@ namespace Xena.Assets
             // Gentle rise into low hills (no bank: a steep rise reads as a new wall).
             height = y0 + 0.05f * d0 + 0.006f * d0 * d0 + (Noise(p.x, p.z) - 0.75f) * Mathf.Clamp01(d0 / 8) * 1.6f;
             foreach (var s in path) { float pd = new Vector2(p.x - s.x, p.z - s.z).magnitude; if (pd < 4) height = Mathf.Lerp(Mathf.Min(height, s.y + 0.1f), height, pd / 4); }
+            // The far 14 m run down to the water level like a shore, so the band never ends in mid-air.
+            height = Mathf.Lerp(height, waterLevel - 1.5f, Mathf.SmoothStep(0, 1, (d0 - (BandMeters - 14)) / 14));
             return true;
         }
         // A level collider (rock, boulder, prop, tree collision) above the band at p.
@@ -338,6 +363,25 @@ namespace Xena.Assets
                 }
                 g.t.AddRange(new[] { b0, b0 + 3, b0 + 2, b0, b0 + 2, b0 + 1 });
             }
+            // Skirts: every open edge of the band (no band quad beyond it) gets an earth bank down to below the water
+            // level, so no band edge can hang in the air whatever the corridor's relief does there.
+            bool Quad(int i, int k) => i >= 0 && k >= 0 && i < nx - 1 && k < nz - 1 && valid[i, k] && valid[i + 1, k] && valid[i, k + 1] && valid[i + 1, k + 1];
+            for (int i = 0; i < nx - 1; i++) for (int k = 0; k < nz - 1; k++)
+            {
+                if (!Quad(i, k)) continue;
+                var wall = Walls[nearest[i, k]]; var crop = CropFor(wall.footSub >= 0 ? wall : fallback); if (crop == null) continue;
+                var g = groups[crop];
+                foreach (var (di, dk, a0i, a0k, a1i, a1k) in new[] { (-1, 0, 0, 1, 0, 0), (1, 0, 1, 0, 1, 1), (0, -1, 0, 0, 1, 0), (0, 1, 1, 1, 0, 1) })
+                {
+                    if (Quad(i + di, k + dk)) continue;
+                    Vector3 top0 = new Vector3(minX + (i + a0i) * Cell, heights[i + a0i, k + a0k], minZ + (k + a0k) * Cell), top1 = new Vector3(minX + (i + a1i) * Cell, heights[i + a1i, k + a1k], minZ + (k + a1k) * Cell);
+                    float bottom = waterLevel - 2; if (Mathf.Min(top0.y, top1.y) <= bottom) continue;
+                    Vector3 bot0 = new Vector3(top0.x, bottom, top0.z), bot1 = new Vector3(top1.x, bottom, top1.z);
+                    int b0 = g.v.Count; var light = crop.light * 0.8f; light.a = 1;
+                    foreach (var q in new[] { top0, top1, bot1, bot0 }) { g.v.Add(q); g.uv.Add(new Vector2(q.x + q.z, q.y) / crop.tileMetres); g.c.Add(light); }
+                    g.t.AddRange(new[] { b0, b0 + 1, b0 + 2, b0, b0 + 2, b0 + 3 }); SkirtQuads++;
+                }
+            }
             foreach (var pair in groups)
             {
                 var mesh = new Mesh { name = "OuterBand", indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
@@ -388,7 +432,7 @@ namespace Xena.Assets
                     var p = new Vector3(x + (float)random.NextDouble() * 2.6f, 0, z + (float)random.NextDouble() * 2.6f);
                     if (!Usable(p) || random.NextDouble() < 0.15) continue;
                     OnBand(p, out _, out float d, out _); if (d < 1.5f || PathDistance(p) < 2.2f) continue;
-                    p.y = Height(p) - 0.1f; if (Occupied(p, p.y)) { Blocked++; continue; }
+                    p.y = Height(p) - 0.1f; if (p.y < waterLevel + 0.4f) continue; if (Occupied(p, p.y)) { Blocked++; continue; }
                     float height = 9 + (float)random.NextDouble() * 9, width = height * (0.42f + 0.2f * (float)random.NextDouble());
                     var go = new GameObject("OuterTree"); go.transform.SetParent(root.transform, false); go.transform.position = p;
                     go.AddComponent<MeshFilter>().sharedMesh = PrototypeRemasterTrees.Build(height, width, random.Next(), 0);
@@ -402,7 +446,7 @@ namespace Xena.Assets
                 var p = new Vector3(x + (float)random.NextDouble() * 1.4f, 0, z + (float)random.NextDouble() * 1.4f);
                 if (!Usable(p)) continue; OnBand(p, out _, out float d, out _); float pd = PathDistance(p);
                 if (pd < 1.2f || random.NextDouble() > (d < 10 || pd < 4 ? 0.9 : 0.55)) continue;
-                float y = Height(p); if (Occupied(p, y)) { Blocked++; continue; }
+                float y = Height(p); if (y < waterLevel + 0.3f) continue; if (Occupied(p, y)) { Blocked++; continue; }
                 var prefab = plants[random.Next(plants.Count)]; var plant = Instantiate(prefab, root.transform);
                 var parts = plant.GetComponentsInChildren<Renderer>(true); int child = random.Next(parts.Length);
                 for (int i = 0; i < parts.Length; i++) parts[i].enabled = i == child;
@@ -419,7 +463,7 @@ namespace Xena.Assets
                 for (float x = minX; x < maxX; x += 0.8f) for (float z = minZ; z < maxZ; z += 0.8f)
                 {
                     var p = new Vector3(x + (float)random.NextDouble() * 0.8f, 0, z + (float)random.NextDouble() * 0.8f);
-                    if (!Usable(p) || PathDistance(p) < 1.1f) continue; p.y = Height(p);
+                    if (!Usable(p) || PathDistance(p) < 1.1f) continue; p.y = Height(p); if (p.y < waterLevel + 0.2f) continue;
                     OnBand(p, out _, out float d, out int w); if (Occupied(p, p.y)) continue;
                     var key = new Vector2Int(Mathf.FloorToInt(p.x / 12), Mathf.FloorToInt(p.z / 12));
                     if (!chunks.TryGetValue(key, out var chunk)) chunks[key] = chunk = (new List<Vector3>(), new List<Vector2>(), new List<Color>(), new List<int>(), new List<Vector2>());

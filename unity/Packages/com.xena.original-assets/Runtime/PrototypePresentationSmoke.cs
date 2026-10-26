@@ -494,6 +494,13 @@ namespace Xena.Assets
                 }
                 orbit2.enabled = true;
             }
+            // Game texts: original pad glyphs and button names become the bound keys (user: "что за icon 4").
+            {
+                var pi = FindFirstObjectByType<PrototypeInput>();
+                string hint = pi.ButtonText("нажми и удерживаи кнопку Р1 потом жми  {icon 4}.");
+                Require(!hint.Contains("{icon") && !hint.Contains("Р1") && hint.Contains(pi.BindingLabel("Sword")) && hint.Contains(pi.BindingLabel("Chakram")), "Button names not replaced: " + hint);
+                report.checks.Add("texts show bound keys for pad glyphs/buttons: " + hint);
+            }
             // Remaster level trees must stand on the ground under their trunk (user: two trees float over a rock).
             {
                 var floating = new List<string>(); var outOfBounds = new List<string>(); int checkedTrees = 0;
@@ -615,6 +622,31 @@ namespace Xena.Assets
                     { PrototypeGraphics.Active.SetMode(m); yield return null; yield return null; yield return new WaitForEndOfFrame(); Capture("shaft-" + shaftIndex + "-" + h * 90 + "-" + m.ToString().ToLowerInvariant() + ".png"); }
                 }
                 lines.Add("shaft " + shaftIndex + " at " + c.ToString("F1")); shaftIndex++;
+            }
+            // The lake from above on four sides (user: the outer world had covered it with forest).
+            foreach (var f in FindObjectsByType<MeshFilter>(FindObjectsSortMode.None))
+            {
+                if (!PrototypeRemasterEnvironment.IsWaterSurface(f.sharedMesh)) continue;
+                Bounds lb = f.GetComponent<Renderer>().bounds;
+                for (int h = 0; h < 4; h++)
+                {
+                    Vector3 dir = Quaternion.Euler(0, h * 90, 0) * Vector3.forward;
+                    camera.transform.position = lb.center - dir * (Mathf.Max(lb.extents.x, lb.extents.z) + 4) + Vector3.up * 7; camera.transform.LookAt(lb.center);
+                    foreach (var m in new[] { XenaVisualMode.Original, XenaVisualMode.Remaster })
+                    { PrototypeGraphics.Active.SetMode(m); yield return null; yield return null; yield return new WaitForEndOfFrame(); Capture("lake-" + h * 90 + "-" + m.ToString().ToLowerInvariant() + ".png"); }
+                }
+                break;
+            }
+            // Overview: the whole level from 8 sides, 25 m up, 70 m out (hanging band edges, shores, water).
+            {
+                Bounds lv = new Bounds(motor.transform.position, Vector3.one); foreach (var r in GameObject.Find("OriginalLevel01").GetComponentsInChildren<MeshRenderer>()) lv.Encapsulate(r.bounds);
+                PrototypeGraphics.Active.SetMode(XenaVisualMode.Remaster);
+                for (int h = 0; h < 8; h++)
+                {
+                    Vector3 dir = Quaternion.Euler(0, h * 45, 0) * Vector3.forward;
+                    camera.transform.position = lv.center - dir * (Mathf.Max(lv.extents.x, lv.extents.z) + 25) + Vector3.up * 25; camera.transform.LookAt(lv.center);
+                    yield return null; yield return null; yield return new WaitForEndOfFrame(); Capture("overview-" + h * 45 + ".png");
+                }
             }
             File.WriteAllText(Path.Combine(output, "perimeter.txt"), string.Join(System.Environment.NewLine, lines));
             report.checks.Add("perimeter tour: " + groups.Count + " painted-wall groups captured");

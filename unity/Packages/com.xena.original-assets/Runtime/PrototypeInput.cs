@@ -85,6 +85,18 @@ namespace Xena.Assets
         }
         public string BindingPath(string key) { int at = Binding(key, out InputAction action); return action.bindings[at].effectivePath; }
         public string BindingLabel(string key) { int at = Binding(key, out InputAction action); return action.GetBindingDisplayString(at); }
+        // Original button names in game texts -> the keys bound now (default PS layout A, docs/xena-pause-menu.md:
+        // ⓧ sword, □ kick, △ jump, ○ block, L1 run, R1 look/aim = the chakram aim here). Byte 0x04 ({icon 4}) is the
+        // circled X (VERIFIED, docs/xena-main-menu.md); the roles of bytes 1..3 are UNKNOWN and fall back to "кнопку".
+        public string ButtonText(string line)
+        {
+            if (string.IsNullOrEmpty(line)) return line;
+            line = line.Replace("{icon 4}", BindingLabel("Sword"));
+            for (int i = 1; i <= 3; i++) line = line.Replace("{icon " + i + "}", "кнопку");
+            line = line.Replace("кнопку Р1", BindingLabel("Chakram")).Replace("Р1", BindingLabel("Chakram"));
+            line = line.Replace("кнопку Л1", BindingLabel("Sprint")).Replace("Л1", BindingLabel("Sprint"));
+            return line;
+        }
         public bool BeginRebind(string key)
         {
             if (!Paused || IsRebinding) return false;

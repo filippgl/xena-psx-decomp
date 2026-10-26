@@ -129,21 +129,8 @@ namespace Xena.Assets
             if (combat == null) combat = target.GetComponent<PrototypeCombat>();
             if (chakram != null && chakram.Active && !input.Paused)
                 GUI.Label(new Rect(Screen.width / 2 - 8, Screen.height / 2 - 12, 24, 30), "+");
-            if (input.Paused) return; // the pause menu owns the screen
-            GUILayout.BeginArea(new Rect(16, 16, 560, 270), GUI.skin.box);
-            GUILayout.Label("Xena — prototype | F10 graphics: " + (PrototypeGraphics.Active == null ? "Remaster" : PrototypeGraphics.Active.Mode.ToString()));
-            GUILayout.Label(input.BindingLabel("Forward") + "/" + input.BindingLabel("Left") + "/" + input.BindingLabel("Back") + "/" + input.BindingLabel("Right") + " move · " + input.BindingLabel("Sprint") + " run · " + input.BindingLabel("Jump") + " jump · Esc pause");
-            GUILayout.Label("Gamepad: sticks · L3 run · A jump · X sword · Y kick · LB block · Start pause");
-            GUILayout.Label(input.BindingLabel("Sword") + " sword · " + input.BindingLabel("Kick") + " kick · hold " + input.BindingLabel("Block") + " block");
-            GUILayout.Label("Hold block + direction: cartwheel / backward handspring");
-            GUILayout.Label("Run + kick: roll · run + sword: slash · run + jump: frontflip");
-            GUILayout.Label("Block + kick: spin kick · block + sword: strike");
-            GUILayout.Label("Sword + kick: spin (tap kick to extend) · backward + jump: backflip");
-            GUILayout.Label("Hold " + input.BindingLabel("Chakram") + " / RB aim · sword button throws · release aim recalls");
-            GUILayout.Label("Wheel zoom · " + input.BindingLabel("CenterCamera") + " / R3 center camera");
-            if (combat != null) GUILayout.Label("Health: " + combat.Health + " | " + input.BindingLabel("Reset") + " resets you and the dummy");
-            // Settings moved to the pause menu (PrototypePauseMenu).
-            GUILayout.EndArea();
+            // The on-screen controls/moves panel was removed (user 2026-10-26): controls live in the pause menu
+            // (Опции -> Управление).
         }
     }
 }

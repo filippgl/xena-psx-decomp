@@ -177,7 +177,7 @@ namespace Xena.Assets
         private void Show(int index)
         {
             if (!messages.TryGetValue(index, out var lines)) return;
-            Shown = lines; ShownIndex = index; MessageLog.Add(index); shownAt = Time.unscaledTime; Time.timeScale = 0;
+            Shown = System.Array.ConvertAll(lines, l => input != null ? input.ButtonText(l) : l); ShownIndex = index; MessageLog.Add(index); shownAt = Time.unscaledTime; Time.timeScale = 0;
         }
 
         private void FixedUpdate()

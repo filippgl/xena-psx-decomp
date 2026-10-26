@@ -10,6 +10,8 @@ namespace Xena.Assets
     public sealed class PrototypeRemasterEnvironment : MonoBehaviour, IXenaVisualModeTarget
     {
         private const string Stream = "level-01-object-14", Waterfall = "level-01-object-40", Rainbow = "level-01-object-0", Terrain = "level-01-object-1";
+        // Water surfaces of the level (other Remaster systems keep off them, e.g. the outer world).
+        public static bool IsWaterSurface(Mesh mesh) => mesh != null && mesh.name == Stream;
         // Terrain submesh page-9 is entirely the falling-water texture column
         // (all 180 triangles map u0..64, v80..190 of that 256px page).
         private const string TerrainFallPage = "page-9_";
