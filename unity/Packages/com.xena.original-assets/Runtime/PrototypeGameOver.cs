@@ -52,9 +52,10 @@ namespace Xena.Assets
             if (Pressed(Key.Enter) || Pressed(Key.Space) || Gamepad.current?.buttonSouth.wasPressedThisFrame == true) Confirm();
         }
         private static bool Pressed(Key key) => Keyboard.current != null && Keyboard.current[key].wasPressedThisFrame;
-        public void Move(int delta) { if (State == Phase.Menu || State == Phase.Confirm) Selected = Mathf.Clamp(Selected + delta, 0, 1); }
+        public void Move(int delta) { if (State == Phase.Menu || State == Phase.Confirm) { int was = Selected; Selected = Mathf.Clamp(Selected + delta, 0, 1); if (was != Selected) PrototypeSfx.Play2D(0x39, ui: true); } }
         public void Confirm()
         {
+            if (State == Phase.Menu || State == Phase.Confirm) PrototypeSfx.Play2D(0, ui: true); // confirm 0x00
             if (State == Phase.Menu) { if (Selected == 0) Retry(); else { State = Phase.Confirm; Selected = 1; } }
             else if (State == Phase.Confirm) { if (Selected == 0) PlayGameOver(); else { State = Phase.Menu; Selected = 1; } }
         }

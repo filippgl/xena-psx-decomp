@@ -166,6 +166,7 @@ namespace Xena.Assets
         private void Step()
         {
             Steps++;
+            Sounds();
             if (Invulnerable > 0) Invulnerable--;
             if (Retaliation > 0) Retaliation--;
             if (Dying)
@@ -262,6 +263,30 @@ namespace Xena.Assets
             MaxTurnObserved = Mathf.Max(MaxTurnObserved, Mathf.Abs(turn));
         }
         private bool Looping => !Dying && (Slot == PrototypeBandits.IdleSlot || Slot == Walk || Slot == Run);
+        // Bandit sounds (docs/xena-sfx.md): script swings rand(0,2), footsteps rand(0x2E,0x32) vol 31, death
+        // thud 0x2E, XA 0x1000 at 0x7B f10; barks: alert 0x102D when leaving mode 0, approach list at
+        // 0xCC/4096 per step (mode 2), attack taunt lists at 0x14/4096 (mode 5). Barks start only while no
+        // XA clip plays (one CD stream; INFERRED pacing).
+        private static readonly int[] ApproachBarks = { 0x1039, 0x103A, 0x1049, 0x104A, 0x104B, 0x10AC, 0x10B2 };
+        private static readonly int[] Taunts = { 0x104E, 0x104F, 0x1050, 0x1051, 0x1052 }, Taunts2 = { 0x1078, 0x1079, 0x107A, 0x1080, 0x1081, 0x1082, 0x1083 };
+        private static readonly System.Collections.Generic.Dictionary<int, int[]> HurtVoice = new System.Collections.Generic.Dictionary<int, int[]> { { 0x7B, new[] { 10 } } };
+        private int soundSlot = -1, soundFrame = -1; private Mode soundState;
+        private void Sounds()
+        {
+            var sfx = PrototypeSfx.Instance; Vector3 at = transform.position;
+            if (PrototypeSfxEvents.Crossed(PrototypeSfxEvents.BanditSword, soundSlot, soundFrame, Slot, Frame)) PrototypeSfx.PlayAt(sfx.Rand(0, 2), at);
+            if (PrototypeSfxEvents.Crossed(PrototypeSfxEvents.BanditSteps, soundSlot, soundFrame, Slot, Frame)) PrototypeSfx.PlayAt(sfx.Rand(0x2E, 0x32), at, 60, 31);
+            if (Dying && PrototypeSfxEvents.Crossed(PrototypeSfxEvents.BanditThud, soundSlot, soundFrame, Slot, Frame)) PrototypeSfx.PlayAt(0x2E, at);
+            if (PrototypeSfxEvents.Crossed(HurtVoice, soundSlot, soundFrame, Slot, Frame)) PrototypeSfx.PlayAt(0x1000, at);
+            if (!Dying && !PrototypeSfx.XaPlaying)
+            {
+                if (soundState == Mode.Idle && State != Mode.Idle) PrototypeSfx.PlayAt(0x102D, at);
+                else if (State == Mode.Approach && sfx.Rand(0, 4095) < 0xCC) PrototypeSfx.PlayAt(ApproachBarks[sfx.Rand(0, ApproachBarks.Length - 1)], at);
+                else if (State == Mode.Attack && sfx.Rand(0, 4095) < 0x14) PrototypeSfx.PlayAt(Taunts[sfx.Rand(0, Taunts.Length - 1)], at);
+                else if (State == Mode.Attack && sfx.Rand(0, 4095) < 0x14) PrototypeSfx.PlayAt(Taunts2[sfx.Rand(0, Taunts2.Length - 1)], at);
+            }
+            soundSlot = Slot; soundFrame = Frame; soundState = State;
+        }
         private void Contacts()
         {
             // Clip frame n (step counter) uses SMA frame n - 1 at the root before this step's movement.
@@ -275,7 +300,7 @@ namespace Xena.Assets
                 for (int i = 0; i < points.Length; i++)
                     if ((mask >> i & 1) != 0 && PrototypeContactPoints.Test(points[i], previousPoints[i], hasPrevious && (previousMask >> i & 1) != 0,
                         target.transform.position, Radius, Radius, 750, out var hit)) { found = true; point = hit; }
-                if (found) { ContactHits++; if (damage.TakeHit(Mathf.Abs(raw), transform.position, point)) attackLanded = true; }
+                if (found) { ContactHits++; if (damage.TakeHit(Mathf.Abs(raw), transform.position, point, Slot)) attackLanded = true; }
             }
             Array.Copy(points, previousPoints, points.Length); previousMask = mask; previousKey = key;
         }
@@ -299,7 +324,7 @@ namespace Xena.Assets
                 Vector3 offset = target.transform.position - transform.position; float dy = offset.y; offset.y = 0;
                 var damage = target.GetComponent<PrototypeOriginalDamage>();
                 if (damage != null && offset.magnitude < (AttackRange + 40) / 400f && Mathf.Abs(dy) * 400 < 750
-                    && Vector3.Angle(Quaternion.Euler(0, heading * 360f / 4096, 0) * Vector3.forward, offset) <= 60 && damage.TakeHit(window.damage, transform.position)) attackLanded = true;
+                    && Vector3.Angle(Quaternion.Euler(0, heading * 360f / 4096, 0) * Vector3.forward, offset) <= 60 && damage.TakeHit(window.damage, transform.position, null, Slot)) attackLanded = true;
             }
             // Root motion of the current frame (last change at or before it).
             int speed = 0, direction = 2048;

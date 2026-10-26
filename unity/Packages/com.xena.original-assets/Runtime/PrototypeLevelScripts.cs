@@ -154,8 +154,10 @@ namespace Xena.Assets
                 if (levelEndStart < 0) { levelEndStart = Time.unscaledTime; levelTime = Time.timeSinceLevelLoad; }
                 float t = Time.unscaledTime - levelEndStart;
                 // Rows appear every 30 vblanks after a 10-pass delay; any press skips to the end; CROSS continues.
+                int rowsBefore = LevelEndRows;
                 if (anyPress && t > 0.35f && LevelEndRows < 6) { LevelEndRows = 6; skipAt = Time.unscaledTime; }
                 else LevelEndRows = Mathf.Max(LevelEndRows, Mathf.Clamp(Mathf.FloorToInt((t - 0.35f) / 0.5f) + 1, 0, 6));
+                if (LevelEndRows > rowsBefore) PrototypeSfx.Play2D(0x38, ui: true); // row sound 0x8006CDD8
                 if (LevelEndRows >= 6 && Time.unscaledTime - skipAt > 0.3f && (k?.enterKey.wasPressedThisFrame == true || k?.spaceKey.wasPressedThisFrame == true || pad?.buttonSouth.wasPressedThisFrame == true))
                 {
                     // Original: CROSS loads level 02 (not ported) -> the main menu.
@@ -206,7 +208,7 @@ namespace Xena.Assets
                         if (trigger.actor.name == "scroll") { Show(Level * 2 + trigger.actor.@params[0]); ScrollsRead++; }
                         else
                         {
-                            ItemsCollected++;
+                            ItemsCollected++; PrototypeSfx.Play2D(0xF); // pickup chime 0x8004038C
                             if (trigger.actor.name == "health2") { Potions++; GetComponent<PrototypeOriginalDamage>()?.OnPotionPicked(); }
                             if (trigger.actor.name == "up_sword") SwordLevel = Mathf.Min(4, SwordLevel + 1);
                             if (firstPickupShown.Add(trigger.actor.name)) Show(trigger.actor.name == "health2" ? 54 : 69);

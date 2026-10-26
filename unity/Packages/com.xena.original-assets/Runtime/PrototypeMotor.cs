@@ -59,6 +59,7 @@ namespace Xena.Assets
             if (GetComponent<PrototypeLightShafts>() == null) gameObject.AddComponent<PrototypeLightShafts>();
             if (GetComponent<PrototypeFire>() == null) gameObject.AddComponent<PrototypeFire>();
             if (GetComponent<PrototypeWaterOriginal>() == null) gameObject.AddComponent<PrototypeWaterOriginal>();
+            if (GetComponent<PrototypeSfxEvents>() == null) gameObject.AddComponent<PrototypeSfxEvents>();
             if (GetComponent<PrototypePauseMenu>() == null) gameObject.AddComponent<PrototypePauseMenu>();
             if (GetComponent<PrototypeRemasterVegetation>() == null) gameObject.AddComponent<PrototypeRemasterVegetation>();
             if (GetComponent<PrototypeRemasterTrees>() == null) gameObject.AddComponent<PrototypeRemasterTrees>();
@@ -142,7 +143,12 @@ namespace Xena.Assets
             else if ((collision & CollisionFlags.Below) != 0 && vertical <= 0) { Grounded = true; vertical = -1; }
             else Grounded = false;
             if (wasGrounded && !Grounded && vertical <= 0) { ConfigureJump(false); backwardsJump = false; }
-            if (Grounded && !wasGrounded) { landingTime = 0; backwardsJump = false; hurt?.OnLanded((fallTop - transform.position.y) * 400); }
+            if (Grounded && !wasGrounded)
+            {
+                landingTime = 0; backwardsJump = false; hurt?.OnLanded((fallTop - transform.position.y) * 400);
+                // Landing thud 0x2E note 55 (0x8003B6D4; fired on touchdown here, the original jump-type frame is INFERRED).
+                PrototypeSfx.PlayOn(0x2E, transform, 55);
+            }
             // Fall tracking (func_800367BC 0x8003B7F4..: drop = landing y - fall start D_800F0D34; fall start
             // taken as the highest point of the airborne phase: INFERRED). Falling 2000 units below the last
             // ground (levels 1..3) ends the game without a death clip (0x80036E0C..).

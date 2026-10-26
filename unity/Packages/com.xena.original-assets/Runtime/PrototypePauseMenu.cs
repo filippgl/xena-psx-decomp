@@ -66,7 +66,7 @@ namespace Xena.Assets
             if (back && Current != Page.Main) Back();
         }
         private int Count => Current == Page.Main ? Items.Length : Current == Page.Options ? OptionItems.Length : Current == Page.Controls ? PrototypeInput.BindingKeys.Length + 2 : 2;
-        public void Move(int delta) { Cursor = Mathf.Clamp(Cursor + delta, 0, Count - 1); } // no wrap
+        public void Move(int delta) { int was = Cursor; Cursor = Mathf.Clamp(Cursor + delta, 0, Count - 1); if (Cursor != was) PrototypeSfx.Play2D(0x39, ui: true); } // no wrap; menu move 0x39
         public void Back()
         {
             if (Current == Page.Controls) { Current = Page.Options; Cursor = 5; }
@@ -76,7 +76,7 @@ namespace Xena.Assets
         {
             if (Current != Page.Options) return;
             if (Cursor == 0) { MusicVolume = Mathf.Clamp01(MusicVolume + delta * 0.05f); PlayerPrefs.SetFloat("xena.music", MusicVolume); }
-            if (Cursor == 1) { EffectsVolume = Mathf.Clamp01(EffectsVolume + delta * 0.05f); PlayerPrefs.SetFloat("xena.effects", EffectsVolume); AudioListener.volume = EffectsVolume; }
+            if (Cursor == 1) { EffectsVolume = Mathf.Clamp01(EffectsVolume + delta * 0.05f); PlayerPrefs.SetFloat("xena.effects", EffectsVolume); PrototypeSfx.Play2D(0x26, ui: true); } // volume test sound 0x26
             if (Cursor == 2) ToggleGraphics();
             if (Cursor == 3) input.Preferences.Data.mouseSensitivity = Mathf.Clamp(input.Preferences.Data.mouseSensitivity + delta * 0.01f, 0.03f, 0.3f);
             if (Cursor == 4) input.Preferences.Data.invertY = !input.Preferences.Data.invertY;
@@ -84,6 +84,7 @@ namespace Xena.Assets
         private static void ToggleGraphics() { if (PrototypeGraphics.Active != null) PrototypeGraphics.Active.SetMode(PrototypeGraphics.Active.Mode == XenaVisualMode.Original ? XenaVisualMode.Remaster : XenaVisualMode.Original); }
         public void Select()
         {
+            PrototypeSfx.Play2D(0, ui: true); // confirm 0x00
             switch (Current)
             {
                 case Page.Main:

@@ -142,7 +142,7 @@ namespace Xena.Assets
             if (Pressed(Key.DownArrow) || Pressed(Key.S) || Gamepad.current?.dpad.down.wasPressedThisFrame == true) move = 1;
             if (Pressed(Key.Enter) || Pressed(Key.Space) || Gamepad.current?.buttonSouth.wasPressedThisFrame == true) confirm = true;
             if (move != 0 || confirm) Idle = 900;
-            if (move != 0) Cursor = Mathf.Clamp(Cursor + move, 0, 3);
+            if (move != 0) MoveCursor(move);
             if (confirm) Select();
             if (!Visible) return;
             clock += Time.unscaledDeltaTime;
@@ -152,10 +152,11 @@ namespace Xena.Assets
             if (stepped) Compose();
         }
         private static bool Pressed(Key key) => Keyboard.current != null && Keyboard.current[key].wasPressedThisFrame;
-        public void MoveCursor(int delta) { if (Visible) { Cursor = Mathf.Clamp(Cursor + delta, 0, 3); Idle = 900; Compose(); } }
+        public void MoveCursor(int delta) { if (Visible) { int was = Cursor; Cursor = Mathf.Clamp(Cursor + delta, 0, 3); Idle = 900; if (was != Cursor) PrototypeSfx.Play2D(0x39, ui: true); Compose(); } }
         public void Select()
         {
             if (!Visible || ConfirmDelay > 0) return;
+            PrototypeSfx.Play2D(0, ui: true); // confirm 0x00
             if (Cursor == 0) { NewGames++; Hide(); return; }
             Note = "Пока недоступно в прототипе"; noteUntil = Time.unscaledTime + 2;
         }

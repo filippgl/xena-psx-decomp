@@ -16,7 +16,7 @@ namespace Xena.Assets
         [Serializable] private sealed class Report
         {
             public string result = "FAIL", error; public List<string> checks = new List<string>();
-            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError, deathLensHeight, gameOverVideoSeconds; public int gameOverMenuStep; public string gameOverVideo; public int hitFlashLife, hitDiscs, hitTriangles, remasterDroplets, discFrames, discStalls; public string strikeState; public int fallDamage, banditBlocks, contactHits, banditContactHits, lowReaction, midReaction, rearReaction; public Vector3 contactPoint; public List<string> discTrace = new List<string>(); public int menuBolts; public List<string> runTrace = new List<string>();
+            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError, deathLensHeight, gameOverVideoSeconds; public int gameOverMenuStep; public string gameOverVideo; public int hitFlashLife, hitDiscs, hitTriangles, remasterDroplets, discFrames, discStalls; public string strikeState; public int fallDamage, banditBlocks, contactHits, banditContactHits, lowReaction, midReaction, rearReaction; public string sfxLog, sfxAttenuation; public Vector3 contactPoint; public List<string> discTrace = new List<string>(); public int menuBolts; public List<string> runTrace = new List<string>();
         }
         private readonly Report report = new Report();
         private string output; private bool finished;
@@ -241,6 +241,7 @@ namespace Xena.Assets
             foe.transform.rotation = Quaternion.LookRotation(-motor.transform.forward); foe.Configure(foe.GetComponentInChildren<XenaAssetPreview>(), motor, Motion(foe), 75, 0, 7);
             foe.Active = false; // stand still while Xena strikes
             int before = foe.Health, reactionsAtStrike = damage.Reactions, hitsAtStrike = damage.HitsTaken;
+            PrototypeSfx.Log.Clear();
             // Hold the press for real frames: after the 4x ending, fixed-step catch-up
             // could otherwise deliver press and release to Input System in one update.
             yield return null; yield return null;
@@ -276,6 +277,25 @@ namespace Xena.Assets
                     && !PrototypeContactPoints.Test(pts[0], pts[0], false, pts[0] + new Vector3(0, -2f, 0), 150, 150, 750, out _),
                     "Contact test does not use the original r + 50 = 200 unit radius / 750 unit height");
                 report.checks.Add("Xena sword uses the original per-frame contact points (pose oracle, r+50 / 750 test)");
+            }
+            // Original sounds (docs/xena-sfx.md): swing rand(0,2) at clip 51 f7, sword connect rand(0x1E,0x21) at
+            // note 60..62; water loops 0x13 from level load; func_800845C8 distance/pan oracle.
+            {
+                var log = PrototypeSfx.Log; report.sfxLog = string.Join(",", log.ConvertAll(x => x.id.ToString("X") + "/" + x.note + "/" + x.vol));
+                report.sfxLog += " taken=" + (damage.HitsTaken - hitsAtStrike) + " dealt=" + damage.HitsDealt + " blocked=" + damage.BlockedHits;
+                Require(PrototypeSfx.Available > 100 && log.Exists(x => x.id <= 2) && log.Exists(x => x.id >= 0x1E && x.id <= 0x21 && x.note >= 60 && x.note <= 62),
+                    "Sword swing / connect sounds missing: " + PrototypeSfx.Available + " sounds, log " + report.sfxLog);
+                Require(PrototypeSfx.IsPlaying(0x13, 0x13), "Level 01 water loop 0x13 is not playing");
+                var cam = new GameObject("SfxProbe").transform; cam.position = Vector3.zero; cam.rotation = Quaternion.identity;
+                PrototypeSfx.Attenuate(new Vector3(0, 0, 2000 / 400f), cam, out int v0, out int p0);
+                PrototypeSfx.Attenuate(new Vector3(0, 0, 12500 / 400f), cam, out int v1, out int p1);
+                PrototypeSfx.Attenuate(new Vector3(0, 0, -12500 / 400f), cam, out int v2, out _);
+                PrototypeSfx.Attenuate(new Vector3(30000 / 400f, 0, 0), cam, out int v3, out int p3);
+                PrototypeSfx.Attenuate(new Vector3(1, 0, 1), cam, out _, out int p4);
+                Destroy(cam.gameObject);
+                report.sfxAttenuation = v0 + "/" + p0 + " " + v1 + "/" + p1 + " " + v2 + " " + v3 + "/" + p3 + " " + p4;
+                Require(v0 == 127 && p0 == 64 && v1 == 63 && v2 == 48 && v3 == 10 && p3 == 127 && p4 == 127, "Sound attenuation differs from func_800845C8: " + report.sfxAttenuation);
+                report.checks.Add("original SFX: swing + connect on a sword hit, level water loops, func_800845C8 distance/pan");
             }
             int d = report.firstHitDamage;
             // The sword spark: (Hit, d) logged, flash life / ring / discs by func_800291A0, the foe bleeds.

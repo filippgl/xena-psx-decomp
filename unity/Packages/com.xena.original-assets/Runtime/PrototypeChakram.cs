@@ -151,6 +151,7 @@ namespace Xena.Assets
                 {
                     projectile.transform.position = start + step.normalized * Mathf.Max(0, hit.distance - 0.03f);
                     trail.Add(projectile.transform.position); WallContacts++; LastImpactCollider = hit.collider.name;
+                    PrototypeSfx.PlayRandAt(0x19, 0x1A, projectile.transform.position); // ricochet 0x8003EAB4
                     EmitImpactSparks(hit.point, hit.normal);
                     BeginReturn(); reboundTime = 0.12f; direction = -step.normalized;
                     return;
@@ -181,6 +182,7 @@ namespace Xena.Assets
                 if (bandit.TakeHit(Damage, at, false))
                 {
                     EnemyHits++; killed = bandit.Health == 0;
+                    PrototypeSfx.PlayAt(0x1B + PrototypeSfx.Instance.Rand(0, 1), bandit.transform.position); // 0x8003ED8C
                     var effects = GetComponent<PrototypeHitEffects>();
                     if (effects != null) { effects.Spark(at, Damage, PrototypeHitEffects.Type.Hit); effects.Bleed(bandit.transform, at, killed ? 20 : 10, killed ? 170 : 80); }
                 }
@@ -221,7 +223,7 @@ namespace Xena.Assets
                 else { projectile.transform.position = Vector3.MoveTowards(projectile.transform.position, next, distance); distance = 0; }
             }
             if (returnIndex < 0)
-            { Flying = Returning = false; projectile.SetActive(false); Catches++; SetMode(Mode.Catching); }
+            { Flying = Returning = false; projectile.SetActive(false); Catches++; SetMode(Mode.Catching); PrototypeSfx.Stop(8); PrototypeSfx.PlayOn(0x1D, transform); }
         }
         public bool PresentPose()
         {

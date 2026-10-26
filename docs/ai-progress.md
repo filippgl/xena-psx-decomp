@@ -21,7 +21,18 @@ One issue per task. Nothing here is a claim without the command/measurement that
   atan2(Xena - attacker) with Unity's +z facing, so every front hit played the rear clip 0x72; now
   atan2(attacker - Xena) - yaw (PSX models face -z). Smoke: low 0x70, mid 0x66, rear 0x72, live intake 0x67.
   All 8 suites + aggregate PASS: build/unity-import/claude-v145-*.txt.
-  Next: SFX wiring (agent a9d83f1d running), lark/butterfly anim, bandit patrol/avoid (mode 6).
+- CLAUDE 2026-10-26 08:30 build (claude-v148 build): ORIGINAL SFX wired. Export merged from the agent
+  (tools/export_sfx.mjs, docs/xena-sfx.md; 4 renders matched to native --wav). tools/install_sfx.py ->
+  Resources/Sfx (+ index.json, loop bodies from the raw samples, gain APPROXIMATED). PrototypeSfx: 24
+  voices, func_800845C8 camera attenuation/pan, notes as pitch, one XA stream, EffectsVolume (the effects
+  slider no longer changes AudioListener.volume = music). PrototypeSfxEvents: Xena swings/kicks/whoosh/
+  footsteps/death voice by clip frame, water loops 0x13, power-up loop 0x3D, chakram whoosh/ricochet/hit/
+  catch. Damage: connect (kick set 0x15.., sword 0x1E..), clang 0x1B, impact 9..14. Bandits: swings, steps,
+  thud, 0x1000, barks (pacing INFERRED). Menus: move 0x39, confirm 0x00, level-end rows 0x38, slider 0x26.
+  Landing 0x2E n55 fires on touchdown (jump-type frame INFERRED). Smoke: swing+connect log, water loop,
+  attenuation oracle (127/64, 63, 48 behind, floor 10, pan 127), run footsteps 3 per 31 steps.
+  All 8 suites + aggregate PASS: build/unity-import/claude-v148-*.txt.
+  Next: lark/butterfly anim + lark chirps 0x4B/0x4C, bandit patrol/avoid (mode 6), hurt-voice lists.
 - CLAUDE 2026-10-25 10:50 build (DLL 10:50:29), all 8 suites + aggregate PASS
   (build/unity-import/claude-v32-*.txt), bandit 6/6 runs 0 stalled.
   GAME OVER (native capture build/gameover, --poke 8700:0x8014E4F2:600:2 = Xena +0x12):

@@ -198,7 +198,7 @@ namespace Xena.Assets
                     bool wasFleeing = bandit.Fleeing;
                     if (bandit.TakeHit(damage, transform.position, kick))
                     {
-                        struck.Add(bandit); HitsDealt++; LastDamageDealt = damage;
+                        struck.Add(bandit); HitsDealt++; LastDamageDealt = damage; ConnectSound(combat.Slot, bandit.transform.position);
                         // Hit effects at the contact point (docs/xena-hit-effects.md): yellow for the
                         // kick/special states, red otherwise; the bandit bleeds for d >= 4 (20 steps on a kill).
                         if (Effects != null)
@@ -215,6 +215,14 @@ namespace Xena.Assets
             }
         }
 
+        // func_80035070: kick set (0x3F, 0x46, 0x5A..0x64 except 0x5E/0x62) -> rand(0x15,0x18), else sword
+        // rand(0x1E,0x21); note rand(60,62) at the target.
+        public static bool KickSet(int slot) => slot == 0x3F || slot == 0x46 || (slot >= 0x5A && slot <= 0x64 && slot != 0x5E && slot != 0x62);
+        public static void ConnectSound(int slot, Vector3 target)
+        {
+            var sfx = PrototypeSfx.Instance;
+            PrototypeSfx.PlayAt(KickSet(slot) ? sfx.Rand(0x15, 0x18) : sfx.Rand(0x1E, 0x21), target, sfx.Rand(60, 62));
+        }
         private void StepContacts(Vector3 root, float yaw, int frame)
         {
             // Step counter n = clip frame n uses SMA frame n - 1; the previous points count only when the
@@ -242,11 +250,12 @@ namespace Xena.Assets
                     // Blocking bandit: all damage discarded, blue spark, clang 0x1B (docs/xena-damage-audit.md 4).
                     struck.Add(bandit);
                     if (Effects != null) Effects.Spark(point, damage, PrototypeHitEffects.Type.Block);
+                    if (!PrototypeSfx.IsPlaying(0x1B, 0x1B)) PrototypeSfx.PlayAt(0x1B, bandit.transform.position, PrototypeSfx.Instance.Rand(55, 57));
                     continue;
                 }
                 bool wasFleeing = bandit.Fleeing;
                 if (!bandit.TakeHit(damage, transform.position, kick)) continue;
-                struck.Add(bandit); HitsDealt++; LastDamageDealt = damage;
+                struck.Add(bandit); HitsDealt++; LastDamageDealt = damage; ConnectSound(combat.Slot, bandit.transform.position);
                 if (Effects != null)
                 {
                     effects.Spark(point, damage, Array.IndexOf(SpecialEffectStates, combat.Slot) >= 0 ? PrototypeHitEffects.Type.Special : PrototypeHitEffects.Type.Hit);
@@ -259,7 +268,7 @@ namespace Xena.Assets
         }
 
         // Bandit -> Xena (called by the bandit inside its attack window).
-        public bool TakeHit(int damage, Vector3 attacker, Vector3? contact = null)
+        public bool TakeHit(int damage, Vector3 attacker, Vector3? contact = null, int attackerSlot = -1)
         {
             if (Dead || (scripts != null && (scripts.Modal || scripts.CutsceneActive))) return false;
             // Invulnerable while a reaction clip plays (not during the get-up 0x88).
@@ -278,6 +287,11 @@ namespace Xena.Assets
                 effects.Spark(point, blocked ? raw : damage, blocked ? PrototypeHitEffects.Type.Block : PrototypeHitEffects.Type.Hit);
                 if (!blocked && damage >= 2) effects.Bleed(transform, point, 8, 200);
             }
+            // Sounds: clang 0x1B (note 55..57) on a blocking target, else the attacker's connect sound; impact
+            // rand(9,14) at Xena for d >= 2 unless one is already playing (0x80037F48).
+            if (combat != null && combat.IsBlocking && facing) { if (!PrototypeSfx.IsPlaying(0x1B, 0x1B)) PrototypeSfx.PlayAt(0x1B, transform.position, PrototypeSfx.Instance.Rand(55, 57)); }
+            else if (attackerSlot >= 0) ConnectSound(attackerSlot, transform.position);
+            if (damage >= 2 && !PrototypeSfx.IsPlaying(9, 14)) PrototypeSfx.PlayOn(PrototypeSfx.Instance.Rand(9, 14), transform);
             Health = Mathf.Max(0, Health - damage); HitsTaken++; LastIntake = damage; LastIntakeBlocked = combat != null && combat.IsBlocking && facing;
             if (Health > 0 && Health < PotionThreshold && scripts != null && scripts.UsePotion()) Health = Mathf.Min(MaxHealth, Health + MaxHealth * 30 / 100);
             if (Health == 0) { Dead = true; deathFrame = 0; motor.enabled = false; Reacting = false; }

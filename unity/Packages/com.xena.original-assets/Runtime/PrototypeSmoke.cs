@@ -25,7 +25,7 @@ namespace Xena.Assets
             public List<string> checks = new List<string>();
             public List<int> jumpFrames = new List<int>();
             public List<int> locomotionFrames = new List<int>();
-            public List<int> sprintFrames = new List<int>();
+            public List<int> sprintFrames = new List<int>(); public int runFootsteps;
             public string rockResult = "";
             public float walkDistance, runDistance, diagonalDistance, gamepadDistance, jumpHeight, yawChange, cameraObstructedDistance, wallDistance, treeAxisDistance, treeProgress, treeMinAxis, treeContactTicks, strafeStalledFrames, strafeScreenJitter, strafeFrames, rockClosest, rockHoleTicks, lowFpsDistance, highFpsDistance, fixedStep;
         }
@@ -101,6 +101,7 @@ namespace Xena.Assets
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.W, Key.LeftShift)); yield return null; yield return null; yield return new WaitForFixedUpdate();
             Require(visual.CurrentSlot == 0x1a, "Shift still uses walking animation15 instead of run1A");
             previousRunFrame = -1; wrapped = false; bool capturedSprint = false;
+            var steps = motor.GetComponent<PrototypeSfxEvents>(); int stepsBefore = steps.FootstepsPlayed; int stepLog = PrototypeSfx.Log.Count;
             for (int i = 0; i < 62; i++)
             {
                 InputSystem.QueueStateEvent(keyboard, new KeyboardState(square[(i / 16) % 4], Key.LeftShift));
@@ -112,6 +113,11 @@ namespace Xena.Assets
             }
             Require(wrapped && report.sprintFrames.Count == 20, "Incomplete distinct 20-frame sprint cycle");
             report.checks.Add("Shift uses distinct complete20-frame native run1A loop");
+            // Footsteps (func_800416E8): run 0x1A frames 6 and 17 -> rand(0x2E,0x32) at vol 31; 62 fixed ticks = 31 game steps = 1.55 cycles -> 3 (+-1 at the window edges).
+            report.runFootsteps = steps.FootstepsPlayed - stepsBefore;
+            Require(report.runFootsteps >= 2 && report.runFootsteps <= 4 && PrototypeSfx.Log.Exists(x => x.id >= 0x2E && x.id <= 0x32 && x.vol == 31),
+                "Run footsteps differ from 2 per 20-frame cycle: " + report.runFootsteps);
+            report.checks.Add("run footsteps rand(0x2E,0x32) vol 31 on run 1A frames 6/17");
             InputSystem.QueueStateEvent(keyboard, new KeyboardState()); yield return null; yield return null;
             bool stopping = false;
             for (int i = 0; i < 20; i++) { yield return new WaitForFixedUpdate(); stopping |= visual.CurrentSlot == 0x1f; }
