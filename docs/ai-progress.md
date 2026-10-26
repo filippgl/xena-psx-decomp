@@ -32,7 +32,15 @@ One issue per task. Nothing here is a claim without the command/measurement that
   Landing 0x2E n55 fires on touchdown (jump-type frame INFERRED). Smoke: swing+connect log, water loop,
   attenuation oracle (127/64, 63, 48 behind, floor 10, pan 127), run footsteps 3 per 31 steps.
   All 8 suites + aggregate PASS: build/unity-import/claude-v148-*.txt.
-  Next: lark/butterfly anim + lark chirps 0x4B/0x4C, bandit patrol/avoid (mode 6), hurt-voice lists.
+- CLAUDE 2026-10-26 claude-v150 build: AMBIENT CREATURES. tools/install_creatures.py exports BFLY1/BFLY2
+  (BFLY1 anim set)/LARK/FROG --static -> Resources/Creatures. PrototypeCreatures: 3 butterflies (follow /
+  teleport >= 5001, timer modes, rest when blocked, height targets; mid-range wobble APPROXIMATED) and 5
+  frogs (jump < 1000, v 6500 -500/step, 40 u/step, landing sound 0x3E.. n58, despawn), render-interpolated;
+  XenaAssetPreview disabled on instances (its debug GUI showed). Smoke: 3+5 placed, frog jump+sound,
+  butterfly 0/399 stalled frames at 120 FPS; build/unity-import/creatures-butterfly-close.png.
+  All 8 suites + aggregate PASS (claude-v150-*). Wings still static: agent researching g_lark generator +
+  SMA wing timing + vertex-frame export (docs/xena-lark-generator.md).
+  Next: wing vertex animation, larks + chirps 0x4B/0x4C, bandit patrol/avoid (mode 6).
 - CLAUDE 2026-10-25 10:50 build (DLL 10:50:29), all 8 suites + aggregate PASS
   (build/unity-import/claude-v32-*.txt), bandit 6/6 runs 0 stalled.
   GAME OVER (native capture build/gameover, --poke 8700:0x8014E4F2:600:2 = Xena +0x12):

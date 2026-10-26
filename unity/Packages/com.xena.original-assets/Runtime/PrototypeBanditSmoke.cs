@@ -16,7 +16,7 @@ namespace Xena.Assets
         [Serializable] private sealed class Report
         {
             public string result = "FAIL", error; public List<string> checks = new List<string>();
-            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError, deathLensHeight, gameOverVideoSeconds; public int gameOverMenuStep; public string gameOverVideo; public int hitFlashLife, hitDiscs, hitTriangles, remasterDroplets, discFrames, discStalls; public string strikeState; public int fallDamage, banditBlocks, contactHits, banditContactHits, lowReaction, midReaction, rearReaction; public string sfxLog, sfxAttenuation; public Vector3 contactPoint; public List<string> discTrace = new List<string>(); public int menuBolts; public List<string> runTrace = new List<string>();
+            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError, deathLensHeight, gameOverVideoSeconds; public int gameOverMenuStep; public string gameOverVideo; public int hitFlashLife, hitDiscs, hitTriangles, remasterDroplets, discFrames, discStalls; public string strikeState; public int fallDamage, banditBlocks, contactHits, banditContactHits, lowReaction, midReaction, rearReaction; public string sfxLog, sfxAttenuation; public int butterflies, frogs, butterflyFrames, butterflyStalls, butterflyTeleports; public Vector3 contactPoint; public List<string> discTrace = new List<string>(); public int menuBolts; public List<string> runTrace = new List<string>();
         }
         private readonly Report report = new Report();
         private string output; private bool finished;
@@ -121,6 +121,7 @@ namespace Xena.Assets
             foreach (var brain in chosen) { brain.Active = false; brain.gameObject.SetActive(false); }
             yield return Scripts(motor);
             yield return Damage(motor, bandits);
+            yield return Creatures(motor);
             yield return GameOver(motor);
             report.result = "PASS"; Finish(null);
         }
@@ -436,6 +437,43 @@ namespace Xena.Assets
                 for (int i = 0; i < 120 && damage.Reacting; i++) yield return new WaitForFixedUpdate();
                 damage.ResetState();
             }
+        }
+        // Ambient creatures (docs/xena-ambient-audit.md 2): 3 butterflies + 5 frogs from the placements; a frog
+        // jumps when Xena comes within 1000 units and despawns on landing with a 0x3E..0x42 sound; butterflies
+        // follow Xena (teleport >= 5001) and are drawn interpolated: 0 stalled render frames at 120 FPS.
+        private IEnumerator Creatures(PrototypeMotor motor)
+        {
+            var creatures = motor.GetComponent<PrototypeCreatures>();
+            report.butterflies = creatures.Creatures.FindAll(c => c.kind == "bfly").Count; report.frogs = creatures.Creatures.FindAll(c => c.kind == "frog").Count;
+            Require(report.butterflies == 3 && report.frogs == 5, "Creature placements: " + report.butterflies + " butterflies, " + report.frogs + " frogs");
+            int frog = creatures.Creatures.FindIndex(c => c.kind == "frog" && !c.gone);
+            var f = creatures.Creatures[frog]; Vector3 at = PrototypeCreatures.ToUnity(f.p) + new Vector3(1.5f, 0, 0);
+            yield return Visit(motor, at); PrototypeSfx.Log.Clear();
+            for (int i = 0; i < 120 && !f.gone; i++) yield return new WaitForFixedUpdate();
+            Require(f.gone && creatures.FrogJumps >= 1 && PrototypeSfx.Log.Exists(x => x.id >= 0x3E && x.id <= 0x42 && x.note == 58),
+                "Frog did not jump and land with sound 0x3E..0x42 (gone " + f.gone + ", jumps " + creatures.FrogJumps + ")");
+            report.checks.Add("frog jumps when Xena < 1000 units and lands with sound 0x3E..0x42 n58, then despawns");
+            int frames = 0, stalls = 0; Vector3 last = Vector3.zero; bool have = false; int b = creatures.Creatures.FindIndex(c => c.kind == "bfly");
+            for (int i = 0; i < 400; i++)
+            {
+                yield return null;
+                if (!creatures.Moving(b)) { have = false; continue; }
+                Vector3 now = creatures.DrawnPosition(b);
+                if (have) { frames++; if (Vector3.Distance(now, last) < 1e-6f) stalls++; }
+                last = now; have = true;
+            }
+            report.butterflyFrames = frames; report.butterflyStalls = stalls; report.butterflyTeleports = creatures.Teleports;
+            Require(creatures.Teleports >= 1 && frames > 60 && stalls == 0, "Butterfly motion: teleports " + creatures.Teleports + ", stalls " + stalls + "/" + frames);
+            report.checks.Add("butterflies follow Xena (teleport >= 5001) and glide interpolated (0 stalled frames at 120 FPS)");
+            yield return new WaitForEndOfFrame(); Capture("creatures-butterfly.png");
+            // Close-up of the butterfly for the visual review.
+            var main = Camera.main; var keepPos = main.transform.position; var keepRot = main.transform.rotation; var orbit = main.GetComponent<PrototypeCamera>(); orbit.enabled = false;
+            for (int i = 0; i < 3; i++)
+            {
+                Vector3 bf = creatures.DrawnPosition(b); main.transform.position = bf + new Vector3(0.5f, 0.15f, 0.5f); main.transform.LookAt(bf);
+                yield return new WaitForEndOfFrame();
+            }
+            Capture("creatures-butterfly-close.png"); main.transform.SetPositionAndRotation(keepPos, keepRot); orbit.enabled = true;
         }
         private IEnumerator Visit(PrototypeMotor motor, Vector3 at)
         {
