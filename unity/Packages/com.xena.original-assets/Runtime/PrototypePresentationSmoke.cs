@@ -10,7 +10,7 @@ namespace Xena.Assets
 {
     internal sealed class PrototypePresentationSmoke : MonoBehaviour
     {
-        [Serializable] private sealed class Report { public string result = "FAIL", error; public int highResolutionPages, stpTexels, originalTriangles, remasterTriangles; public float maxTerrainOffset, maxWalkableOffset; public int seamEdges, curtains, foams, bandits; public List<string> checks = new List<string>(), wallSpots = new List<string>(); public int wallSpotsTested, wallLensBehind; }
+        [Serializable] private sealed class Report { public string result = "FAIL", error; public int highResolutionPages, stpTexels, originalTriangles, remasterTriangles; public float maxTerrainOffset, maxWalkableOffset; public int seamEdges, curtains, foams, bandits; public List<string> checks = new List<string>(), wallSpots = new List<string>(); public int wallSpotsTested, wallLensBehind; public float gateCopyMean; }
         private readonly Report report = new Report();
         private string output; private bool finished; private Gamepad pad;
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -432,6 +432,16 @@ namespace Xena.Assets
                     { PrototypeGraphics.Active.SetMode(m); yield return null; yield return new WaitForEndOfFrame(); Capture("gate-" + tag + "-" + m.ToString().ToLowerInvariant() + ".png"); }
                     gate.ShowFlatForTest(true); yield return null; yield return new WaitForEndOfFrame(); Capture("gate-" + tag + "-remaster-flat.png"); gate.ShowFlatForTest(false);
                 }
+            }
+            // The smoothed page copy must keep the HD page's colours (only the alpha changes).
+            {
+                var leafR = System.Array.Find(FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None), r => r.name == "6-@2doors");
+                PrototypeGraphics.Active.SetMode(XenaVisualMode.Remaster); yield return null; yield return null;
+                var copy = leafR.sharedMaterial.mainTexture as Texture2D;
+                Require(copy != null && copy.name.EndsWith(PrototypeRemasterGate.SmoothSuffix), "Gate does not use its smoothed page copy");
+                var px = copy.GetPixels32(); double sum = 0; int n = 0; foreach (var c in px) if (c.a > 128) { sum += (c.r + c.g + c.b) / 3.0; n++; }
+                report.gateCopyMean = (float)(sum / Mathf.Max(1, n));
+                Require(report.gateCopyMean > 34 && report.gateCopyMean < 46, "Gate page copy colours differ from the HD page (opaque mean " + report.gateCopyMean.ToString("F1") + ", page ~40)");
             }
             report.checks.Add("Remaster gate: 2 leaves with rounded plank volume (" + gate.RemasterTriangles + " tris, max depth " + gate.MaxDepthMeters.ToString("F3") + " m per side), original outline and collision");
             // Props for the image-to-3D trial: first signpost and the bridge, both modes.

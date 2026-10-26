@@ -8,6 +8,7 @@ Per page:
   original silhouettes with smooth edges); Codex RGB is ignored where the original is cut out;
 - palette lock: each 256x256 cell (64x64 original texels) is matched to the reference's
   per-channel mean and standard deviation, so the repaint keeps the original colours;
+- tone: pages without an earlier HD version follow the original page's local tone (tone_match_pages);
 - seams: a 12-px band along every cell border blends into the reference, so tiling and
   neighbouring polygons still meet where the original texels met.
 The pre-Codex page-N-4x.png files are kept in build/pages/previous-4x (only pages that had one
@@ -93,8 +94,14 @@ def main():
     pages = args.pages or sorted(int(re.findall(r"\d+", os.path.basename(f))[0]) for f in glob.glob(os.path.join(OUT, "page-*.png")))
     level0 = os.path.join(PROJECTS[1], "Assets", "Imported", "Level01")
     os.makedirs(args.work, exist_ok=True)
+    import tone_match_pages
     for n in pages:
         image = finish(n, level0, args.work)
+        # Pages palette-locked to a Real-ESRGAN reference came out darker (docs/ai-progress.md claude-v187):
+        # follow the original page's local tone (tools/tone_match_pages.py).
+        if "page-%d.png" % n not in pre_codex_upscaled(args.work):
+            original = np.asarray(Image.open(os.path.join(level0, "page-%d.png" % n)).convert("RGBA"))
+            image = Image.fromarray(tone_match_pages.match(original, np.asarray(image.convert("RGBA"))), "RGBA")
         image.save(os.path.join(args.work, "page-%d-4x.png" % n))
         for project in PROJECTS:
             level = os.path.join(project, "Assets", "Imported", "Level01")

@@ -46,7 +46,9 @@ namespace Xena.Assets
         // GPU readback works for pages that are not CPU readable.
         private static Color32[] Read(Texture page)
         {
-            var rt = RenderTexture.GetTemporary(page.width, page.height, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear);
+            // sRGB target: the sampled colour is re-encoded, so the copy keeps the page's sRGB values (a linear
+            // target stored linear values in an sRGB texture and darkened the copy).
+            var rt = RenderTexture.GetTemporary(page.width, page.height, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
             Graphics.Blit(page, rt); var keep = RenderTexture.active; RenderTexture.active = rt;
             var t = new Texture2D(page.width, page.height, TextureFormat.RGBA32, false); t.ReadPixels(new Rect(0, 0, page.width, page.height), 0, 0); t.Apply(false);
             RenderTexture.active = keep; RenderTexture.ReleaseTemporary(rt);
@@ -187,7 +189,7 @@ namespace Xena.Assets
             }
             for (int i = 0; i < px.Length; i++) px[i].a = (byte)Mathf.RoundToInt(Mathf.SmoothStep(0, 1, Mathf.InverseLerp(0.35f, 0.65f, a[i])) * 255);
             var t = new Texture2D(w, h, TextureFormat.RGBA32, true) { name = page.name + SmoothSuffix, filterMode = FilterMode.Trilinear, anisoLevel = 4, wrapMode = page.wrapMode };
-            t.SetPixels32(px); t.Apply(true, true); return t;
+            t.SetPixels32(px); t.Apply(true, false); return t; // kept readable (4 MB) for the colour check
         }
     }
 }

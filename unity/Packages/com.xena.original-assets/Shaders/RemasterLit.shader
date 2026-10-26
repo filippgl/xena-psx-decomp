@@ -124,10 +124,12 @@ Shader "Xena/RemasterLit"
                     tX = float3(tX.xy + n.zy, abs(tX.z) * n.x); tY = float3(tY.xy + n.xz, abs(tY.z) * n.y); tZ = float3(tZ.xy + n.xy, abs(tZ.z) * n.z);
                     float3 detailNormal = normalize(tX.zyx * w.x + tY.xzy * w.y + tZ.xyz * w.z);
                     float luminance = dot(albedo, float3(0.3, 0.59, 0.11));
-                    // Detail relative to mid-grey: keeps the original hue/brightness,
-                    // carries the rock's full pattern and a hint of its moss tint.
-                    float3 relief = lerp(luminance.xxx, albedo, 0.35) / 0.55;
-                    color.rgb *= lerp(1, relief * lerp(1, ao, _XenaRockParams.w), _XenaRockParams.y * rock);
+                    // Detail relative to its own mean: keeps the original hue/brightness, carries the rock's
+                    // full pattern and a hint of its moss tint. The means are measured on the textures as the
+                    // shader samples them (linear colour space: albedo luminance 0.178, AO 0.892); the old
+                    // /0.55 assumed an sRGB mid-grey and darkened every rock face about 3x.
+                    float3 relief = lerp(luminance.xxx, albedo, 0.35) / 0.178;
+                    color.rgb *= lerp(1, relief * lerp(1, ao / 0.892, _XenaRockParams.w), _XenaRockParams.y * rock);
                     n = normalize(lerp(n, detailNormal, _XenaRockParams.z * rock));
                 }
                 float wrap = saturate((dot(n, normalize(_SunDirection.xyz)) + 0.4) / 1.4);

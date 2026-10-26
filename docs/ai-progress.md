@@ -108,7 +108,17 @@ One issue per task. Nothing here is a claim without the command/measurement that
   as its source page (22 pages). Relief vs flat leaves under Remaster light: mean luma 24.3 vs 25.0 (front),
   so the relief does not darken. FOUND (pre-existing): the Remaster gate front inside the arch is much darker
   than Original (24 vs 38, gate-front-*.png) - Remaster lighting in the arch, not the gate. All suites PASS
-  (claude-v184-*). Next: Remaster arch/gate lighting (candidate), then remaining level-1 items.
+  (claude-v184-*).
+- claude-v187: REMASTER BRIGHTNESS vs ORIGINAL (user asked to bring the arch/gate closer). Three causes:
+  (1) Codex pages without an earlier HD version were palette-locked to a darker Real-ESRGAN reference:
+  opaque mean 0.64..0.83 of the original on pages 5/11/14/20/23 -> tools/tone_match_pages.py (local
+  per-channel tone to the original page, sigma 6 texels; now 0.95..0.98), also run by
+  install_codex_pages.py; (2) the gate's smoothed page copy was read through a Linear RenderTexture into
+  an sRGB texture (darker) -> sRGB target, copy mean 39.8 = page 40; (3) RemasterLit rock detail divided by
+  0.55 while the CC0 albedo samples at linear mean luminance 0.178 (AO 0.892): every steep grey rock face
+  was ~3x darker -> normalised by the measured means. Gate front view: gate 26.1 vs original 26.1, rock
+  37.7 vs 42.2, frame 38.6 vs 38.5; level view arch 55 vs 50, pillar 49 vs 46. All suites PASS (claude-v187-*).
+  Next: remaining level-1 items (user to pick), Remaster look re-check after the rock brightening.
 - CLAUDE 2026-10-25 10:50 build (DLL 10:50:29), all 8 suites + aggregate PASS
   (build/unity-import/claude-v32-*.txt), bandit 6/6 runs 0 stalled.
   GAME OVER (native capture build/gameover, --poke 8700:0x8014E4F2:600:2 = Xena +0x12):
