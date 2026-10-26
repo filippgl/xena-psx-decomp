@@ -156,6 +156,13 @@ One issue per task. Nothing here is a claim without the command/measurement that
   s5 = trunc(-pitch*45/64) scrolling with heading/2, fog fill; URP-flip aware), clear RGB(0,74,97); OriginalUnlit/
   SemiTransparent per-vertex hyperbolic depth cue N 24.45 / F 32.77 m in encoded RGB. Smoke: curve oracle,
   orientation oracle (looking up -> top row (21,97,214)). All suites PASS (claude-v223-*).
+- claude-v225: AUTOMATIC INSPECTOR (user: "see the game, not single screenshots"): `python tools/run_inspector.py`
+  runs the player with --inspect (PrototypeInspector): standing points on a 6 m grid over every walkable floor
+  (130 on level 01), 8 headings, eye 1.7 m, 6 deg down; per view a magenta-clear render without sky counts holes
+  below the horizon in Original and Remaster; Remaster views with more holes than Original (> 0.2 %) are saved
+  with the holes hatched; build/inspect/inspect-sheet.png + inspect-summary.txt, per-view PNGs deleted.
+  First run: 1040 Remaster views, 1 flagged: (-8.3,-2,32.4) heading 0, a gap at the waterfall pool edge.
+  Detects see-through holes only (not hanging edges or style issues).
 - QUEUE (user 2026-10-26, in order): lake covered by the outer world (fix in test: water = level hull);
   {icon 4}/Р1 in texts -> bound keys (done v215); remove on-screen moves panel (done v214); chakram artifact in
   the centre when thrown; Original-mode level background (user: not ported to Unity Original); grass on slopes
