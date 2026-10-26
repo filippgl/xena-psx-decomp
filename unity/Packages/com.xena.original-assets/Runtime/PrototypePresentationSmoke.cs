@@ -50,9 +50,11 @@ namespace Xena.Assets
             yield return new WaitForEndOfFrame(); Capture("presentation-original.png");
             InputSystem.QueueStateEvent(keyboard, new KeyboardState()); yield return null; yield return null;
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.F10)); yield return null; yield return null;
-            var pages = new HashSet<Texture>();
+            // Pages by name; the gate's smoothed copy counts as its source page.
+            var pages = new HashSet<string>();
             foreach (var item in level.GetComponentsInChildren<MeshRenderer>()) foreach (var material in item.sharedMaterials)
-                if (material.mainTexture != null && material.mainTexture.width == 1024) pages.Add(material.mainTexture);
+                if (material.mainTexture != null && material.mainTexture.width == 1024)
+                { string n = material.mainTexture.name; pages.Add(n.EndsWith(PrototypeRemasterGate.SmoothSuffix) ? n.Substring(0, n.Length - PrototypeRemasterGate.SmoothSuffix.Length) : n); }
             report.highResolutionPages = pages.Count;
             var levelPreview = level.GetComponentInChildren<XenaAssetPreview>(); int expectedPages = levelPreview != null ? levelPreview.UpscaledTextureCount : 16;
             Require(graphics.Mode == XenaVisualMode.Remaster && preview.UsingUpscale && pages.Count == expectedPages && pages.Count >= 16 && motor.transform.position == position, "F10 did not bind all real high-resolution environment pages: " + pages.Count + "/" + expectedPages);
@@ -414,11 +416,11 @@ namespace Xena.Assets
             }
             // Remaster gate: both leaves get volume (rounded planks), at most thickness + grain deep per side.
             var gate = FindFirstObjectByType<PrototypeRemasterGate>();
-            Require(gate != null && gate.Leaf == 2 && gate.RemasterTriangles > 0 && gate.MaxDepthMeters > 0.02f && gate.MaxDepthMeters <= PrototypeRemasterGate.ThicknessMeters + PrototypeRemasterGate.GrainMeters + 1e-4f,
+            Require(gate != null && gate.Leaf == 2 && gate.SmoothedPages == 1 && gate.RemasterTriangles > 0 && gate.MaxDepthMeters > 0.02f && gate.MaxDepthMeters <= PrototypeRemasterGate.ThicknessMeters + PrototypeRemasterGate.GrainMeters + 1e-4f,
                 "Remaster gate relief: leaves " + (gate != null ? gate.Leaf : 0) + ", depth " + (gate != null ? gate.MaxDepthMeters : 0).ToString("F3"));
             // Front-oblique views at eye height (the original leaves are one-sided: front = their normal side).
             {
-                var leaf = System.Array.Find(FindObjectsByType<MeshFilter>(FindObjectsSortMode.None), f => f.name.Contains("@2doors"));
+                var leaf = System.Array.Find(FindObjectsByType<MeshFilter>(FindObjectsSortMode.None), f => f.name == "6-@2doors"); // fixed leaf: same views every run
                 PrototypeGraphics.Active.SetMode(XenaVisualMode.Original); yield return null;
                 Vector3 n = Vector3.zero; foreach (var v in leaf.sharedMesh.normals) n += v; n = leaf.transform.TransformDirection(n); n.y = 0; n.Normalize();
                 Bounds gb = leaf.GetComponent<Renderer>().bounds; foreach (var f in FindObjectsByType<MeshFilter>(FindObjectsSortMode.None)) if (f.name.Contains("@2doors")) gb.Encapsulate(f.GetComponent<Renderer>().bounds);
@@ -428,6 +430,7 @@ namespace Xena.Assets
                     camera.transform.position = new Vector3(gb.center.x, gb.min.y + 1.6f, gb.center.z) + offset; camera.transform.LookAt(gb.center + Vector3.up * 0.2f);
                     foreach (var m in new[] { XenaVisualMode.Original, XenaVisualMode.Remaster })
                     { PrototypeGraphics.Active.SetMode(m); yield return null; yield return new WaitForEndOfFrame(); Capture("gate-" + tag + "-" + m.ToString().ToLowerInvariant() + ".png"); }
+                    gate.ShowFlatForTest(true); yield return null; yield return new WaitForEndOfFrame(); Capture("gate-" + tag + "-remaster-flat.png"); gate.ShowFlatForTest(false);
                 }
             }
             report.checks.Add("Remaster gate: 2 leaves with rounded plank volume (" + gate.RemasterTriangles + " tris, max depth " + gate.MaxDepthMeters.ToString("F3") + " m per side), original outline and collision");

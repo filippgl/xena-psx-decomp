@@ -102,7 +102,13 @@ One issue per task. Nothing here is a claim without the command/measurement that
   collision; visible from behind too (the original one-sided leaves vanish from the back). 50688 tris.
   Style check captures: build/unity-import/gate-{front,oblique,close}-{original,remaster}.png. PENDING the
   user's verdict (prominent object). Known: stair-stepped gap edges from the HD page alpha. All suites PASS
-  (claude-v178-*). Next: user verdict on the gate; then smooth the alpha edges if wanted.
+  (claude-v178-*). USER APPROVED the gate ("Ок дальше", 2026-10-26).
+- claude-v184: gate cut-out edges smoothed: the leaves use a copy of their HD page whose alpha is box-blurred
+  (r 1, 2 passes) and re-ramped 0.35..0.65 (r 3 closed one-texel gaps: rejected). Presentation counts the copy
+  as its source page (22 pages). Relief vs flat leaves under Remaster light: mean luma 24.3 vs 25.0 (front),
+  so the relief does not darken. FOUND (pre-existing): the Remaster gate front inside the arch is much darker
+  than Original (24 vs 38, gate-front-*.png) - Remaster lighting in the arch, not the gate. All suites PASS
+  (claude-v184-*). Next: Remaster arch/gate lighting (candidate), then remaining level-1 items.
 - CLAUDE 2026-10-25 10:50 build (DLL 10:50:29), all 8 suites + aggregate PASS
   (build/unity-import/claude-v32-*.txt), bandit 6/6 runs 0 stalled.
   GAME OVER (native capture build/gameover, --poke 8700:0x8014E4F2:600:2 = Xena +0x12):

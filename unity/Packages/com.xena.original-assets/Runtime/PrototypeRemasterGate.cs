@@ -18,7 +18,13 @@ namespace Xena.Assets
         public const float ThicknessMeters = 0.035f, GrainMeters = 0.006f;
         // EdgeTexels: profile ramp in original-page texels (256 wide; scaled for the 4x HD page).
         private const int Subdivisions = 24; private const float EdgeTexels = 4f;
-        private sealed class Pair { public MeshFilter filter; public Mesh original, remaster; }
+        private sealed class Pair { public MeshFilter filter; public MeshRenderer renderer; public Mesh original, remaster; public Material shared, smooth; }
+        // Smoothed cut-out: the HD page's alpha is stair-stepped at the original 256-texel grid; the leaves use a
+        // copy whose alpha is blurred (two box passes, radius 1 HD texel) and re-thresholded with a soft ramp,
+        // so the gap edges become curves. The copy is named "<page>-gate-smooth" (not a level page).
+        public const string SmoothSuffix = "-gate-smooth";
+        private readonly Dictionary<Texture, Texture2D> smoothed = new Dictionary<Texture, Texture2D>();
+        public int SmoothedPages => smoothed.Count;
         private readonly List<Pair> pairs = new List<Pair>();
         public int Leaf => pairs.Count;
         public int RemasterTriangles { get; private set; }
@@ -33,7 +39,7 @@ namespace Xena.Assets
                 var renderer = filter.GetComponent<MeshRenderer>(); var page = renderer != null && renderer.sharedMaterial != null ? renderer.sharedMaterial.mainTexture : null;
                 if (page == null) continue;
                 var remaster = Build(filter.sharedMesh, Read(page), page.width, page.height, filter.transform);
-                if (remaster != null) pairs.Add(new Pair { filter = filter, original = filter.sharedMesh, remaster = remaster });
+                if (remaster != null) pairs.Add(new Pair { filter = filter, renderer = renderer, original = filter.sharedMesh, remaster = remaster });
             }
             ApplyVisualMode(PrototypeGraphics.Active == null ? XenaVisualMode.Remaster : PrototypeGraphics.Active.Mode);
         }
@@ -138,10 +144,50 @@ namespace Xena.Assets
             return mesh;
         }
 
+        // Test only: show the flat original leaves under the Remaster material (lighting comparison).
+        public void ShowFlatForTest(bool flat) { foreach (var p in pairs) if (p.filter != null) p.filter.sharedMesh = flat ? p.original : p.remaster; }
         public void ApplyVisualMode(XenaVisualMode mode)
         {
             RemasterShown = mode == XenaVisualMode.Remaster;
-            foreach (var p in pairs) if (p.filter != null) p.filter.sharedMesh = RemasterShown ? p.remaster : p.original;
+            foreach (var p in pairs)
+            {
+                if (p.filter != null) p.filter.sharedMesh = RemasterShown ? p.remaster : p.original;
+                // Only undo our own binding: the level preview may already have bound its Original material.
+                if (!RemasterShown && p.shared != null && p.renderer != null && p.renderer.sharedMaterial == p.smooth) p.renderer.sharedMaterial = p.shared;
+            }
+        }
+        // The HD page is bound by the level preview after the mode switch: bind the smoothed copy once it is there.
+        private void LateUpdate()
+        {
+            if (!RemasterShown) return;
+            foreach (var p in pairs)
+            {
+                if (p.renderer == null) continue;
+                var current = p.renderer.sharedMaterial;
+                if (current == null || current == p.smooth) continue;
+                var page = current.mainTexture;
+                if (page == null || page.width < 1024) continue; // HD page not bound yet
+                if (!smoothed.TryGetValue(page, out var copy)) smoothed[page] = copy = Smooth(page);
+                p.shared = current;
+                if (p.smooth == null || p.smooth.mainTexture != copy) { p.smooth = new Material(current) { name = current.name + SmoothSuffix, mainTexture = copy }; }
+                p.renderer.sharedMaterial = p.smooth;
+            }
+        }
+        private static Texture2D Smooth(Texture page)
+        {
+            int w = page.width, h = page.height; var px = Read(page); var a = new float[w * h]; var b = new float[w * h];
+            for (int i = 0; i < a.Length; i++) a[i] = px[i].a / 255f;
+            const int R = 1; // keeps 4-texel (one original texel) gaps fully open, rounds the stair corners
+            for (int pass = 0; pass < 2; pass++)
+            {
+                for (int y = 0; y < h; y++) { float sum = 0; int row = y * w; for (int x = -R; x <= R; x++) sum += a[row + Mathf.Clamp(x, 0, w - 1)];
+                    for (int x = 0; x < w; x++) { b[row + x] = sum / (2 * R + 1); sum += a[row + Mathf.Min(w - 1, x + R + 1)] - a[row + Mathf.Max(0, x - R)]; } }
+                for (int x = 0; x < w; x++) { float sum = 0; for (int y = -R; y <= R; y++) sum += b[Mathf.Clamp(y, 0, h - 1) * w + x];
+                    for (int y = 0; y < h; y++) { a[y * w + x] = sum / (2 * R + 1); sum += b[Mathf.Min(h - 1, y + R + 1) * w + x] - b[Mathf.Max(0, y - R) * w + x]; } }
+            }
+            for (int i = 0; i < px.Length; i++) px[i].a = (byte)Mathf.RoundToInt(Mathf.SmoothStep(0, 1, Mathf.InverseLerp(0.35f, 0.65f, a[i])) * 255);
+            var t = new Texture2D(w, h, TextureFormat.RGBA32, true) { name = page.name + SmoothSuffix, filterMode = FilterMode.Trilinear, anisoLevel = 4, wrapMode = page.wrapMode };
+            t.SetPixels32(px); t.Apply(true, true); return t;
         }
     }
 }
