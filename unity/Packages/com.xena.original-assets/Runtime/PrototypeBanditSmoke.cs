@@ -383,8 +383,8 @@ namespace Xena.Assets
             graphics.SetMode(XenaVisualMode.Original); Require(!foe.CorpseVisible, "Original kept the corpse");
             graphics.SetMode(XenaVisualMode.Remaster); Require(foe.CorpseVisible, "Corpse did not return in Remaster");
             report.checks.Add("Remaster keeps corpses in their death pose; Original hides them");
-            // Intake: an attacking bandit next to Xena.
-            damage.ResetState();
+            // Intake: an attacking bandit next to Xena (back at the spawn: the sword root motion moved her on).
+            damage.ResetState(); motor.ResetToSpawn(); for (int i = 0; i < 4; i++) yield return new WaitForFixedUpdate();
             var attacker = bandits.SpawnForTest(motor.transform.position + motor.transform.forward * 1.2f); Require(attacker != null, "No pending bandit for intake test");
             attacker.transform.rotation = Quaternion.LookRotation(-motor.transform.forward); attacker.Configure(attacker.GetComponentInChildren<XenaAssetPreview>(), motor, Motion(attacker), 75, 90, 11);
             for (int i = 0; i < 60 * 15 && damage.HitsTaken == 0; i++) yield return new WaitForFixedUpdate();
@@ -393,10 +393,11 @@ namespace Xena.Assets
             Require(hitFx.LastType == PrototypeHitEffects.Type.Hit && hitFx.BloodEmitters >= 2, "Bandit hit on Xena did not flash red / make her bleed");
             Require(report.firstIntake == 15 || report.firstIntake == 25 || report.firstIntake == 30, "Bandit hit did not use an original window damage: " + report.firstIntake);
             report.checks.Add("bandit attack damages Xena by its original window value");
-            report.banditContactHits = attacker.ContactHits;
-            Require(attacker.ContactHits >= 1, "Bandit hit did not come from its contact points");
+            int contactHits = 0; foreach (var brain in bandits.Brains) if (brain != null) contactHits += brain.ContactHits;
+            report.banditContactHits = contactHits; // the first hit may come from another live bandit
+            Require(contactHits >= 1, "Bandit hit did not come from its contact points");
             report.checks.Add("bandit attacks hit through their 7 original contact points");
-            Require(damage.Reactions >= 1, "Xena did not play an original hit reaction"); report.xenaReaction = damage.ReactionSlot;
+            Require(damage.Reactions >= 1, "Xena did not play an original hit reaction: slot " + motor.GetComponent<PrototypeCombat>().Slot.ToString("X") + " grounded " + motor.Grounded + " blocked " + damage.LastIntakeBlocked + " hits " + damage.HitsTaken + " health " + damage.Health); report.xenaReaction = damage.ReactionSlot;
             report.checks.Add("Xena plays an original hit reaction (0x66/0x67/0x72/0x74/0x75/0x7C) on an unblocked hit");
             var hud = motor.GetComponent<PrototypeHud>(); for (int i = 0; i < 10; i++) yield return new WaitForFixedUpdate();
             Require(hud.Loaded && hud.TargetLength == PrototypeHud.HealthLength(damage.Health, 500) && hud.ShownLength == hud.TargetLength,
@@ -493,7 +494,9 @@ namespace Xena.Assets
                 Vector3 gen = PrototypeCreatures.ToUnity(new Vector3(-11253, 582, 1997));
                 yield return Visit(motor, gen + new Vector3(4f, 0, 0));
                 System.Predicate<PrototypeCreatures.Creature> from24 = c => c.kind == "lark" && c.root.name.StartsWith("lark_24_");
-                for (int i = 0; i < 80 && !creatures.Creatures.Exists(from24); i++) yield return new WaitForFixedUpdate();
+                // Generator 23 (180 units away) fires first; its lark blocks 24 (350 exclusion) until it has flown off:
+                // up to 16 + ~13 + 16 steps.
+                for (int i = 0; i < 200 && !creatures.Creatures.Exists(from24); i++) yield return new WaitForFixedUpdate();
                 Require(creatures.LarksSpawned > before && creatures.Creatures.Exists(from24), "g_lark 24 did not release a lark with Xena 1600 units away");
                 var lark = creatures.Creatures.Find(from24);
                 for (int i = 0; i < 6; i++) yield return new WaitForFixedUpdate();

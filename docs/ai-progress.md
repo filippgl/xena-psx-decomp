@@ -59,7 +59,18 @@ One issue per task. Nothing here is a claim without the command/measurement that
   All suites PASS (build/unity-import/claude-v159-*.txt).
 - claude-v160: bandit hurt voice list D_800C0BF4 (50 % on a non-lethal hit) and Xena knockdown voice list
   D_800C142C (50 % on 0x7C from a bandit) via PrototypeSfx.PlayListAt (func_80084E80). All suites PASS.
-  Next: mode 6 avoid (needs research: exit/steer rules), level 02 transition / save on the stats screen.
+- claude-v167: XENA ROOT MOTION. Native RAM (xena-console 2026-10-22; scratchpad rootmo/, rootmo2/):
+  0x51 moves Xena 481.6 units (steps 10.8, 10.8, 1.4, 0, 14.4, 47, 66, ...) and 0x2A back evade 22/114/112/...;
+  the displacement at clip counter n = SMA moves[n-1] with per-axis trunc. tools/install_xena_motion.py ->
+  Resources/Xena/XenaMotion.json; PrototypeCombat applies it to every combat clip with data (replaces the
+  provisional constant evade/running-attack speeds). Motor ActorLimit: steps ending within 300 units of a
+  live bandit / the dummy and closer are dropped (mover actor contact). Tests updated where they assumed a
+  stationary attack (combat/advanced: displacement <= root travel, dummy not passed; bandit: Xena back to
+  spawn before intake; lark 24 wait 100 steps for generator 23's 350 exclusion). Sword root travel 493 u
+  (native 481.6 at another yaw). All suites PASS (build/unity-import/claude-v167-*.txt).
+  NOT yet: reaction clips' root motion (0x67 373 u back, 0x7C knockdown 2464 u back, 0x88 377 u) — INFERRED,
+  no native capture with a knockdown. Mode 6 avoid research merged: docs/xena-bandit-avoid.md (port next).
+  Next: port mode 6 + bandit-bandit contact, reaction root motion (capture first), level 02 / save.
 - CLAUDE 2026-10-25 10:50 build (DLL 10:50:29), all 8 suites + aggregate PASS
   (build/unity-import/claude-v32-*.txt), bandit 6/6 runs 0 stalled.
   GAME OVER (native capture build/gameover, --poke 8700:0x8014E4F2:600:2 = Xena +0x12):

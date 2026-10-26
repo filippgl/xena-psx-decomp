@@ -11,7 +11,7 @@ namespace Xena.Assets
     internal sealed class PrototypeCombatSmoke : MonoBehaviour
     {
         [Serializable] private sealed class Report
-        { public string result = "FAIL", error, device; public List<string> checks = new List<string>(); public int swordComboHits, kickComboHits; }
+        { public string result = "FAIL", error, device; public List<string> checks = new List<string>(); public int swordComboHits, kickComboHits; public float swordRootTravel; }
         private Report report;
         private string output;
         private bool finished;
@@ -74,12 +74,23 @@ namespace Xena.Assets
             combat = motor.GetComponent<PrototypeCombat>(); visual = motor.GetComponentInChildren<XenaAssetPreview>();
             Require(combat != null && combat.Target != null, "Practice target unavailable"); report.checks.Add("practice target spawns with original player");
             Release(); motor.ResetToSpawn(); yield return Ticks(2); PlaceTarget(1.05f);
+            Vector3 beforeSwing = motor.transform.position; float travelBefore = combat.RootTravel;
             yield return Tap(1); Require(combat.Slot == 0x51 && visual.CurrentSlot == 0x51, "Mouse sword did not sample original51");
-            Vector3 start = motor.transform.position;
+            Vector3 start = motor.transform.position; float rootAtStart = combat.RootTravel;
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.W)); yield return Ticks(8);
-            Require(Vector3.Distance(start, motor.transform.position) < 0.06f, "Player slid during sword attack"); report.checks.Add("attacks hold movement during animation");
+            // Input does not move Xena during an attack; only the clip's original root motion does.
+            Vector3 slid = motor.transform.position - start; slid.y = 0;
+            Require(slid.magnitude <= combat.RootTravel - rootAtStart + 0.005f, "Player slid during sword attack beyond the root motion: " + slid.magnitude.ToString("F3"));
+            report.checks.Add("attacks ignore movement input; only the original root motion moves Xena");
             Release(); yield return new WaitForEndOfFrame(); Capture("combat-sword.png"); yield return Idle();
+            // Native port (xena-console 2026-10-22, RAM 8804..8832, yaw ~35 deg): sword 0x51 carries Xena 481.6 units forward
+            // (per-axis truncation makes the total depend on the yaw by up to ~1 unit per frame: 20 units tolerance).
+            report.swordRootTravel = combat.RootTravel - travelBefore;
+            Require(Mathf.Abs(report.swordRootTravel * 400 - 481.6f) < 20, "Sword 0x51 root motion differs from the native 481.6 units: " + (report.swordRootTravel * 400).ToString("F1"));
+            report.checks.Add("sword 0x51 root motion matches the native port (481.6 units)");
             Require(combat.Target.Hits == 1 && combat.Target.Health == 80, "Sword contact was missing or duplicated"); report.checks.Add("mouse sword: one contact per swing");
+            // The sword's root motion carried Xena 1.2 m on: put the dummy back in front for the kick (hits kept).
+            { int hits = combat.Target.Hits, health = combat.Target.Health; combat.Target.transform.position = motor.transform.position + motor.transform.forward * 1.05f + Vector3.up * 0.85f; Physics.SyncTransforms(); Require(combat.Target.Hits == hits && combat.Target.Health == health, "Dummy state changed on move"); }
             yield return Tap(2); Require(combat.Slot == 0x61 && visual.CurrentSlot == 0x61, "F did not sample original kick61");
             yield return Ticks(10); yield return new WaitForEndOfFrame(); Capture("combat-kick.png"); yield return Idle();
             Require(combat.Target.Hits == 2 && combat.Target.Health == 65, "Kick contact differs"); report.checks.Add("keyboard kick: original61 and one contact");

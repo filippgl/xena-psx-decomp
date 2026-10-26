@@ -7,6 +7,7 @@ namespace Xena.Assets
     public sealed class PrototypeCombat : MonoBehaviour
     {
         private struct Intent { public int action; public float expires; }
+        [System.Serializable] private sealed class MotionFile { public PrototypeBanditBrain.MotionClip[] clips; }
         private readonly Queue<Intent> buffer = new Queue<Intent>();
         private readonly HashSet<PrototypePracticeTarget> struck = new HashSet<PrototypePracticeTarget>();
         private PrototypeInput input;
@@ -23,6 +24,31 @@ namespace Xena.Assets
         public bool IsEvading => slot == 0x28 || slot == 0x29 || slot == 0x2a || slot == 0x3c;
         public bool DrivesMotion => IsEvading || slot == 0x3e;
         public Vector3 ActionVelocity => DrivesMotion ? evadeVelocity : Vector3.zero;
+        // Original root motion (Resources/Xena/XenaMotion.json, tools/install_xena_motion.py): the step whose clip
+        // frame becomes f moves Xena by moves[f] (speed units, direction 2048 = forward), per axis
+        // trunc(speed * sin/cos) - VERIFIED on the native port for 0x51 and 0x2A (displacement at counter n =
+        // moves[n-1]). Replaces the provisional constant evade/running-attack speeds when the data exists.
+        private Dictionary<int, PrototypeBanditBrain.MotionClip> rootClips;
+        private Vector3 pendingRoot; private int rootStart = -1, rootFrame = -1;
+        public bool HasRootMotion => Busy && rootClips != null && rootClips.ContainsKey(slot);
+        public float RootTravel { get; private set; }
+        public Vector3 TakeRootMotion() { var r = pendingRoot; pendingRoot = Vector3.zero; return r; }
+        private void StepRootMotion()
+        {
+            if (!HasRootMotion) { rootStart = -1; return; }
+            int frame = Mathf.Min(Frame, rootClips[slot].frames - 1);
+            if (rootStart != Starts) { rootStart = Starts; rootFrame = frame - 1; }
+            for (int f = rootFrame + 1; f <= frame; f++)
+            {
+                int speed = 0, direction = 2048;
+                foreach (var m in rootClips[slot].moves) if (m.frame <= f) { speed = m.speed; direction = m.direction; }
+                if (speed == 0) continue;
+                float angle = transform.eulerAngles.y * Mathf.PI / 180 + (direction - 2048) / 4096f * 2 * Mathf.PI;
+                var step = new Vector3((int)(speed * Mathf.Sin(angle)), 0, (int)(speed * Mathf.Cos(angle))) / 400f;
+                pendingRoot += step; RootTravel += step.magnitude;
+            }
+            rootFrame = Mathf.Max(rootFrame, frame);
+        }
         public bool Busy => slot >= 0;
         public bool IsBlocking => slot == 0x80;
         public int Slot => slot;
@@ -35,6 +61,12 @@ namespace Xena.Assets
         {
             input = GetComponent<PrototypeInput>(); motor = GetComponent<PrototypeMotor>();
             visual = GetComponentInChildren<XenaAssetPreview>();
+            var json = Resources.Load<TextAsset>("Xena/XenaMotion");
+            if (json != null)
+            {
+                rootClips = new Dictionary<int, PrototypeBanditBrain.MotionClip>();
+                foreach (var c in JsonUtility.FromJson<MotionFile>(json.text).clips) if (c.moves != null && System.Array.Exists(c.moves, m => m.speed != 0)) rootClips[c.slot] = c;
+            }
         }
         private void Start()
         {
@@ -82,7 +114,7 @@ namespace Xena.Assets
         // Hit reaction interrupts the current action (no damage/target reset).
         public void Interrupt()
         {
-            slot = -1; time = 0; buffer.Clear(); struck.Clear(); input.ClearPending(); ClearChain();
+            slot = -1; time = 0; buffer.Clear(); struck.Clear(); input.ClearPending(); ClearChain(); pendingRoot = Vector3.zero;
             heldEvade = 0; evadeVelocity = Vector3.zero; spinLap = spinBudget = 0; spinExtend = false;
         }
         public void ResetState()
@@ -94,6 +126,10 @@ namespace Xena.Assets
             Health = 100; BlockedHits = 0; if (Target != null) Target.ResetTarget();
         }
         public void Tick(float dt, bool grounded, float cameraYaw)
+        {
+            TickActions(dt, grounded, cameraYaw); StepRootMotion();
+        }
+        private void TickActions(float dt, bool grounded, float cameraYaw)
         {
             clock += dt;
             int action = input.ConsumeAttack();

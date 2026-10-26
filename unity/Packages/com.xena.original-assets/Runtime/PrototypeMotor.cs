@@ -131,9 +131,11 @@ namespace Xena.Assets
             }
             if (!backwardsJump && motion.sqrMagnitude > 0.0001f) transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(motion), 720 * dt);
             vertical -= gravity * dt;
-            Vector3 horizontal = combat.DrivesMotion ? combat.ActionVelocity : motion * (input.Sprint ? runSpeed : walkSpeed);
+            Vector3 root = combat.TakeRootMotion();
+            Vector3 horizontal = combat.HasRootMotion || root != Vector3.zero ? root / dt : combat.DrivesMotion ? combat.ActionVelocity : motion * (input.Sprint ? runSpeed : walkSpeed);
             if (backwardsJump) horizontal = backwardsVelocity;
             if (Grounded) horizontal = OriginalTerrainLimit(horizontal, dt);
+            horizontal = ActorLimit(horizontal, dt);
             CollisionFlags collision = controller.Move((horizontal + Vector3.up * vertical) * dt);
             if ((collision & CollisionFlags.Above) != 0 && vertical > 0) vertical = 0;
             float floor = Floor(transform.position);
@@ -224,6 +226,26 @@ namespace Xena.Assets
         // with no surface or a step up above 300 units. Rocks/cliffs without CLS
         // are holes in the height grid. The original slides along the probed
         // surface normal; the probe direction stands in for it (approximation).
+        // Actor contact (mover func_8006E78C, docs/xena-enemy-audit.md): a step that would bring Xena within
+        // r + r = 300 units (max + 3/8 min metric) of a live bandit or the practice dummy and closer to it is
+        // dropped; moving away or sideways out of contact stays free. Blocked steps: ActorBlocks.
+        public int ActorBlocks { get; private set; }
+        private Vector3 ActorLimit(Vector3 horizontal, float dt)
+        {
+            if (horizontal.sqrMagnitude < 1e-8f) return horizontal;
+            Vector3 next = transform.position + horizontal * dt;
+            var bandits = GetComponent<PrototypeBandits>();
+            if (bandits != null)
+                foreach (var b in bandits.Brains)
+                    if (b != null && !b.Removed && b.Health > 0 && b.gameObject.activeInHierarchy && Blocks(b.transform.position, next)) { ActorBlocks++; return Vector3.zero; }
+            if (combat != null && combat.Target != null && combat.Target.gameObject.activeInHierarchy && Blocks(combat.Target.transform.position, next)) { ActorBlocks++; return Vector3.zero; }
+            return horizontal;
+        }
+        private bool Blocks(Vector3 other, Vector3 next)
+        {
+            int Metric(Vector3 a) { int dx = Mathf.Abs(Mathf.RoundToInt((a.x - other.x) * 400)), dz = Mathf.Abs(Mathf.RoundToInt((a.z - other.z) * 400)); return Mathf.Max(dx, dz) + 3 * Mathf.Min(dx, dz) / 8; }
+            int after = Metric(next); return after < 2 * PrototypeBanditBrain.Radius && after < Metric(transform.position);
+        }
         private Vector3 OriginalTerrainLimit(Vector3 horizontal, float dt)
         {
             if (horizontal.sqrMagnitude < 0.000001f) return horizontal;

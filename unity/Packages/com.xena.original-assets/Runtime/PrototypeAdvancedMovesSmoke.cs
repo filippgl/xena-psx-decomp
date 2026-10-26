@@ -143,9 +143,15 @@ namespace Xena.Assets
             wall.transform.rotation = Quaternion.LookRotation(back); wall.transform.localScale = new Vector3(3, 3, 0.1f); Physics.SyncTransforms();
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.S, Key.Space)); yield return Ticks(4); Release(); yield return Ticks(85);
             Require(Vector3.Dot(motor.transform.position - begin, back) < 0.8f, "Backflip crossed solid wall"); report.checks.Add("backflip respects capsule wall collision"); Destroy(wall); yield return null;
-            Reset(1.05f, true); yield return Ticks(3); begin = motor.transform.position; facing = motor.transform.rotation;
+            Reset(1.05f, true); yield return Ticks(3); begin = motor.transform.position; facing = motor.transform.rotation; float rootBefore = combat.RootTravel;
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.S)); InputSystem.QueueStateEvent(mouse, new MouseState { buttons = 1 }); yield return Slot(0x51); Release(); yield return Idle();
-            Require(combat.Target.Hits == 1 && combat.Target.Health == 80 && Quaternion.Angle(facing, motor.transform.rotation) > 170 && Vector3.Distance(begin, motor.transform.position) < 0.08f, "Backward sword failed facing/hit/movement lock"); report.checks.Add("backward sword turns before original51 and hits rear target");
+            // Only the original 0x51 root motion moves her (input locked), and actor contact stops her at r + r = 300
+            // units from the dummy instead of passing through it.
+            Vector3 moved = motor.transform.position - begin; moved.y = 0; Vector3 toDummy = combat.Target.transform.position - motor.transform.position; toDummy.y = 0;
+            Require(combat.Target.Hits == 1 && combat.Target.Health == 80 && Quaternion.Angle(facing, motor.transform.rotation) > 170
+                && moved.magnitude <= combat.RootTravel - rootBefore + 0.005f && toDummy.magnitude * 400 >= 2 * PrototypeBanditBrain.Radius - 40,
+                "Backward sword failed facing/hit/movement lock: moved " + moved.magnitude.ToString("F2") + " m, dummy at " + (toDummy.magnitude * 400).ToString("F0"));
+            report.checks.Add("backward sword turns before original51, hits the rear target, moves only by root motion and stops at the dummy");
             Reset(1.05f, true); yield return Ticks(3);
             InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.S, Key.F)); yield return Slot(0x61); Release(); yield return Idle();
             Require(combat.Target.Hits == 1 && combat.Target.Health == 85, "Backward kick failed rear target"); report.checks.Add("backward kick turns before original61");
