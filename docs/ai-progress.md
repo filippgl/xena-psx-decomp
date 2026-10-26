@@ -5,6 +5,22 @@ One issue per task. Nothing here is a claim without the command/measurement that
 
 ## Current task — Unity combat and original collision audit (2026-10-24)
 
+- CLAUDE 2026-10-27 02:05 build `claude-v247` (DLL 02:02): the pool seam by the waterfall (Codex handoff,
+  eye (-2.315,-0.9775,38.38), heading 90) is fixed.
+  - Cause: `RemasterWaterfall.shader` sorted faces into falling and flat by the smooth vertex normal. At
+    the foot of a fall the vertices shared with the flat pool point up, so a steep face (face n.y 0.30)
+    was clipped as "flat" (`_HideFlat`) and opened a slit into the void. A ray dump in both modes showed
+    it.
+  - Fix: the face slope now comes from screen derivatives of the position. The smooth normal is kept for
+    shading.
+  - Rejected hypotheses: original fall faces hidden by `_HideFalling` (the experiment still had a 1.18%
+    hole); walls on the water bed's open edges (1.11% -> 0.95% only).
+  - Inspector on this build plus `codex-walls.patch` (with reference points): 0 views flagged, pool 0%
+    (was 1.11%).
+  - Tests: all 8 suites and the aggregate PASS. Without the patch the inspector flags only the old
+    under-lake point (27.7,-8.2,32.4), which Codex's cliff shell fixes.
+  - Also: this worktree builds `codex-walls.patch` normally (no Licensing IPC block).
+
 - CLAUDE 2026-10-27 01:20 build `claude-v244` (worktree `decomp-claude`, DLL 00:45):
   - Water bed: an opaque bed 0.9 m under every Remaster water surface, so no models show through
     under the waterfall.

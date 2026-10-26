@@ -85,9 +85,13 @@ Shader "Xena/RemasterWaterfall"
                 // Width coordinate in world units keeps streak size constant.
                 float across = f.x * _Across;
                 // 2: free-standing fall object (nothing to show behind it) -> drop faces.
-                clip(_HideFalling > 1.5 && abs(n.y) < 0.75 ? -1 : 1);
-                clip(_HideFlat > 0.5 && abs(n.y) >= 0.75 ? -1 : 1);
-                if (_HideFalling > 0.5 && abs(n.y) < 0.75)
+                // Falling / flat by the FACE slope (screen derivatives), not the smooth vertex normal: at the foot of a
+                // fall the vertex normals shared with the flat pool point up, so steep faces were clipped as "flat" and
+                // opened a slit into the void beside the curtain (2026-10-27).
+                float faceY = abs(normalize(cross(ddy(input.positionWS), ddx(input.positionWS))).y);
+                clip(_HideFalling > 1.5 && faceY < 0.75 ? -1 : 1);
+                clip(_HideFlat > 0.5 && faceY >= 0.75 ? -1 : 1);
+                if (_HideFalling > 0.5 && faceY < 0.75)
                 {
                     // Wet cliff behind the curtain (the original falling faces):
                     // dark streaked rock, a glossy running film and sun sheen.
