@@ -298,6 +298,11 @@ namespace Xena.Assets
                 report.sfxAttenuation = v0 + "/" + p0 + " " + v1 + "/" + p1 + " " + v2 + " " + v3 + "/" + p3 + " " + p4;
                 Require(v0 == 127 && p0 == 64 && v1 == 63 && v2 == 48 && v3 == 10 && p3 == 127 && p4 == 127, "Sound attenuation differs from func_800845C8: " + report.sfxAttenuation);
                 report.checks.Add("original SFX: swing + connect on a sword hit, level water loops, func_800845C8 distance/pan");
+                int voice = PrototypeSfx.PlayListAt(PrototypeBanditBrain.HurtVoices, motor.transform.position, 4096);
+                Require(Array.IndexOf(PrototypeBanditBrain.HurtVoices, voice) >= 0 && PrototypeSfx.XaPlaying && PrototypeSfx.PlayListAt(PrototypeOriginalDamage.KnockdownVoices, motor.transform.position, 0) == -1,
+                    "Voice list pick (func_80084E80) failed: " + voice.ToString("X"));
+                PrototypeSfx.Stop(voice);
+                report.checks.Add("bandit hurt / knockdown voice lists play through func_80084E80 (chance /4096, XA stream)");
             }
             int d = report.firstHitDamage;
             // The sword spark: (Hit, d) logged, flash life / ring / discs by func_800291A0, the foe bleeds.

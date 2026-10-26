@@ -90,6 +90,8 @@ namespace Xena.Assets
         private static readonly Dictionary<int, int> ReactionFrames = new Dictionary<int, int> { { 0x66, 13 }, { 0x67, 22 }, { 0x70, 41 }, { 0x72, 14 }, { 0x74, 14 }, { 0x75, 14 }, { 0x7C, 26 }, { 0x88, 37 } };
         private readonly System.Random random = new System.Random(5);
         public int LastReactionHeight { get; private set; }
+        public static readonly int[] KnockdownVoices = { 0x105C, 0x105E, 0x1062, 0x10AD, 0x10AE, 0x10B4, 0x10B5 };
+        private bool banditAttacker;
         private void StartReaction(int damage, Vector3 attacker, int height)
         {
             if (combat != null && (combat.Slot == 0x48 || (combat.Slot >= 0x4A && combat.Slot <= 0x4D) || combat.Slot == 0x5C)) return;
@@ -105,6 +107,8 @@ namespace Xena.Assets
                 : sector < 0x800 ? (low ? 0x70 : 0x74) : sector < 0xC00 ? 0x72 : (low ? 0x74 : 0x75);
             if (combat != null) combat.Interrupt();
             Reacting = true; ReactionSlot = slot; ReactionFrame = 1; getUp = slot == 0x7C; Reactions++;
+            // Big front hit by a bandit class 0x95..0x98 (0x80038184): D_800C142C voice list, 50 %, at Xena.
+            if (slot == 0x7C && banditAttacker) PrototypeSfx.PlayListAt(KnockdownVoices, transform.position, 2048);
             freeze = slot == 0x7C ? 0 : 4; pushUnits = Mathf.Min(damage, 30); pushDirection = away.sqrMagnitude > 0.0001f ? away.normalized : -transform.forward;
         }
         // Called by the motor each 60 Hz tick while reacting; steps the 30/s reaction clock.
@@ -295,7 +299,8 @@ namespace Xena.Assets
             Health = Mathf.Max(0, Health - damage); HitsTaken++; LastIntake = damage; LastIntakeBlocked = combat != null && combat.IsBlocking && facing;
             if (Health > 0 && Health < PotionThreshold && scripts != null && scripts.UsePotion()) Health = Mathf.Min(MaxHealth, Health + MaxHealth * 30 / 100);
             if (Health == 0) { Dead = true; deathFrame = 0; motor.enabled = false; Reacting = false; }
-            else if (damage >= 2) StartReaction(damage, attacker, contact.HasValue ? Mathf.RoundToInt((contact.Value.y - transform.position.y) * 400) : 400);
+            banditAttacker = attackerSlot >= 0;
+            if (Health > 0 && damage >= 2) StartReaction(damage, attacker, contact.HasValue ? Mathf.RoundToInt((contact.Value.y - transform.position.y) * 400) : 400);
             return true;
         }
 

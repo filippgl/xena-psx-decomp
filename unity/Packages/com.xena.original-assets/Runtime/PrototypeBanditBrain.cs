@@ -103,6 +103,8 @@ namespace Xena.Assets
             Slot = rear ? ReactRear : kick ? ReactLow : ReactFront; Frame = 0; Invulnerable = 8; Reactions++;
             if (Retaliation == 0) { Retaliation = random.Next(90, 221); Cooldown = 0; }
             Patrolling = false; // a hit ends the patrol (INFERRED)
+            // Hurt voice (0x8001F5F0, family 0): D_800C0BF4 list, 50 %.
+            if (Health > 0) PrototypeSfx.PlayListAt(HurtVoices, transform.position, 2048);
             if (!Fleeing && Health < MaxHealth / 3 && random.Next(4) == 0) Fleeing = true;
             return true;
         }
@@ -295,6 +297,7 @@ namespace Xena.Assets
         // thud 0x2E, XA 0x1000 at 0x7B f10; barks: alert 0x102D when leaving mode 0, approach list at
         // 0xCC/4096 per step (mode 2), attack taunt lists at 0x14/4096 (mode 5). Barks start only while no
         // XA clip plays (one CD stream; INFERRED pacing).
+        public static readonly int[] HurtVoices = { 0x1036, 0x1037, 0x1038, 0x1048, 0x104C, 0x104D, 0x105A, 0x105B, 0x1061 };
         private static readonly int[] ApproachBarks = { 0x1039, 0x103A, 0x1049, 0x104A, 0x104B, 0x10AC, 0x10B2 };
         private static readonly int[] Taunts = { 0x104E, 0x104F, 0x1050, 0x1051, 0x1052 }, Taunts2 = { 0x1078, 0x1079, 0x107A, 0x1080, 0x1081, 0x1082, 0x1083 };
         private static readonly System.Collections.Generic.Dictionary<int, int[]> HurtVoice = new System.Collections.Generic.Dictionary<int, int[]> { { 0x7B, new[] { 10 } } };

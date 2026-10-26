@@ -65,6 +65,15 @@ namespace Xena.Assets
             return false;
         }
         public static bool XaPlaying => IsPlaying(0x1000, 0x1FFF);
+        // func_80084E80(list, n, pos, chance): if rand(0,4095) < chance play a random entry, re-rolled while it is
+        // the XA clip already playing. Returns the id played or -1.
+        public static int PlayListAt(int[] list, Vector3 position, int chance)
+        {
+            var s = Instance; if (s.Rand(0, 4095) >= chance) return -1;
+            int id = list[s.Rand(0, list.Length - 1)];
+            for (int guard = 0; guard < 8 && list.Length > 1 && IsPlaying(id, id); guard++) id = list[s.Rand(0, list.Length - 1)];
+            PlayAt(id, position); return id;
+        }
         public static void Stop(int id) { foreach (var v in Instance.voices) if (v.id == id) { v.source.Stop(); v.id = -1; } }
         public static void StopAll() { foreach (var v in Instance.voices) { v.source.Stop(); v.id = -1; } }
 
