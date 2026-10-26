@@ -38,7 +38,7 @@ namespace Xena.Assets
         {
             if (State == Phase.None)
             {
-                if (damage != null && damage.Dead && damage.DeathFrame >= MenuStep) { State = Phase.Menu; Selected = 0; }
+                if (damage != null && damage.Dead && damage.DeathFrame >= damage.MenuAfterSteps) { State = Phase.Menu; Selected = 0; }
                 return;
             }
             if (State == Phase.Video)

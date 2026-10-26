@@ -57,6 +57,21 @@ namespace Xena.Assets
         public void SetKarmaForTest(int value) { Karma = Mathf.Clamp(value, 0, 96); }
         public bool Dead { get; private set; }
         public int DeathFrame => deathFrame;
+        // Fall damage (0x8003B834): landing drop > 2000 units deals drop - 2000 (1000 with D_800F0EF4,
+        // not ported), unblockable and without a reaction; a fall kill plays clip 0x8F (10 frames) and the
+        // menu follows after 180 vblanks; falling into the void ends the game at once (no clip).
+        public bool FallDeath { get; private set; }
+        public bool FellIntoVoid { get; private set; }
+        public int LastFallDamage { get; private set; }
+        public int MenuAfterSteps => FellIntoVoid ? 0 : FallDeath ? 10 + 90 : 65 + 45;
+        public void OnLanded(float dropUnits)
+        {
+            if (Dead || dropUnits <= 2000) return;
+            int d = Mathf.RoundToInt(dropUnits) - 2000; LastFallDamage = d;
+            Health = Mathf.Max(0, Health - d); HitsTaken++; LastIntake = d;
+            if (Health == 0) { Dead = true; FallDeath = true; deathFrame = 0; motor.enabled = false; Reacting = false; }
+        }
+        public void FellOut() { if (Dead) return; Health = 0; Dead = true; FellIntoVoid = true; deathFrame = 0; motor.enabled = false; Reacting = false; }
         // Xena hit reactions (docs/xena-hit-reactions.md, func_800367BC 0x80037E68..0x800383F8):
         // only when final damage >= 2; sector s = (atan2(Xena - attacker) - rotY + 0x200) & 0xFFF:
         // [0,0x400) front -> 0x66 (2/3) / 0x67 (1/3), or knockdown 0x7C when damage >= 30;
@@ -121,7 +136,7 @@ namespace Xena.Assets
             if (Health + MaxHealth * 30 / 100 < MaxHealth && scripts != null && scripts.UsePotion()) Health = Mathf.Min(MaxHealth, Health + MaxHealth * 30 / 100);
         }
         public void SetHealthForTest(int value) { Health = Mathf.Clamp(value, 0, MaxHealth); }
-        public void ResetState() { Karma = 0; PowerUp = 0; Reacting = false; ReactionSlot = -1; Reactions = 0; Health = MaxHealth; Dead = false; deathFrame = 0; HitsTaken = 0; BlockedHits = 0; HitsDealt = 0; struck.Clear(); attackSlot = -1; if (motor != null) motor.enabled = true; }
+        public void ResetState() { FallDeath = false; FellIntoVoid = false; Karma = 0; PowerUp = 0; Reacting = false; ReactionSlot = -1; Reactions = 0; Health = MaxHealth; Dead = false; deathFrame = 0; HitsTaken = 0; BlockedHits = 0; HitsDealt = 0; struck.Clear(); attackSlot = -1; if (motor != null) motor.enabled = true; }
 
         private void FixedUpdate()
         {
@@ -134,7 +149,8 @@ namespace Xena.Assets
             {
                 // Original death clip 0x91 (65 frames) on the 30/s clock, then held on its last
                 // frame; PrototypeGameOver opens the menu at DeathFrame >= MenuStep.
-                visual.SampleSlotFrame(0x91, Mathf.Min(deathFrame, 64)); deathFrame++;
+                if (!FellIntoVoid) visual.SampleSlotFrame(FallDeath ? 0x8F : 0x91, Mathf.Min(deathFrame, FallDeath ? 9 : 64));
+                deathFrame++;
                 return;
             }
             if (PowerUp > 0 && --PowerUp == 0) Karma = 0;

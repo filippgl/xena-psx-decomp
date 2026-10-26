@@ -15,7 +15,7 @@ namespace Xena.Assets
         private PrototypeCombat combat;
         private PrototypeChakram chakram;
         private XenaTerrainQuery terrain;
-        private float vertical, groundTime, landingTime = -1;
+        private float vertical, groundTime, landingTime = -1, fallTop, lastGround;
         private int groundSlot;
         private bool backwardsJump;
         private Vector3 backwardsVelocity;
@@ -142,12 +142,17 @@ namespace Xena.Assets
             else if ((collision & CollisionFlags.Below) != 0 && vertical <= 0) { Grounded = true; vertical = -1; }
             else Grounded = false;
             if (wasGrounded && !Grounded && vertical <= 0) { ConfigureJump(false); backwardsJump = false; }
-            if (Grounded && !wasGrounded) { landingTime = 0; backwardsJump = false; }
+            if (Grounded && !wasGrounded) { landingTime = 0; backwardsJump = false; hurt?.OnLanded((fallTop - transform.position.y) * 400); }
+            // Fall tracking (func_800367BC 0x8003B7F4..: drop = landing y - fall start D_800F0D34; fall start
+            // taken as the highest point of the airborne phase: INFERRED). Falling 2000 units below the last
+            // ground (levels 1..3) ends the game without a death clip (0x80036E0C..).
+            if (Grounded) { fallTop = transform.position.y; lastGround = transform.position.y; }
+            else { fallTop = Mathf.Max(fallTop, transform.position.y); if (lastGround - transform.position.y > 2000 / 400f) hurt?.FellOut(); }
             if (reacting) hurt.PresentReaction(controller);
             else if (!chakram.PresentPose() && !combat.PresentPose()) SampleLocomotion(motion.sqrMagnitude > 0.01f, dt);
             else { groundSlot = 0; groundTime = 0; landingTime = -1; }
             // These are externally driven sampled clips, not animation root motion.
-            if (transform.position.y < spawn.y - 30) ResetToSpawn();
+            if (transform.position.y < spawn.y - 30 && (hurt == null || !hurt.Dead)) ResetToSpawn();
             currentPosition = transform.position; currentRotation = transform.rotation;
             Ticks++;
         }

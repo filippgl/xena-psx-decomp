@@ -16,7 +16,7 @@ namespace Xena.Assets
         [Serializable] private sealed class Report
         {
             public string result = "FAIL", error; public List<string> checks = new List<string>();
-            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError, deathLensHeight, gameOverVideoSeconds; public int gameOverMenuStep; public string gameOverVideo; public int hitFlashLife, hitDiscs, hitTriangles, remasterDroplets, discFrames, discStalls; public string strikeState; public List<string> discTrace = new List<string>(); public int menuBolts; public List<string> runTrace = new List<string>();
+            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError, deathLensHeight, gameOverVideoSeconds; public int gameOverMenuStep; public string gameOverVideo; public int hitFlashLife, hitDiscs, hitTriangles, remasterDroplets, discFrames, discStalls; public string strikeState; public int fallDamage; public List<string> discTrace = new List<string>(); public int menuBolts; public List<string> runTrace = new List<string>();
         }
         private readonly Report report = new Report();
         private string output; private bool finished;
@@ -182,13 +182,23 @@ namespace Xena.Assets
             var camera = Camera.main.GetComponent<PrototypeCamera>(); camera.enabled = true; motor.enabled = true;
             motor.ResetToSpawn(); Vector3 spawn = motor.transform.position; yield return new WaitForFixedUpdate();
             for (int i = 0; i < 120 && damage.Reacting; i++) yield return new WaitForFixedUpdate();
+            // Fall damage (0x8003B834): drop Xena 6 m onto open ground -> drop - 2000 units of damage.
+            {
+                var cc = motor.GetComponent<CharacterController>(); Vector3 at = motor.transform.position;
+                cc.enabled = false; motor.transform.position = at + Vector3.up * 6; cc.enabled = true; motor.SnapPresentationForTest();
+                for (int i = 0; i < 240 && (damage.LastFallDamage == 0); i++) yield return new WaitForFixedUpdate();
+                report.fallDamage = damage.LastFallDamage;
+                Require(damage.LastFallDamage >= 300 && damage.LastFallDamage <= 500 && !damage.Dead, "Fall from 6 m did not deal about 6*400-2000 = 400: " + damage.LastFallDamage);
+                report.checks.Add("fall damage: landing drop > 2000 units deals drop - 2000 (" + damage.LastFallDamage + " from 6 m)");
+                damage.ResetState(); motor.ResetToSpawn(); yield return new WaitForFixedUpdate();
+            }
             damage.SetHealthForTest(1);
             Require(damage.TakeHit(50, motor.transform.position + motor.transform.forward) && damage.Dead, "Xena did not die at 0 health");
             int menuStep = -1; float lensHeight = 0;
             for (int i = 0; i < 600 && flow.State == PrototypeGameOver.Phase.None; i++) yield return new WaitForFixedUpdate();
             menuStep = damage.DeathFrame; lensHeight = camera.transform.position.y - motor.transform.position.y;
             report.gameOverMenuStep = menuStep; report.deathLensHeight = lensHeight;
-            Require(flow.State == PrototypeGameOver.Phase.Menu && menuStep >= PrototypeGameOver.MenuStep && menuStep <= PrototypeGameOver.MenuStep + 1, "Death menu did not open at the original step: " + menuStep);
+            Require(flow.State == PrototypeGameOver.Phase.Menu && menuStep >= damage.MenuAfterSteps && menuStep <= damage.MenuAfterSteps + 1, "Death menu did not open at the original step: " + menuStep);
             Require(camera.DeathCamera && lensHeight > 5 && Vector3.Angle(camera.transform.forward, Vector3.down) < 25, "Death camera is not above Xena: " + lensHeight);
             report.checks.Add("death: clip 0x91, top-down death camera, menu after 65+45 steps");
             yield return null; yield return new WaitForEndOfFrame(); Capture("game-over-menu.png");
