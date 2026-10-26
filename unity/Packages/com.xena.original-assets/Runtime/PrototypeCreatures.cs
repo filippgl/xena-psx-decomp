@@ -62,7 +62,9 @@ namespace Xena.Assets
             {
                 string model = a.name == "bfly1" ? "Bfly1" : a.name == "bfly2" ? "Bfly2" : a.name == "frog" ? "Frog" : null;
                 if (model == null || a.position == null) continue;
-                var c = Spawn(model, a.name + "_" + a.index, new Vector3(a.position[0], a.position[1], a.position[2]), a.yaw & 4095, true);
+                // Frogs jump along +(rsin, rcos) of rotY (0x8001B278..) = Unity forward of the same yaw: drawn without the
+                // 180 deg turn so the model matches the original; butterflies keep it (they move along their drawn front).
+                var c = Spawn(model, a.name + "_" + a.index, new Vector3(a.position[0], a.position[1], a.position[2]), a.yaw & 4095, model != "Frog");
                 if (c == null) continue;
                 c.kind = model == "Frog" ? "frog" : "bfly";
                 if (c.kind == "frog") { c.mode = 0; if (c.mesh0 != null) c.mesh0.gameObject.SetActive(false); }

@@ -18,6 +18,11 @@ namespace Xena.Assets
     // treated as 0), larks.
     public sealed class PrototypeBandits : MonoBehaviour, IXenaVisualModeTarget
     {
+        // PSX rotY and Unity yaw are the same rotation matrix; PSX bodies face local -z, i.e. world
+        // (-sin rotY, -cos rotY) (docs/xena-enemy-audit.md: a bandit walking to its waypoint has relative angle
+        // atan2(actor - target) - rotY = 0). The brain's heading moves along (sin, cos) with the body turned
+        // 180 deg, so heading = rotY + 2048 (was rotY: spawned bandits faced backwards).
+        public static int SpawnHeading(int rotY) => (rotY + 2048) & 4095;
         [Serializable] private sealed class ScriptFile { public LevelConfig levelConfig; public Actor[] actors; }
         [Serializable] private sealed class LevelConfig { public Value maxLiveEnemies; }
         [Serializable] private sealed class Value { public int value; }
@@ -118,7 +123,7 @@ namespace Xena.Assets
             if (!float.IsNegativeInfinity(ground)) position.y = ground;
             if (group == null) group = new GameObject("Level01Bandits").transform;
             var root = new GameObject(slot.actor.name + " #" + slot.actor.index + " " + model); root.transform.SetParent(group, false);
-            root.transform.SetPositionAndRotation(position, Quaternion.Euler(0, (g.spawnYaw & 4095) * 360f / 4096, 0));
+            root.transform.SetPositionAndRotation(position, Quaternion.Euler(0, SpawnHeading(g.spawnYaw) * 360f / 4096, 0));
             var body = Instantiate(prefab, root.transform, false); body.transform.localRotation = Quaternion.Euler(0, 180, 0);
             var preview = body.GetComponent<XenaAssetPreview>(); preview.ShowControls = false;
             // New actors take the current Original/Remaster bindings and shadows.

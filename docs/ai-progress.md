@@ -53,7 +53,11 @@ One issue per task. Nothing here is a claim without the command/measurement that
   so bandit heading = rotY + 2048; PrototypeBandits uses spawnYaw as heading directly -> bandits may
   spawn facing backwards. Check against a native capture before changing (the frog's +sin/+cos jump
   direction from the audit has the same open sign question).
-  Next: verify bandit spawn facing vs native, mode 6 avoid, bandit hurt-voice lists.
+  -> RESOLVED claude-v159: facing = (-sin rotY, -cos rotY) from the RAM-verified patrol snapshot (relative
+  angle 0 to the waypoint), so PrototypeBandits.SpawnHeading = rotY + 2048 (bandits spawned backwards).
+  Frog asm 0x8001B278..: x += 40 rsin/4096, z += 40 rcos/4096 -> frogs drawn without the 180 deg turn.
+  All suites PASS (build/unity-import/claude-v159-*.txt).
+  Next: mode 6 avoid, bandit hurt-voice lists, level 02 transition / save on the stats screen.
 - CLAUDE 2026-10-25 10:50 build (DLL 10:50:29), all 8 suites + aggregate PASS
   (build/unity-import/claude-v32-*.txt), bandit 6/6 runs 0 stalled.
   GAME OVER (native capture build/gameover, --poke 8700:0x8014E4F2:600:2 = Xena +0x12):

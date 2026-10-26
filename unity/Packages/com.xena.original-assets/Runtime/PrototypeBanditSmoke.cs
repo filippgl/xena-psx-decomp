@@ -543,6 +543,13 @@ namespace Xena.Assets
             report.patrolSightings = foe.Sightings;
             Require(foe.Sightings == 1 && !foe.Patrolling && foe.State != PrototypeBanditBrain.Mode.Idle, "Patrolling bandit did not see Xena ahead: blocker " + foe.SightBlocker + ", state " + foe.State + ", dist " + (Vector3.Distance(foe.transform.position, motor.transform.position) * 400).ToString("F0") + ", angle " + Vector3.Angle(foe.transform.forward, motor.transform.position - foe.transform.position).ToString("F0"));
             report.checks.Add("patrol (flag 0x200): walks to waypoint 0, sees Xena only ahead (35 deg / 6000) and then approaches");
+            // Spawn facing: heading h moves along (sin h, cos h); the original faces (-sin rotY, -cos rotY).
+            foreach (int rotY in new[] { 0, -1856, 1024, 3000 })
+            {
+                float h = PrototypeBandits.SpawnHeading(rotY) / 4096f * 2 * Mathf.PI, r = rotY / 4096f * 2 * Mathf.PI;
+                Require(Mathf.Abs(Mathf.Sin(h) + Mathf.Sin(r)) < 1e-3f && Mathf.Abs(Mathf.Cos(h) + Mathf.Cos(r)) < 1e-3f, "Bandit spawn heading does not face (-sin, -cos) of rotY " + rotY);
+            }
+            report.checks.Add("bandits spawn facing the original (-sin rotY, -cos rotY)");
             foe.Active = false;
         }
         private IEnumerator Visit(PrototypeMotor motor, Vector3 at)
