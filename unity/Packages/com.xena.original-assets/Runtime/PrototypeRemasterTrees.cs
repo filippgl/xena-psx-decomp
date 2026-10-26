@@ -19,6 +19,8 @@ namespace Xena.Assets
         public int Triangles { get; private set; }
         public int MatchedTrunks { get; private set; }
         public bool RemasterShown { get; private set; }
+        public Material Bark { get; private set; }
+        public Material Leaves { get; private set; }
         public GameObject FirstTree => trees.Count > 0 ? trees[0].tree : null;
 
         private void Start()
@@ -33,6 +35,7 @@ namespace Xena.Assets
             var leaves = new Material(template) { name = "RemasterLeaves" };
             leaves.SetTexture("_MainTex", leafTexture); leaves.SetFloat("_Cutoff", 0.45f); leaves.SetFloat("_UseVertexLighting", 0); leaves.SetFloat("_RockDetail", 0);
             leaves.SetFloat("_Cull", 0); leaves.SetFloat("_Wind", 0.004f); leaves.SetColor("_Color", new Color(0.62f, 0.68f, 0.56f, 1));
+            Bark = bark; Leaves = leaves;
             var motor = GetComponent<PrototypeMotor>();
             var root = new GameObject("RemasterTrees");
             // Original trunk collision (CLS prisms, OriginalCLSWalls): the generated trunk takes the radius
@@ -115,7 +118,7 @@ namespace Xena.Assets
             }
         }
 
-        private static Mesh Build(float height, float width, int seed, float collisionRadius)
+        internal static Mesh Build(float height, float width, int seed, float collisionRadius)
         {
             var state = Random.state; Random.InitState(seed);
             var b = new Builder();

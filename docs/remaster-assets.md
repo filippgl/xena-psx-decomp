@@ -9,6 +9,7 @@ or build them are committed.
 | Sky HDRI `kloofendal_48d_partly_cloudy_puresky` (4k) | Poly Haven | CC0 1.0 | Remaster sky dome (`Xena/RemasterSky`) |
 | Rock051 | ambientCG | CC0 1.0 | triplanar rock detail (`Xena/RemasterLit`) |
 | `bark_brown_02` (tree bark) | Poly Haven | CC0 1.0 | generated trees (`PrototypeRemasterTrees`) |
+| `forrest_ground_01` (Diffuse 1k, `Resources/Remaster/Vegetation/ForestGround.jpg`, `tools/fetch_polyhaven_texture.py`) | Poly Haven | CC0 1.0 | outer-world ground band and path (`PrototypeRemasterOuterWorld`) |
 | `fern_02`, `shrub_02` | Poly Haven, `tools/fetch_polyhaven.py` | CC0 1.0 | ground plants replacing `@pretty` (`PrototypeRemasterVegetation`) |
 | Tenor Sans | Google Fonts (`Runtime/Resources/Fonts`, licence file alongside) | SIL OFL 1.1 | main menu / exit menu text |
 | Real-ESRGAN x4plus (ncnn-vulkan v0.2.5.0) | github.com/xinntao/Real-ESRGAN, local tool `../_tools/realesrgan` | BSD-3-Clause | 4x upscales: boot videos (EA_LOGO, UNILOGO, INTRO), GAME OVER video, menu lightning, panorama |

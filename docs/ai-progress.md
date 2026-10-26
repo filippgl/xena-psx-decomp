@@ -119,6 +119,18 @@ One issue per task. Nothing here is a claim without the command/measurement that
   was ~3x darker -> normalised by the measured means. Gate front view: gate 26.1 vs original 26.1, rock
   37.7 vs 42.2, frame 38.6 vs 38.5; level view arch 55 vs 50, pillar 49 vs 46. All suites PASS (claude-v187-*).
   Next: remaining level-1 items (user to pick), Remaster look re-check after the rock brightening.
+- claude-v194: REMASTER OUTER WORLD (user request: the corridor's painted boundary walls -> a 3D world).
+  PrototypeRemasterOuterWorld: painted walls = steep terrain faces on pages 3/5/12/16 with no walkable ground
+  behind (112 tris); PrototypeRemasterGeometry leaves them out of the drawn terrain (collider/camera/gameplay
+  keep them = invisible walls). Behind them a 0.5 m heightfield band (outside the hull = no non-steep terrain
+  face above/below; 30 m; starts at the walkable foot, climbs to the wall top in 4 m, then hills; 1.5 m skirt
+  under the corridor edge closes gaps), CC0 forrest_ground_01 tinted dark, 804 Remaster trees (darker
+  materials), 2504 CC0 ferns/shrubs, 13948 grass tufts, and the page-16 painted path continued as a 26-segment
+  dirt strip curving into the trees. Failed first tries: outward-of-nearest-wall test (holes at corners), slanted
+  walls marking the hull, wall min-y as the foot (walls reach far below the ground -> deep gaps). Spawn views
+  build/unity-import/presentation-sky-remaster-*.png vs -original-180. Cost: 1.61 ms vs 0.87 ms frame (spawn,
+  looking back). All suites PASS (claude-v193-*, presentation claude-v194). PENDING user verdict; next: tour
+  the whole perimeter (other painted walls / corners), tune palette vs the painted backdrops.
 - CLAUDE 2026-10-25 10:50 build (DLL 10:50:29), all 8 suites + aggregate PASS
   (build/unity-import/claude-v32-*.txt), bandit 6/6 runs 0 stalled.
   GAME OVER (native capture build/gameover, --poke 8700:0x8014E4F2:600:2 = Xena +0x12):

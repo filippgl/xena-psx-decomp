@@ -46,6 +46,7 @@ namespace Xena.Assets
         public bool RemasterActive { get; private set; }
         public int SeamEdges { get; private set; }
         public float MaxReliefMeters { get; private set; }
+        public int DroppedBackdropTriangles { get; private set; }
 
         private void Awake()
         {
@@ -58,7 +59,25 @@ namespace Xena.Assets
                 for (int i = 0; i < bound.Length; i++) if (bound[i] != null && bound[i].name.StartsWith("page-9_")) rounded.Add(i);
                 bool boulder = System.Array.IndexOf(Boulders, filter.sharedMesh.name) >= 0;
                 var pages = new Texture2D[bound.Length]; for (int i = 0; i < bound.Length; i++) pages[i] = bound[i] != null ? bound[i].mainTexture as Texture2D : null;
-                Mesh remaster = Subdivide(filter.sharedMesh, rounded, pages, terrain ? TerrainBulge : PropBulge, filter.transform.InverseTransformDirection(Vector3.up).normalized, out float offset, out float walkOffset, out int seams, filter.transform.lossyScale.y, out float relief,
+                // Painted boundary walls (PrototypeRemasterOuterWorld) are not drawn in Remaster: their
+                // collider stays, the world they depicted is built behind them.
+                Mesh source = filter.sharedMesh;
+                if (terrain)
+                {
+                    var drop = new HashSet<(int, int)>(); foreach (var w in PrototypeRemasterOuterWorld.Detect(source, bound, filter.transform)) drop.Add((w.submesh, w.triangle));
+                    if (drop.Count > 0)
+                    {
+                        source = Instantiate(filter.sharedMesh); source.name = filter.sharedMesh.name;
+                        for (int s = 0; s < source.subMeshCount; s++)
+                        {
+                            int[] all = source.GetTriangles(s); var keep = new List<int>(all.Length);
+                            for (int i = 0; i < all.Length; i += 3) if (!drop.Contains((s, i / 3))) { keep.Add(all[i]); keep.Add(all[i + 1]); keep.Add(all[i + 2]); }
+                            source.SetTriangles(keep, s);
+                        }
+                        DroppedBackdropTriangles = drop.Count;
+                    }
+                }
+                Mesh remaster = Subdivide(source, rounded, pages, terrain ? TerrainBulge : PropBulge, filter.transform.InverseTransformDirection(Vector3.up).normalized, out float offset, out float walkOffset, out int seams, filter.transform.lossyScale.y, out float relief,
                     terrain ? TerrainReliefMeters : boulder ? RockReliefMeters : 0, boulder ? 180 : terrain ? TerrainCreaseDegrees : CreaseDegrees, terrain ? TerrainMaxBulgeMeters : float.PositiveInfinity);
                 MaxReliefMeters = Mathf.Max(MaxReliefMeters, relief);
                 SeamEdges += seams;

@@ -10,7 +10,7 @@ namespace Xena.Assets
 {
     internal sealed class PrototypePresentationSmoke : MonoBehaviour
     {
-        [Serializable] private sealed class Report { public string result = "FAIL", error; public int highResolutionPages, stpTexels, originalTriangles, remasterTriangles; public float maxTerrainOffset, maxWalkableOffset; public int seamEdges, curtains, foams, bandits; public List<string> checks = new List<string>(), wallSpots = new List<string>(); public int wallSpotsTested, wallLensBehind; public float gateCopyMean; }
+        [Serializable] private sealed class Report { public string result = "FAIL", error; public int highResolutionPages, stpTexels, originalTriangles, remasterTriangles; public float maxTerrainOffset, maxWalkableOffset; public int seamEdges, curtains, foams, bandits; public List<string> checks = new List<string>(), wallSpots = new List<string>(); public int wallSpotsTested, wallLensBehind; public float gateCopyMean, outerFrameMs, noOuterFrameMs; }
         private readonly Report report = new Report();
         private string output; private bool finished; private Gamepad pad;
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -85,6 +85,21 @@ namespace Xena.Assets
             Require(sky.LandscapeActive && Shader.GetGlobalVector("_XenaLandscapeParams").w > 0.5f, "Remaster painted 360-degree landscape inactive");
             report.checks.Add("Remaster sky and far fog show the painted 360-degree landscape");
             yield return SkyViews(motor, orbit, camera, "presentation-sky-remaster.png");
+            // Outer world cost: mean frame time looking back from the spawn (180 deg), with and without it.
+            {
+                var outer = FindFirstObjectByType<PrototypeRemasterOuterWorld>(); orbit.enabled = false; int keepRate = Application.targetFrameRate; Application.targetFrameRate = -1;
+                camera.transform.SetPositionAndRotation(motor.transform.position + Vector3.up * 1.7f, Quaternion.Euler(-12, 180, 0));
+                foreach (bool on in new[] { true, false, true })
+                {
+                    outer.ApplyVisualMode(on ? XenaVisualMode.Remaster : XenaVisualMode.Original);
+                    for (int i = 0; i < 20; i++) yield return null;
+                    float t0 = Time.realtimeSinceStartup; for (int i = 0; i < 120; i++) yield return null;
+                    float ms = (Time.realtimeSinceStartup - t0) / 120 * 1000;
+                    if (on) report.outerFrameMs = ms; else report.noOuterFrameMs = ms;
+                }
+                Application.targetFrameRate = keepRate; orbit.enabled = true;
+                report.checks.Add("outer world frame time " + report.outerFrameMs.ToString("F2") + " ms vs " + report.noOuterFrameMs.ToString("F2") + " ms without (spawn, looking back)");
+            }
             yield return WallCamera(motor, orbit, camera, level);
             // Original water motion (docs/xena-water-animation.md): CLUT cycling, stream wave, splashes.
             {
@@ -224,7 +239,9 @@ namespace Xena.Assets
             { if (item.sharedMesh.name == "level-01-object-1") terrain = item; else if (item.sharedMesh.name == "level-01-object-66") rock = item.GetComponent<MeshRenderer>(); }
             report.originalTriangles = geometry.OriginalTriangles; report.remasterTriangles = geometry.RemasterTriangles; report.maxTerrainOffset = geometry.MaxTerrainOffset; report.maxWalkableOffset = geometry.MaxWalkableOffset; report.seamEdges = geometry.SeamEdges;
             int perFace = PrototypeRemasterGeometry.Segments * PrototypeRemasterGeometry.Segments;
-            Require(geometry.RemasterActive && geometry.RemasterTriangles == geometry.OriginalTriangles * perFace && terrain.sharedMesh.triangles.Length / 3 == 2290 * perFace
+            // Painted boundary walls (PrototypeRemasterOuterWorld) are left out of the drawn terrain only.
+            int dropped = geometry.DroppedBackdropTriangles;
+            Require(geometry.RemasterActive && geometry.RemasterTriangles == (geometry.OriginalTriangles - dropped) * perFace && terrain.sharedMesh.triangles.Length / 3 == (2290 - dropped) * perFace
                 && terrain.GetComponent<MeshCollider>().sharedMesh.triangles.Length / 3 == 2290 && geometry.MaxWalkableOffset < 0.001f && geometry.LitSlots > 10 && terrain.GetComponent<MeshRenderer>().sharedMaterials[0].shader.name == "Xena/RemasterLit", "Remaster did not subdivide terrain while keeping the original collider");
             report.checks.Add("Remaster draws 9x curved terrain/prop triangles; walkable surfaces and colliders keep original geometry");
             yield return View(camera, rock.bounds, new Vector3(-0.6f, 0.25f, -1), 1.3f, "presentation-geometry-remaster.png");
@@ -413,6 +430,14 @@ namespace Xena.Assets
                 float extent = Mathf.Max(b.size.x, Mathf.Max(b.size.y, b.size.z));
                 camera.transform.position = b.center + new Vector3(0.7f, 0.35f, 0.7f).normalized * (extent * 1.6f + 1.5f); camera.transform.LookAt(b.center);
                 yield return null; yield return new WaitForEndOfFrame(); Capture("veg-" + kind.Trim('@') + ".png");
+            }
+            // Remaster outer world: painted boundary walls are not drawn; a band with trees, plants, grass and the
+            // continued path stands behind them.
+            {
+                var outer = FindFirstObjectByType<PrototypeRemasterOuterWorld>(); var geo = FindFirstObjectByType<PrototypeRemasterGeometry>();
+                Require(outer != null && geo != null && geo.DroppedBackdropTriangles > 0 && outer.BandTriangles > 0 && outer.Trees > 0 && outer.Plants > 0 && outer.Tufts > 0 && outer.PathSegments > 0,
+                    "Outer world: dropped " + (geo != null ? geo.DroppedBackdropTriangles : 0) + ", band " + (outer != null ? outer.BandTriangles : 0) + ", trees " + (outer != null ? outer.Trees : 0) + ", path " + (outer != null ? outer.PathSegments : 0));
+                report.checks.Add("Remaster outer world: " + geo.DroppedBackdropTriangles + " painted wall tris hidden; band " + outer.BandTriangles + " tris, " + outer.Trees + " trees, " + outer.Plants + " plants, " + outer.Tufts + " tufts, path " + outer.PathSegments + " segments");
             }
             // Remaster gate: both leaves get volume (rounded planks), at most thickness + grain deep per side.
             var gate = FindFirstObjectByType<PrototypeRemasterGate>();

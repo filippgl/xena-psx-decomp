@@ -98,7 +98,7 @@ namespace Xena.Assets
             ApplyVisualMode(PrototypeGraphics.Active == null ? XenaVisualMode.Remaster : PrototypeGraphics.Active.Mode);
         }
         // Two crossed quads; base alpha 0, tip alpha 1 (wind weight).
-        private static void Tuft((List<Vector3> v, List<Vector2> uv, List<Color> c, List<int> tri, List<Vector2> h) chunk, Vector3 at, float height, float width, float turn, int cell, Color light, float keep)
+        internal static void Tuft((List<Vector3> v, List<Vector2> uv, List<Color> c, List<int> tri, List<Vector2> h) chunk, Vector3 at, float height, float width, float turn, int cell, Color light, float keep)
         {
             // Atlas padded by tools/clean_grass_atlas.py: each tuft fills the bottom-centred 72 % of its cell.
             const float content = 0.72f;
