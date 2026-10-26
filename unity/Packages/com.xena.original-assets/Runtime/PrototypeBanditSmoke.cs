@@ -16,7 +16,7 @@ namespace Xena.Assets
         [Serializable] private sealed class Report
         {
             public string result = "FAIL", error; public List<string> checks = new List<string>();
-            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError, deathLensHeight, gameOverVideoSeconds; public int gameOverMenuStep; public string gameOverVideo; public int hitFlashLife, hitDiscs, hitTriangles, remasterDroplets, discFrames, discStalls; public string strikeState; public int fallDamage, banditBlocks; public List<string> discTrace = new List<string>(); public int menuBolts; public List<string> runTrace = new List<string>();
+            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError, deathLensHeight, gameOverVideoSeconds; public int gameOverMenuStep; public string gameOverVideo; public int hitFlashLife, hitDiscs, hitTriangles, remasterDroplets, discFrames, discStalls; public string strikeState; public int fallDamage, banditBlocks, contactHits, banditContactHits; public Vector3 contactPoint; public List<string> discTrace = new List<string>(); public int menuBolts; public List<string> runTrace = new List<string>();
         }
         private readonly Report report = new Report();
         private string output; private bool finished;
@@ -258,6 +258,25 @@ namespace Xena.Assets
             report.strikeState = "modal=" + scripts.Modal + " paused=" + input.Paused + " menuOwns=" + input.MenuOwnsInput + " grounded=" + motor.Grounded + " reacting=" + damage.Reacting + " chakram=" + motor.GetComponent<PrototypeChakram>().Active;
             Require(report.firstHitDamage == 30 + scripts.SwordLevel, "Sword 51 did not deal original 30 + sword level: " + report.firstHitDamage + " (Xena hit " + (damage.HitsTaken - hitsAtStrike) + "x, reactions " + (damage.Reactions - reactionsAtStrike) + ", live bandits " + bandits.Live() + ", Xena clips " + string.Join(",", slots.ConvertAll(x => x.ToString("X"))) + ", foe at " + Vector3.Distance(foe.transform.position, motor.transform.position).ToString("F2") + " m, angle " + Vector3.Angle(motor.transform.forward, foe.transform.position - motor.transform.position).ToString("F0") + ")");
             report.checks.Add("sword 51 deals the original 30 + sword level to a bandit");
+            // Contact points (docs/xena-contact-points.md): the sword hit came from the posed points, at the
+            // bandit's body (within r + 50 units horizontally, between feet and 750 units up).
+            {
+                Vector3 c = damage.LastContactPoint - foe.transform.position; float up = c.y * 400; c.y = 0;
+                report.contactHits = damage.ContactHits; report.contactPoint = damage.LastContactPoint;
+                Require(PrototypeContactPoints.Available && damage.ContactHits >= 1 && c.magnitude * 400 < PrototypeBanditBrain.Radius + 50 + 60 && up > 0 && up < 750,
+                    "Sword hit did not come from an original contact point: hits " + damage.ContactHits + ", offset " + (c.magnitude * 400).ToString("F0") + ", up " + up.ToString("F0"));
+                // Geometry oracle: clip 51 counter 7 (SMA frame 6) tip = local (-241,-443,-570) -> 570 units ahead,
+                // 241 to Xena's right, 443 up for a root at the origin facing +z.
+                var pts = new Vector3[9];
+                int mask = PrototypeContactPoints.Pose("xena", 0x51, 6, Vector3.zero, 0, 0, pts, out int raw);
+                Require(raw == 30 && mask == 0x1F && Vector3.Distance(pts[0] * 400, new Vector3(241, 443, 570)) < 0.5f,
+                    "Contact point pose mismatch: mask " + mask + " d " + raw + " tip " + (pts[0] * 400));
+                Require(PrototypeContactPoints.Test(pts[0], pts[0], false, pts[0] + new Vector3(0.45f, -0.5f, 0), 150, 150, 750, out _)
+                    && !PrototypeContactPoints.Test(pts[0], pts[0], false, pts[0] + new Vector3(0.55f, -0.5f, 0), 150, 150, 750, out _)
+                    && !PrototypeContactPoints.Test(pts[0], pts[0], false, pts[0] + new Vector3(0, -2f, 0), 150, 150, 750, out _),
+                    "Contact test does not use the original r + 50 = 200 unit radius / 750 unit height");
+                report.checks.Add("Xena sword uses the original per-frame contact points (pose oracle, r+50 / 750 test)");
+            }
             int d = report.firstHitDamage;
             // The sword spark: (Hit, d) logged, flash life / ring / discs by func_800291A0, the foe bleeds.
             Require(effects.SparkLog.GetRange(sparks, effects.SparkLog.Count - sparks).Contains((PrototypeHitEffects.Type.Hit, d, Mathf.Min(d / 4 + 4, 12), d >= 26, Mathf.Clamp(d / 4 - 1, 0, 6)))
@@ -347,6 +366,9 @@ namespace Xena.Assets
             Require(hitFx.LastType == PrototypeHitEffects.Type.Hit && hitFx.BloodEmitters >= 2, "Bandit hit on Xena did not flash red / make her bleed");
             Require(report.firstIntake == 15 || report.firstIntake == 25 || report.firstIntake == 30, "Bandit hit did not use an original window damage: " + report.firstIntake);
             report.checks.Add("bandit attack damages Xena by its original window value");
+            report.banditContactHits = attacker.ContactHits;
+            Require(attacker.ContactHits >= 1, "Bandit hit did not come from its contact points");
+            report.checks.Add("bandit attacks hit through their 7 original contact points");
             Require(damage.Reactions >= 1, "Xena did not play an original hit reaction"); report.xenaReaction = damage.ReactionSlot;
             report.checks.Add("Xena plays an original hit reaction (0x66/0x67/0x72/0x74/0x75/0x7C) on an unblocked hit");
             var hud = motor.GetComponent<PrototypeHud>(); for (int i = 0; i < 10; i++) yield return new WaitForFixedUpdate();

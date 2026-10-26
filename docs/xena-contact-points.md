@@ -234,6 +234,13 @@ Per attacker step, with the position before this step's movement:
    `cur < p < prev` on all axes, else `cur` then `prev`; hit if `feet - 750 < y < feet` and `dist < r_t + 50`
    with `dist = max + 3/8 min` of |dx|, |dz|. Store the hit point (last hitting point wins), keep `max(|d|)`.
 
+## Unity port status (2026-10-26)
+
+Implemented in `PrototypeContactPoints` (data via `tools/install_contact_points.py`), used by
+`PrototypeOriginalDamage` (Xena -> bandits) and `PrototypeBanditBrain` (bandit -> Xena, with the
+part-3 twist driven by the bearing to Xena; sign verified geometrically). Checked by the bandit smoke
+(pose oracle, test radius/height, contact-hit counters).
+
 ## 9. Unknowns
 
 - Use of Xena points 7 and 8; meaning of the extra `func_80035070` arguments.

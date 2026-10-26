@@ -9,10 +9,10 @@ namespace Xena.Assets
     // 0x800C90D8, bandits 0x800C9CF8; +0xFE live on frames start+1..end); Xena
     // damage = |d| + sword level (up_sword, 0..4); Xena health 500, potion
     // auto-use below 350 (+30% of max); blocked bandit hits deal d>40 ? d-40 : 1;
-    // Xena death clip 0x91. APPROXIMATED here (contact points not ported yet):
-    // contact = horizontal reach (sword 1.65 m / kick 1.25 m for Xena, 1.85 m for
-    // bandits: their 700-unit attack range) in a +-60 deg front cone and |dy| < 750 units. Each attack hits a
-    // target once (the original invulnerability timer D_800F0CC2 is UNKNOWN).
+    // Xena death clip 0x91. Contact uses the original per-frame weapon points (PrototypeContactPoints,
+    // docs/xena-contact-points.md): sword points 0..4, kick points 5..6, bandits all 7; the old reach cone
+    // (sword 1.65 m / kick 1.25 m, bandit 740 units, +-60 deg) remains only without the data. Each attack
+    // hits a target once (the original invulnerability timer D_800F0CC2 is UNKNOWN).
     // NOT implemented: armour subtraction (up_armor absent on level 01).
     // The practice dummy keeps its separate provisional damage.
     public sealed class PrototypeOriginalDamage : MonoBehaviour
@@ -123,6 +123,11 @@ namespace Xena.Assets
         private float clock; private int deathFrame;
         private int attackSlot = -1; private float attackStart;
         private readonly HashSet<PrototypeBanditBrain> struck = new HashSet<PrototypeBanditBrain>();
+        // Contact points of the last two steps (root and yaw from the end of the previous step).
+        private readonly Vector3[] points = new Vector3[9], previousPoints = new Vector3[9];
+        private int previousMask, previousKey = -1; private Vector3 stepRoot; private float stepYaw; private bool stepRootValid;
+        public int ContactHits { get; private set; }
+        public Vector3 LastContactPoint { get; private set; }
 
         private void Awake()
         {
@@ -154,11 +159,16 @@ namespace Xena.Assets
                 return;
             }
             if (PowerUp > 0 && --PowerUp == 0) Karma = 0;
+            if (!stepRootValid) { stepRoot = transform.position; stepYaw = transform.eulerAngles.y; stepRootValid = true; }
+            Vector3 root = stepRoot; float yaw = stepYaw;
+            stepRoot = transform.position; stepYaw = transform.eulerAngles.y;
             if (combat == null || bandits == null) return;
             // One hit per target per attack instance (a new clip start clears it).
             if (!combat.Busy || combat.Slot != attackSlot) { struck.Clear(); attackSlot = combat.Busy ? combat.Slot : -1; }
             if (!combat.Busy || !XenaWindows.TryGetValue(combat.Slot, out var windows)) return;
             int frame = combat.Frame;
+            if (PrototypeContactPoints.HasClip("xena", combat.Slot)) { StepContacts(root, yaw, frame); return; }
+            previousKey = -1;
             foreach (var window in windows)
             {
                 if (frame <= window.start || frame > window.end) continue;
@@ -199,8 +209,51 @@ namespace Xena.Assets
             }
         }
 
+        private void StepContacts(Vector3 root, float yaw, int frame)
+        {
+            // Step counter n = clip frame n uses SMA frame n - 1; the previous points count only when the
+            // previous step was live in the same attack (invalid on the first live step).
+            int mask = PrototypeContactPoints.Pose("xena", combat.Slot, frame - 1, root, yaw, 0, points, out int raw);
+            int key = combat.Slot * 1000 + frame; bool hasPrevious = previousKey == key - 1;
+            if (raw == 0 || mask == 0) { previousKey = -1; return; }
+            bool kick = raw < 0;
+            int damage = Math.Abs(raw) * (PowerUp > 0 ? 2 : 1) + (scripts != null ? scripts.SwordLevel : 0);
+            foreach (var bandit in bandits.Brains)
+            {
+                if (bandit == null || bandit.Removed || bandit.Health <= 0 || struck.Contains(bandit)) continue;
+                bool found = false; Vector3 point = default;
+                for (int i = 0; i < points.Length; i++)
+                {
+                    if ((mask >> i & 1) == 0) continue;
+                    // Last hitting point wins (docs/xena-contact-points.md section 8).
+                    if (PrototypeContactPoints.Test(points[i], previousPoints[i], hasPrevious && (previousMask >> i & 1) != 0, bandit.transform.position,
+                        PrototypeBanditBrain.Radius, PrototypeBanditBrain.Radius, 750, out var hit)) { found = true; point = hit; }
+                }
+                if (!found) continue;
+                ContactHits++; LastContactPoint = point;
+                if (bandit.Blocking)
+                {
+                    // Blocking bandit: all damage discarded, blue spark, clang 0x1B (docs/xena-damage-audit.md 4).
+                    struck.Add(bandit);
+                    if (Effects != null) Effects.Spark(point, damage, PrototypeHitEffects.Type.Block);
+                    continue;
+                }
+                bool wasFleeing = bandit.Fleeing;
+                if (!bandit.TakeHit(damage, transform.position, kick)) continue;
+                struck.Add(bandit); HitsDealt++; LastDamageDealt = damage;
+                if (Effects != null)
+                {
+                    effects.Spark(point, damage, Array.IndexOf(SpecialEffectStates, combat.Slot) >= 0 ? PrototypeHitEffects.Type.Special : PrototypeHitEffects.Type.Hit);
+                    if (damage >= 4) effects.Bleed(bandit.transform, point, bandit.Health == 0 ? 20 : 10, bandit.Health == 0 ? 170 : 80);
+                }
+                if (bandit.Health == 0 && PowerUp == 0 && wasFleeing) Karma = Mathf.Max(0, Karma - 10); // killing a fleeing enemy
+                else if (bandit.Health == 0 && PowerUp == 0 && Array.IndexOf(KarmaStates, combat.Slot) >= 0 && (Karma = Mathf.Min(96, Karma + 10)) >= 96) { PowerUp = 825; PowerUps++; }
+            }
+            Array.Copy(points, previousPoints, points.Length); previousMask = mask; previousKey = key;
+        }
+
         // Bandit -> Xena (called by the bandit inside its attack window).
-        public bool TakeHit(int damage, Vector3 attacker)
+        public bool TakeHit(int damage, Vector3 attacker, Vector3? contact = null)
         {
             if (Dead || (scripts != null && (scripts.Modal || scripts.CutsceneActive))) return false;
             // Invulnerable while a reaction clip plays (not during the get-up 0x88).
@@ -214,7 +267,7 @@ namespace Xena.Assets
                 // Contact 447 units above Xena's feet; blue flash with the raw value when blocked;
                 // Xena bleeds for a final d >= 2 (blocked hits deal 1 and never bleed).
                 Vector3 away = attacker - transform.position; away.y = 0; away = away.sqrMagnitude > 1e-4f ? away.normalized : transform.forward;
-                Vector3 point = transform.position + away * 0.3f + Vector3.up * (447 / 400f);
+                Vector3 point = contact ?? transform.position + away * 0.3f + Vector3.up * (447 / 400f);
                 bool blocked = combat != null && combat.IsBlocking && facing;
                 effects.Spark(point, blocked ? raw : damage, blocked ? PrototypeHitEffects.Type.Block : PrototypeHitEffects.Type.Hit);
                 if (!blocked && damage >= 2) effects.Bleed(transform, point, 8, 200);

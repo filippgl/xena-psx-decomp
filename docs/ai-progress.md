@@ -5,6 +5,18 @@ One issue per task. Nothing here is a claim without the command/measurement that
 
 ## Current task — Unity combat and original collision audit (2026-10-24)
 
+- CLAUDE 2026-10-26 08:03 build (DLL 08:03:48 local): weapon CONTACT POINTS ported.
+  `tools/install_contact_points.py` flattens build/contact-points/contact_points.json (from
+  tools/export_contact_points.mjs) into Resources/Combat/contact_points.json (both projects, ignored).
+  `PrototypeContactPoints` poses the per-frame points (local (-x,-y,-z)/400 under the root yaw; frame
+  counter n -> SMA frame n-1; root/yaw from the previous step) and runs func_80070DFC (coarse
+  2(r_t+r_a), projection only when strictly cur<p<prev, fine r_t+50 / 0<up<750, max+3/8 min).
+  Xena: sword points 0..4 / kick 5..6 replace the 1.65/1.25 m cone (cone kept only without data);
+  sparks/blood at the hit point. Bandits: 7 points + part-3 twist (bearing/3 stepped 60, zero outside
+  +-0x384; sign checked: +twist moves the weapon to the bandit's right = +bearing); Xena's spark at the
+  bandit's contact point. Bandit smoke adds a pose oracle (51 counter 7 tip = (241,443,570) units), the
+  r+50/750 test and contact-hit counters. All 8 suites + aggregate PASS: build/unity-import/claude-v143-*.txt.
+  Next: SFX wiring (agent a9d83f1d running), hit-height reactions (contact y), lark/butterfly anim.
 - CLAUDE 2026-10-25 10:50 build (DLL 10:50:29), all 8 suites + aggregate PASS
   (build/unity-import/claude-v32-*.txt), bandit 6/6 runs 0 stalled.
   GAME OVER (native capture build/gameover, --poke 8700:0x8014E4F2:600:2 = Xena +0x12):

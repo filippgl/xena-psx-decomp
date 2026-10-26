@@ -63,6 +63,13 @@ namespace Xena.Assets
         public int Reactions { get; private set; }
         private int knockback, knockbackHeading, deathWait;
         private bool attackLanded;
+        // Weapon contact points (PrototypeContactPoints) and the upper-body aim twist +0x11E (part 3 rotY,
+        // docs/xena-contact-points.md 5): bearing a to Xena (0 outside +-0x384 or when not engaged),
+        // target trunc(a/3), stepped 60 toward it only when farther than the step.
+        private readonly Vector3[] points = new Vector3[7], previousPoints = new Vector3[7];
+        private int previousMask, previousKey = -1;
+        public int Twist { get; private set; }
+        public int ContactHits { get; private set; }
         public const int ReactFront = 0x67, ReactLow = 0x6D, ReactRear = 0x6A, DieMid = 0x8D, DieLow = 0x8B, DieRear = 0x8A;
         private static bool IsReaction(int slot) => slot >= 0x66 && slot <= 0x7F;
         private static bool IsDeath(int slot) => slot >= 0x8A && slot <= 0x91;
@@ -105,7 +112,7 @@ namespace Xena.Assets
         {
             pose = model; target = player; motion = clips; Health = maxHealth; MaxHealth = maxHealth; aggression = Mathf.Clamp(aggressionPercent, 0, 99);
             random = new System.Random(seed); heading = Mathf.RoundToInt(transform.eulerAngles.y / 360f * 4096) & 4095;
-            Fleeing = false; State = Mode.Idle; blockRolledFor = -1;
+            Fleeing = false; State = Mode.Idle; blockRolledFor = -1; Twist = 0; previousKey = -1;
             pose.enabled = false; Play(PrototypeBandits.IdleSlot);
         }
         private void OnEnable() { all.Add(this); }
@@ -255,6 +262,23 @@ namespace Xena.Assets
             MaxTurnObserved = Mathf.Max(MaxTurnObserved, Mathf.Abs(turn));
         }
         private bool Looping => !Dying && (Slot == PrototypeBandits.IdleSlot || Slot == Walk || Slot == Run);
+        private void Contacts()
+        {
+            // Clip frame n (step counter) uses SMA frame n - 1 at the root before this step's movement.
+            int mask = PrototypeContactPoints.Pose("bandit", Slot, Frame - 1, transform.position, heading * 360f / 4096, Twist, points, out int raw);
+            int key = Slot * 1000 + Frame; bool hasPrevious = previousKey == key - 1;
+            if (raw == 0 || mask == 0) { previousKey = -1; return; }
+            var damage = target.GetComponent<PrototypeOriginalDamage>();
+            if (!attackLanded && damage != null)
+            {
+                bool found = false; Vector3 point = default;
+                for (int i = 0; i < points.Length; i++)
+                    if ((mask >> i & 1) != 0 && PrototypeContactPoints.Test(points[i], previousPoints[i], hasPrevious && (previousMask >> i & 1) != 0,
+                        target.transform.position, Radius, Radius, 750, out var hit)) { found = true; point = hit; }
+                if (found) { ContactHits++; if (damage.TakeHit(Mathf.Abs(raw), transform.position, point)) attackLanded = true; }
+            }
+            Array.Copy(points, previousPoints, points.Length); previousMask = mask; previousKey = key;
+        }
         private bool ClipFinished() => !Looping && Frame >= Frames(Slot) - 1;
         private int Frames(int slot) => motion.TryGetValue(slot, out var clip) ? clip.frames : 1;
         private void Play(int slot) { if (slot == Slot && (Looping || !ClipFinished())) return; Slot = slot; Frame = 0; }
@@ -263,7 +287,14 @@ namespace Xena.Assets
         {
             // Attack windows: damage Xena once per attack inside start+1..end.
             if (Frame == 0) attackLanded = false;
-            if (!Dying && !attackLanded && PrototypeOriginalDamage.BanditWindows.TryGetValue(Slot, out var window) && Frame > window.start && Frame <= window.end)
+            if (!Dying && !IsReaction(Slot))
+            {
+                Distance(out int bearing);
+                int aim = State != Mode.Idle && !Fleeing && Mathf.Abs(bearing) <= 0x384 ? bearing / 3 : 0;
+                if (Mathf.Abs(aim - Twist) > 60) Twist += aim > Twist ? 60 : -60;
+            }
+            if (!Dying && PrototypeContactPoints.HasClip("bandit", Slot)) Contacts();
+            else if (!Dying && !attackLanded && PrototypeOriginalDamage.BanditWindows.TryGetValue(Slot, out var window) && Frame > window.start && Frame <= window.end)
             {
                 Vector3 offset = target.transform.position - transform.position; float dy = offset.y; offset.y = 0;
                 var damage = target.GetComponent<PrototypeOriginalDamage>();
