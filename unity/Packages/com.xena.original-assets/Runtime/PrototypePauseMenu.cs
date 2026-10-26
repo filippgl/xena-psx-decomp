@@ -23,7 +23,7 @@ namespace Xena.Assets
         public static readonly string[] Items = { "Продолжить", "Повтор уровня", "Опции", "Выход" };
         private static readonly string[] OptionItems = { "Музыка", "Эффекты", "Графика", "Чувствительность мыши", "Инверсия камеры", "Управление", "Назад" };
         private PrototypeInput input; private PrototypeLevelScripts scripts; private bool wasPaused;
-        private readonly Dictionary<string, Texture2D> labels = new Dictionary<string, Texture2D>(); private Texture2D shield, sword, scroll;
+        private readonly Dictionary<string, Texture2D> labels = new Dictionary<string, Texture2D>(); private Texture2D shield, sword, scroll, hdShield, hdSword, hdScroll;
         [Serializable] private sealed class Label { public string name; public int[] originOffset; public int extent; }
         [Serializable] private sealed class LabelFile { public Label[] labels; }
         private readonly Dictionary<string, Label> layout = new Dictionary<string, Label>();
@@ -38,6 +38,9 @@ namespace Xena.Assets
             foreach (var t in Resources.LoadAll<Texture2D>("PauseMenu/labels")) { t.filterMode = FilterMode.Point; labels[t.name] = t; }
             shield = Resources.Load<Texture2D>("PauseMenu/icons/shield"); sword = Resources.Load<Texture2D>("PauseMenu/icons/sword"); scroll = Resources.Load<Texture2D>("PauseMenu/icons/scroll");
             foreach (var t in new[] { shield, sword, scroll }) if (t != null) t.filterMode = FilterMode.Point;
+            // Remaster icons: Codex shield (PauseMenu/icons/shield-hd); the sword and scroll are the same
+            // sprites as the pickups (UP_SWORD / SCROLL tile 0), whose Codex HD versions already exist.
+            hdShield = Resources.Load<Texture2D>("PauseMenu/icons/shield-hd"); hdSword = Resources.Load<Texture2D>("Props/Pickups/up_sword-hd"); hdScroll = Resources.Load<Texture2D>("Props/Pickups/scroll-hd");
             var json = Resources.Load<TextAsset>("PauseMenu/pause_menu");
             if (json != null) foreach (var l in JsonUtility.FromJson<LabelFile>(json.text).labels) if (l != null && l.name != null) layout[l.name] = l;
             MusicVolume = PlayerPrefs.GetFloat("xena.music", 1); EffectsVolume = PlayerPrefs.GetFloat("xena.effects", 1);
@@ -137,7 +140,7 @@ namespace Xena.Assets
                 Text(R, 160, 140, "Нет", null, new Color(0.49f, 0.49f, 0.49f), Cursor == 1, scale, pulse);
             }
             // Right column: armour (none on level 01), sword level, scrolls read.
-            Icon(R, shield, 224, 66); Icon(R, sword, 224, 110); Icon(R, scroll, 231, 155);
+            Icon(R, shield, 224, 66, Remaster ? hdShield : null); Icon(R, sword, 224, 110, Remaster ? hdSword : null); Icon(R, scroll, 231, 155, Remaster ? hdScroll : null);
             int[] counts = { 0, scripts != null ? scripts.SwordLevel : 0, scripts != null ? scripts.ScrollsRead : 0 };
             for (int i = 0; i < 3; i++) Text(R, 216, new[] { 59, 103, 148 }[i], counts[i] + "x", null, new Color(0.43f, 0.43f, 0.43f), false, scale, pulse);
         }
@@ -166,7 +169,14 @@ namespace Xena.Assets
             }
         }
         private static void Line(Rect r) { var c = GUI.color; GUI.color = new Color(0, 0, 0, 0.9f); GUI.DrawTexture(new Rect(r.x + 2, r.y + 2, r.width, Mathf.Max(1, r.height)), Texture2D.whiteTexture); GUI.color = Color.white; GUI.DrawTexture(r, Texture2D.whiteTexture); GUI.color = c; }
-        private static void Icon(Func<float, float, float, float, Rect> R, Texture2D t, float cx, float cy) { if (t != null) GUI.DrawTexture(R(cx - t.width / 2, cy - t.height / 2, t.width, t.height), t); }
+        // Original sprite rect; the HD texture is fitted into it keeping its own aspect.
+        private static void Icon(Func<float, float, float, float, Rect> R, Texture2D t, float cx, float cy, Texture2D hd)
+        {
+            if (t == null) return;
+            if (hd == null) { GUI.DrawTexture(R(cx - t.width / 2, cy - t.height / 2, t.width, t.height), t); return; }
+            float h = t.height * 1.15f, w = h * hd.width / hd.height; if (w > t.width * 1.6f) { w = t.width * 1.6f; h = w * hd.height / hd.width; }
+            GUI.DrawTexture(R(cx - w / 2, cy - h / 2, w, h), hd, ScaleMode.StretchToFill);
+        }
         // Right-aligned text at the anchor: Original draws the exported label when there is one.
         private void Text(Func<float, float, float, float, Rect> R, float x, float y, string text, string label, Color colour, bool selected, float scale, float pulse)
         {
@@ -177,7 +187,8 @@ namespace Xena.Assets
                 float w = add.width, h = add.height; layout.TryGetValue(label, out var l);
                 Rect r = l != null && l.originOffset != null && l.originOffset.Length == 2 ? R(x - l.extent + l.originOffset[0], y + l.originOffset[1], w, h) : R(x - w + 1, y - 2, w, h);
                 if (shadow != null) GUI.DrawTexture(r, shadow);
-                if (selected && glow != null) { var c = GUI.color; GUI.color = new Color(1, 1, 1, pulse); GUI.DrawTexture(r, glow); GUI.color = c; }
+                // Glow: R = G = pulse, B = 15 (yellow), added over the label.
+                if (selected && glow != null) { var c = GUI.color; GUI.color = new Color(1, 1, 15 / 255f, pulse); GUI.DrawTexture(r, glow); GUI.DrawTexture(r, add); GUI.color = c; }
                 GUI.DrawTexture(r, add);
                 return;
             }

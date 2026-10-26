@@ -1,0 +1,8 @@
+Use your built-in image_gen tool (imagegen skill, built-in mode, not the CLI) to remaster the attached game sprite.
+The attached image is a tiny PS1 pause-menu icon from "Xena: Warrior Princess" (1999), shown enlarged with nearest-neighbour pixels.
+Magenta (#FF00FF) is the transparent background. It shows a small heraldic shield (armour level icon): white/silver shield with a dark
+bronze emblem and rim, seen from the front.
+Create a modern high-resolution hand-painted version of exactly this object: same silhouette, orientation, proportions and colour
+palette as the sprite, metal with soft sheen and fine engraving. The object fills the canvas edge to edge like the sprite fills its frame.
+No new elements, no text, no border, no drop shadow, no background. Transparent background (real alpha). Output 1024x1536.
+Save the final selected image into this workspace as out/shield.png (copy it from CODEX_HOME/generated_images). Do nothing else.

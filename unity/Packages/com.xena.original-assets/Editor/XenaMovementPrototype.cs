@@ -220,6 +220,18 @@ namespace Xena.Assets.Editor
                 panoramaImporter.maxTextureSize = 8192; panoramaImporter.textureCompression = TextureImporterCompression.CompressedHQ; panoramaImporter.npotScale = TextureImporterNPOTScale.None;
                 panoramaImporter.SaveAndReimport();
             }
+            // Original pixel art (pause menu labels/icons, fire and smoke frames): exact size (no NPOT
+            // rescale: 82x24 labels became 128x32 and shifted), point sampled, uncompressed, no mips.
+            foreach (string pixelFolder in new[] { "Assets/Imported/Resources/PauseMenu", "Assets/Imported/Resources/Effects" })
+                if (Directory.Exists(pixelFolder))
+                    foreach (string pixelPath in Directory.GetFiles(pixelFolder, "*.png", SearchOption.AllDirectories))
+                        if (AssetImporter.GetAtPath(pixelPath.Replace(Path.DirectorySeparatorChar, '/')) is TextureImporter pixelImporter)
+                        {
+                            bool hdArt = pixelPath.EndsWith("-hd.png");
+                            pixelImporter.npotScale = TextureImporterNPOTScale.None; pixelImporter.mipmapEnabled = hdArt; pixelImporter.filterMode = hdArt ? FilterMode.Trilinear : FilterMode.Point;
+                            pixelImporter.textureCompression = TextureImporterCompression.Uncompressed; pixelImporter.alphaIsTransparency = true; pixelImporter.wrapMode = TextureWrapMode.Clamp;
+                            pixelImporter.SaveAndReimport();
+                        }
             // Main menu (tools/install_main_menu.py): readable for the CPU compositor,
             // uncompressed, no mips; Original tiles point-sampled, HD layers bilinear.
             if (Directory.Exists("Assets/Imported/Resources/Menu"))
