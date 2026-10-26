@@ -16,7 +16,12 @@ One issue per task. Nothing here is a claim without the command/measurement that
   +-0x384; sign checked: +twist moves the weapon to the bandit's right = +bearing); Xena's spark at the
   bandit's contact point. Bandit smoke adds a pose oracle (51 counter 7 tip = (241,443,570) units), the
   r+50/750 test and contact-hit counters. All 8 suites + aggregate PASS: build/unity-import/claude-v143-*.txt.
-  Next: SFX wiring (agent a9d83f1d running), hit-height reactions (contact y), lark/butterfly anim.
+- CLAUDE 2026-10-26 08:11 build (DLL 08:11:39): hit-height reactions from the bandit contact point
+  (< 250 low -> 0x70 front/side A, 0x74 side B; > 500 high = mid). BUG FIXED: the reaction sector used
+  atan2(Xena - attacker) with Unity's +z facing, so every front hit played the rear clip 0x72; now
+  atan2(attacker - Xena) - yaw (PSX models face -z). Smoke: low 0x70, mid 0x66, rear 0x72, live intake 0x67.
+  All 8 suites + aggregate PASS: build/unity-import/claude-v145-*.txt.
+  Next: SFX wiring (agent a9d83f1d running), lark/butterfly anim, bandit patrol/avoid (mode 6).
 - CLAUDE 2026-10-25 10:50 build (DLL 10:50:29), all 8 suites + aggregate PASS
   (build/unity-import/claude-v32-*.txt), bandit 6/6 runs 0 stalled.
   GAME OVER (native capture build/gameover, --poke 8700:0x8014E4F2:600:2 = Xena +0x12):

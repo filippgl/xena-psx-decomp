@@ -16,7 +16,7 @@ namespace Xena.Assets
         [Serializable] private sealed class Report
         {
             public string result = "FAIL", error; public List<string> checks = new List<string>();
-            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError, deathLensHeight, gameOverVideoSeconds; public int gameOverMenuStep; public string gameOverVideo; public int hitFlashLife, hitDiscs, hitTriangles, remasterDroplets, discFrames, discStalls; public string strikeState; public int fallDamage, banditBlocks, contactHits, banditContactHits; public Vector3 contactPoint; public List<string> discTrace = new List<string>(); public int menuBolts; public List<string> runTrace = new List<string>();
+            public string firstSign, firstScroll; public int firstHitDamage, deathSlot, firstIntake, blockedIntake, xenaReaction; public int runRenderFrames, runStalledFrames; public int steps, attacks, maxSimultaneousAttackers, maxTurn, closestUnits = int.MaxValue, spawnDelayTicks, maxLive; public float maxGroundError, deathLensHeight, gameOverVideoSeconds; public int gameOverMenuStep; public string gameOverVideo; public int hitFlashLife, hitDiscs, hitTriangles, remasterDroplets, discFrames, discStalls; public string strikeState; public int fallDamage, banditBlocks, contactHits, banditContactHits, lowReaction, midReaction, rearReaction; public Vector3 contactPoint; public List<string> discTrace = new List<string>(); public int menuBolts; public List<string> runTrace = new List<string>();
         }
         private readonly Report report = new Report();
         private string output; private bool finished;
@@ -397,6 +397,25 @@ namespace Xena.Assets
             PrototypeGraphics.Active.SetMode(XenaVisualMode.Remaster);
             report.checks.Add("blocked bandit hits deal d>40 ? d-40 : 1 (=1) and do not stagger Xena");
             attacker.Active = false;
+            // Hit height (docs/xena-hit-reactions.md): a front contact < 250 units above the feet plays the low
+            // reaction 0x70; 400 units (mid) plays 0x66/0x67.
+            {
+                for (int i = 0; i < 120 && damage.Reacting; i++) yield return new WaitForFixedUpdate();
+                damage.ResetState(); Vector3 feet = motor.transform.position, ahead = feet + motor.transform.forward;
+                damage.TakeHit(15, ahead, feet + motor.transform.forward * 0.3f + Vector3.up * (100 / 400f)); report.lowReaction = damage.ReactionSlot;
+                for (int i = 0; i < 120 && damage.Reacting; i++) yield return new WaitForFixedUpdate();
+                feet = motor.transform.position; ahead = feet + motor.transform.forward;
+                damage.TakeHit(15, ahead, feet + motor.transform.forward * 0.3f + Vector3.up * (400 / 400f)); report.midReaction = damage.ReactionSlot;
+                for (int i = 0; i < 120 && damage.Reacting; i++) yield return new WaitForFixedUpdate();
+                feet = motor.transform.position;
+                damage.TakeHit(15, feet - motor.transform.forward, feet - motor.transform.forward * 0.3f + Vector3.up); report.rearReaction = damage.ReactionSlot;
+                Require(report.rearReaction == 0x72, "A hit from behind did not play the rear reaction 0x72: " + report.rearReaction.ToString("X"));
+                Require(report.lowReaction == 0x70 && (report.midReaction == 0x66 || report.midReaction == 0x67),
+                    "Hit height did not pick the original reaction: low " + report.lowReaction.ToString("X") + ", mid " + report.midReaction.ToString("X"));
+                report.checks.Add("hit height from the contact point: low < 250 -> 0x70, mid -> 0x66/0x67; front/rear sectors (rear 0x72)");
+                for (int i = 0; i < 120 && damage.Reacting; i++) yield return new WaitForFixedUpdate();
+                damage.ResetState();
+            }
         }
         private IEnumerator Visit(PrototypeMotor motor, Vector3 at)
         {

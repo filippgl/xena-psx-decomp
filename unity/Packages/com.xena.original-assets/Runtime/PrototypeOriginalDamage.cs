@@ -75,8 +75,9 @@ namespace Xena.Assets
         // Xena hit reactions (docs/xena-hit-reactions.md, func_800367BC 0x80037E68..0x800383F8):
         // only when final damage >= 2; sector s = (atan2(Xena - attacker) - rotY + 0x200) & 0xFFF:
         // [0,0x400) front -> 0x66 (2/3) / 0x67 (1/3), or knockdown 0x7C when damage >= 30;
-        // [0x400,0x800) side A -> 0x74; [0x800,0xC00) rear -> 0x72; else side B -> 0x75 (mid
-        // height assumed: bandit contact heights are not ported; side mirroring UNKNOWN).
+        // [0x400,0x800) side A -> 0x74; [0x800,0xC00) rear -> 0x72; else side B -> 0x75. Height of the
+        // contact point above the feet: < 250 low (front/side A 0x70, side B 0x74), > 500 high (as mid);
+        // side mirroring UNKNOWN.
         // Frame 1 is held 4 steps pushing min(d,30) units/step away from the attacker (not
         // for knockdowns); input is locked; invulnerable only while the reaction clip plays;
         // knockdowns get up with 0x88. No reaction in attack states 0x48, 0x4A..0x4D, 0x5C,
@@ -88,15 +89,20 @@ namespace Xena.Assets
         private int freeze, pushUnits; private Vector3 pushDirection; private bool getUp;
         private static readonly Dictionary<int, int> ReactionFrames = new Dictionary<int, int> { { 0x66, 13 }, { 0x67, 22 }, { 0x70, 41 }, { 0x72, 14 }, { 0x74, 14 }, { 0x75, 14 }, { 0x7C, 26 }, { 0x88, 37 } };
         private readonly System.Random random = new System.Random(5);
-        private void StartReaction(int damage, Vector3 attacker)
+        public int LastReactionHeight { get; private set; }
+        private void StartReaction(int damage, Vector3 attacker, int height)
         {
             if (combat != null && (combat.Slot == 0x48 || (combat.Slot >= 0x4A && combat.Slot <= 0x4D) || combat.Slot == 0x5C)) return;
             if (!motor.Grounded) return;
             Vector3 away = transform.position - attacker; away.y = 0;
-            int angle = Mathf.RoundToInt(Mathf.Atan2(away.x, away.z) / (2 * Mathf.PI) * 4096) & 4095;
+            // rel = atan2(Xena - attacker) - rotY in PSX, where models face local -z; Unity bodies face +z (turned
+            // 180 deg), so the same sector is atan2(attacker - Xena) - yaw (attacker ahead -> rel 0).
+            int angle = Mathf.RoundToInt(Mathf.Atan2(-away.x, -away.z) / (2 * Mathf.PI) * 4096) & 4095;
             int yaw = Mathf.RoundToInt(transform.eulerAngles.y / 360f * 4096) & 4095;
             int sector = (angle - yaw + 0x200) & 0xFFF;
-            int slot = sector < 0x400 ? (damage >= 30 ? 0x7C : (random.Next(3) < 2 ? 0x66 : 0x67)) : sector < 0x800 ? 0x74 : sector < 0xC00 ? 0x72 : 0x75;
+            bool low = height < 250; LastReactionHeight = height;
+            int slot = sector < 0x400 ? (damage >= 30 ? 0x7C : low ? 0x70 : (random.Next(3) < 2 ? 0x66 : 0x67))
+                : sector < 0x800 ? (low ? 0x70 : 0x74) : sector < 0xC00 ? 0x72 : (low ? 0x74 : 0x75);
             if (combat != null) combat.Interrupt();
             Reacting = true; ReactionSlot = slot; ReactionFrame = 1; getUp = slot == 0x7C; Reactions++;
             freeze = slot == 0x7C ? 0 : 4; pushUnits = Mathf.Min(damage, 30); pushDirection = away.sqrMagnitude > 0.0001f ? away.normalized : -transform.forward;
@@ -275,7 +281,7 @@ namespace Xena.Assets
             Health = Mathf.Max(0, Health - damage); HitsTaken++; LastIntake = damage; LastIntakeBlocked = combat != null && combat.IsBlocking && facing;
             if (Health > 0 && Health < PotionThreshold && scripts != null && scripts.UsePotion()) Health = Mathf.Min(MaxHealth, Health + MaxHealth * 30 / 100);
             if (Health == 0) { Dead = true; deathFrame = 0; motor.enabled = false; Reacting = false; }
-            else if (damage >= 2) StartReaction(damage, attacker);
+            else if (damage >= 2) StartReaction(damage, attacker, contact.HasValue ? Mathf.RoundToInt((contact.Value.y - transform.position.y) * 400) : 400);
             return true;
         }
 
