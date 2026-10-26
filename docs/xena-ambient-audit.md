@@ -70,16 +70,16 @@ rand(3,30), speed ±1 clamped **5..10**. Mode 0: turn rand(−512,512) then mode
 `func_8006E78C(rotY, speed)`; blocked → turn 180°, mode 2 (rest: speed 0, `+0xE0`=4) for rand(20,60).
 Height target: < 1500 from Xena → Xena head − rand(100,200); > 3000 → ground − 20; between → wobbling
 around Xena's height; ≥ 200 above ground when below. Vertical velocity `+0x2E` +1 to 5 (descending,
-`+0xE0`=2) or −1 to −10 (climbing, `+0xE0`=1). `+0xE0` meaning UNKNOWN (not the SMA slot: `+0xD0`=0).
+`+0xE0`=2) or −1 to −10 (climbing, `+0xE0`=1). `+0xE0` = SMA step period in vblanks (1/2 → one frame per tick, 4 → every 2nd tick; `docs/xena-lark-generator.md` §3).
 Wings = SMA vertex animation (4 frames, below).
 
 **Lark** (`0x80019950`, shared with classes 0x3E..0x46) — VERIFIED code; no lark alive in the snapshot.
 Spawned by g_lark (`+0x138` = generator) → mode 0 perched, else mode 3. Lifetime `+0x118` = **210**
 frames, decremented every frame, despawn at 0. Mode 0: Xena (or `D_800EE17C`) < **2000** → mode 3,
-lifetime 210. Mode 3: fly straight along yaw at 4096/150 ≈ **27 u/frame**, climb **9** (1/3) or
+lifetime 210. Mode 3: fly straight, velocity (−sin, −cos)(yaw) · 4096/150 ≈ **27 u/frame**, climb **9** (1/3) or
 **13** (2/3) u/frame, bank 0. Modes 1/4 (circling; not entered by level-01 larks): turn rate → ±50
 (±10/frame, sign flips at 10 %), bank −8·rate, 9 %/frame check: > 3000 from home → mode 2 (return,
-turn ≤ 20/frame until < 1000). Chirp sound 0x4B/0x4C with probability 1/256 per frame.
+turn ≤ 20/frame until < 1000). Chirp sound 0x4B/0x4C with probability 1/256 per frame. Generator, perched lifetime and wing timing: `docs/xena-lark-generator.md`.
 
 **Exporter** (`tools/export_enemy_unity.mjs`, main tree, run to scratchpad): FROG `--static` OK
 (7 nodes, 3 meshes, 18 vertices, 13 triangles, 2 materials, 0 validator problems); LARK and BFLY1/2
