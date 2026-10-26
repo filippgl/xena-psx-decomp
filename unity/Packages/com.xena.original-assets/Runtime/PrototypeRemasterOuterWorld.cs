@@ -39,9 +39,16 @@ namespace Xena.Assets
         }
         private static HashSet<Vector2Int> covered;
         public static List<Wall> Walls { get; private set; }
+        // Painted-forest faces that cannot get a band behind them (see Detect): drawn as hedges.
+        public static List<Wall> InteriorWalls { get; private set; } = new List<Wall>();
+        public int HedgeTrees { get; private set; }
+        public int HedgePlants { get; private set; }
         public static List<string> ForestPages { get; private set; }
         public static int PartialPanels { get; private set; }
         public static int WaterCells { get; private set; }
+        public static int CompletedFaces { get; private set; }
+        // Diagnostics: forest-coloured steep faces that stayed, with the reason (inspector walls.txt).
+        public static readonly List<(Vector3 centre, string reason)> Rejected = new List<(Vector3, string)>();
         public int BandTriangles { get; private set; }
         public int Trees { get; private set; }
         public int Plants { get; private set; }
@@ -125,6 +132,8 @@ namespace Xena.Assets
                 holes = (float)cut / n; return n > cut ? sum / (n - cut) : Color.clear;
             }
             var candidates = new List<(Wall wall, Color colour, int steep)>();
+            // Green panel-mates that failed the boundary / open tests (completed when most of their panel goes).
+            var mates = new List<(int sub, int tri, Vector3 a, Vector3 b, Vector3 c, int steep)>();
             // Panels: steep faces of one submesh that share an edge and a plane are decided together (a quad's two
             // triangles are dropped both or neither, so no half walls remain).
             var steepNormals = new List<Vector3>(); var steepSub = new List<int>(); var parent = new List<int>();
@@ -154,7 +163,10 @@ namespace Xena.Assets
                     bool farFront = Inside(centre + h * 4) || Inside(centre + h * 8) || Inside(centre + h * 12);
                     bool farBack = Inside(centre - h * 4) || Inside(centre - h * 8) || Inside(centre - h * 12);
                     Vector3 outward;
-                    if (front && !back && !farBack) outward = -h; else if (back && !front && !farFront) outward = h; else continue;
+                    Color probe = Sample(s, uv[tri[i]], uv[tri[i + 1]], uv[tri[i + 2]], out float probeHoles);
+                    bool green = probe.g >= ForestGreenOverRed * probe.r && probe.g >= ForestGreenOverBlue * probe.b && probeHoles <= 0.25f;
+                    if (front && !back && !farBack) outward = -h; else if (back && !front && !farFront) outward = h;
+                    else { if (green) { Rejected.Add((centre, "not boundary f" + (front ? 1 : 0) + " b" + (back ? 1 : 0) + " ff" + (farFront ? 1 : 0) + " fb" + (farBack ? 1 : 0))); mates.Add((s, i / 3, a, b, c, steepId)); } continue; }
                     // More than a quarter cut-out -> a fence/card, not a painted panel.
                     Color colour = Sample(s, uv[tri[i]], uv[tri[i + 1]], uv[tri[i + 2]], out float holeShare);
                     if (holeShare > 0.25f) continue;
@@ -169,7 +181,7 @@ namespace Xena.Assets
                             Vector3 q = from + outward * k; var key = new Vector2Int(Mathf.FloorToInt(q.x * 2), Mathf.FloorToInt(q.z * 2));
                             for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) if (covered.Contains(key + new Vector2Int(dx, dz))) open = false;
                         }
-                    if (!open) continue;
+                    if (!open) { if (green) { Rejected.Add((centre, "covered behind")); mates.Add((s, i / 3, a, b, c, steepId)); } continue; }
                     // Foot = the walkable face just inside the wall (painted walls often continue far below it).
                     bool found = false; (float y, int sub, int tri) foot = default;
                     for (float k = 0.5f; k <= 3f && !found; k += 0.5f)
@@ -209,11 +221,39 @@ namespace Xena.Assets
             var panelSize = new Dictionary<int, int>(); var panelPassed = new Dictionary<int, int>();
             for (int k = 0; k < parent.Count; k++) { int r = Find(k); panelSize[r] = (panelSize.TryGetValue(r, out int ps) ? ps : 0) + 1; }
             foreach (var cand in candidates) { int r = Find(cand.steep); panelPassed[r] = (panelPassed.TryGetValue(r, out int pp) ? pp : 0) + 1; }
+            // A panel goes when at least half of its faces passed every test; its remaining green faces go with it
+            // (a half-kept panel left hard-edged wedges and strips beside the outer forest, inspector walls 006/012/031).
+            var panelOutward = new Dictionary<int, Vector3>();
+            var panelFoot = new Dictionary<int, Wall>();
+            foreach (var cand in candidates) { int r = Find(cand.steep); panelOutward[r] = (panelOutward.TryGetValue(r, out var o) ? o : Vector3.zero) + cand.wall.outward; if (!panelFoot.ContainsKey(r) || cand.wall.footSub >= 0) panelFoot[r] = cand.wall; }
+            foreach (var mate in mates)
+            {
+                int r = Find(mate.steep);
+                if (!panelPassed.TryGetValue(r, out int passed) || passed * 2 < panelSize[r] || !forest.Contains(mate.sub)) continue;
+                Vector3 o = panelOutward[r]; o.y = 0; o.Normalize();
+                float low = Mathf.Min(mate.a.y, Mathf.Min(mate.b.y, mate.c.y)), high = Mathf.Max(mate.a.y, Mathf.Max(mate.b.y, mate.c.y));
+                var foot = panelFoot[r]; // the panel's ground: same foot height, crop and light as its passed faces
+                walls.Add(new Wall { submesh = mate.sub, triangle = mate.tri, a = mate.a, b = mate.b, c = mate.c, outward = o, baseY = foot.baseY, topY = Mathf.Max(high, foot.topY), footSub = foot.footSub, footUv = foot.footUv, footLight = foot.footLight, metresPerUv = foot.metresPerUv }); CompletedFaces++;
+            }
+            var interior = new List<Wall>(); var used = new HashSet<(int, int)>();
             foreach (var (w, c, id) in candidates)
             {
                 int r = Find(id);
-                if (forest.Contains(w.submesh) && panelPassed[r] == panelSize[r]) walls.Add(w); else PartialPanels++;
+                if (forest.Contains(w.submesh) && panelPassed[r] * 2 >= panelSize[r]) walls.Add(w);
+                else if (forest.Contains(w.submesh)) { PartialPanels++; interior.Add(w); }
             }
+            foreach (var w in walls) used.Add((w.submesh, w.triangle));
+            foreach (var w in interior) used.Add((w.submesh, w.triangle));
+            // Every other painted-forest face (partitions with level ground on both sides, walls in front of a plateau,
+            // panel leftovers) becomes a hedge: the face is not drawn, real trees and shrubs stand on its foot line.
+            foreach (var mate in mates)
+                if (forest.Contains(mate.sub) && !used.Contains((mate.sub, mate.tri)))
+                {
+                    float low = Mathf.Min(mate.a.y, Mathf.Min(mate.b.y, mate.c.y)), high = Mathf.Max(mate.a.y, Mathf.Max(mate.b.y, mate.c.y));
+                    interior.Add(new Wall { submesh = mate.sub, triangle = mate.tri, a = mate.a, b = mate.b, c = mate.c, baseY = low, topY = high, footSub = -1 });
+                    used.Add((mate.sub, mate.tri));
+                }
+            InteriorWalls = interior;
             ForestPages = new List<string>(); foreach (int sub in forest) ForestPages.Add(materials[sub].name);
             Walls = walls; return walls;
         }
@@ -245,6 +285,7 @@ namespace Xena.Assets
                 if (PrototypeRemasterEnvironment.IsWaterSurface(f.sharedMesh)) foreach (var v in f.sharedMesh.vertices) waterLevel = Mathf.Min(waterLevel, f.transform.TransformPoint(v).y);
             if (waterLevel == float.MaxValue) { waterLevel = float.MaxValue; foreach (var w in Walls) waterLevel = Mathf.Min(waterLevel, w.baseY); waterLevel -= 5; }
             BuildBand();
+            BuildHedges();
             ApplyVisualMode(PrototypeGraphics.Active == null ? XenaVisualMode.Remaster : PrototypeGraphics.Active.Mode);
         }
 
@@ -313,6 +354,49 @@ namespace Xena.Assets
             foreach (var c in crops) { var mats = terrain.sharedMaterials; if (c.sub < mats.Length && mats[c.sub] != null && mats[c.sub].mainTexture != c.source) Refresh(c); }
         }
 
+        // Hedges on interior painted walls: along the base edge of each face, generated trees every 1.7 m on the wall
+        // line (crowns as high as the wall) and CC0 shrubs/ferns on both sides, standing on the level ground.
+        private void BuildHedges()
+        {
+            var trees = GetComponent<PrototypeRemasterTrees>(); var motor = GetComponent<PrototypeMotor>();
+            if (trees == null || trees.Bark == null || motor == null || InteriorWalls.Count == 0) return;
+            var random = new System.Random(4242);
+            var bark = new Material(trees.Bark) { name = "HedgeBark" }; bark.SetColor("_Color", trees.Bark.GetColor("_Color") * 0.75f);
+            var leaves = new Material(trees.Leaves) { name = "HedgeLeaves" }; leaves.SetColor("_Color", new Color(0.4f, 0.48f, 0.34f, 1));
+            var plants = new List<GameObject>(); foreach (var asset in new[] { "shrub_02", "fern_02", "shrub_02" }) { var pr = Resources.Load<GameObject>("Remaster/Vegetation/" + asset); if (pr != null) plants.Add(pr); }
+            var hedge = new GameObject("RemasterHedges"); hedge.transform.SetParent(root.transform, false);
+            var placed = new List<Vector3>();
+            foreach (var w in InteriorWalls)
+            {
+                Vector3[] q = { w.a, w.b, w.c }; System.Array.Sort(q, (x, y) => x.y.CompareTo(y.y));
+                Vector3 e0 = q[0], e1 = q[1]; Vector3 n = Vector3.Cross(w.b - w.a, w.c - w.a); n.y = 0; n.Normalize();
+                float len = new Vector2(e1.x - e0.x, e1.z - e0.z).magnitude, height = w.topY - w.baseY;
+                for (float t = 0.5f; t < Mathf.Max(len, 0.6f); t += 1.7f)
+                {
+                    Vector3 p = Vector3.Lerp(e0, e1, len > 0.01f ? t / len : 0.5f);
+                    if (placed.Exists(o => new Vector2(o.x - p.x, o.z - p.z).sqrMagnitude < 1.4f * 1.4f)) continue;
+                    // Ground: the highest level floor beside the wall line that is not above the face.
+                    float ground = float.NegativeInfinity;
+                    foreach (float side in new[] { 0.7f, -0.7f }) { float g = motor.GroundHeight(p + n * side + Vector3.up * (height + 1)); if (!float.IsNegativeInfinity(g) && g < w.topY + 0.5f) ground = Mathf.Max(ground, g); }
+                    if (float.IsNegativeInfinity(ground)) continue;
+                    placed.Add(p);
+                    float th = Mathf.Max(6, (w.topY - ground) * 1.4f) * (0.85f + 0.3f * (float)random.NextDouble());
+                    var go = new GameObject("HedgeTree"); go.transform.SetParent(hedge.transform, false); go.transform.position = new Vector3(p.x, ground - 0.1f, p.z);
+                    go.AddComponent<MeshFilter>().sharedMesh = PrototypeRemasterTrees.Build(th, Mathf.Max(3, th * 0.5f), random.Next(), 0);
+                    go.AddComponent<MeshRenderer>().sharedMaterials = new[] { bark, leaves }; HedgeTrees++;
+                    foreach (float side in new[] { 0.8f, -0.8f })
+                        for (int k = 0; k < 2 && plants.Count > 0; k++)
+                        {
+                            Vector3 sp = p + n * side + Vector3.Cross(Vector3.up, n) * ((float)random.NextDouble() - 0.5f) * 1.6f;
+                            float g = motor.GroundHeight(sp + Vector3.up * (height + 1)); if (float.IsNegativeInfinity(g) || g > w.topY + 0.5f) continue;
+                            var plant = Instantiate(plants[random.Next(plants.Count)], hedge.transform); var parts = plant.GetComponentsInChildren<Renderer>(true); int child = random.Next(parts.Length);
+                            for (int i = 0; i < parts.Length; i++) parts[i].enabled = i == child;
+                            plant.transform.SetPositionAndRotation(Vector3.zero, Quaternion.Euler(0, random.Next(360), 0)); plant.transform.localScale = Vector3.one * (1.6f + 1.2f * (float)random.NextDouble());
+                            Bounds own = parts[child].bounds; plant.transform.position = new Vector3(sp.x - own.center.x, g - own.min.y - 0.04f, sp.z - own.center.z); HedgePlants++;
+                        }
+                }
+            }
+        }
         private void BuildBand()
         {
             var random = new System.Random(2026);

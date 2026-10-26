@@ -65,6 +65,7 @@ namespace Xena.Assets
                 if (terrain)
                 {
                     var drop = new HashSet<(int, int)>(); foreach (var w in PrototypeRemasterOuterWorld.Detect(source, bound, filter.transform)) drop.Add((w.submesh, w.triangle));
+                    foreach (var w in PrototypeRemasterOuterWorld.InteriorWalls) drop.Add((w.submesh, w.triangle)); // drawn as hedges
                     if (drop.Count > 0)
                     {
                         source = Instantiate(filter.sharedMesh); source.name = filter.sharedMesh.name;

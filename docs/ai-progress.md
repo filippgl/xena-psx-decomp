@@ -172,6 +172,12 @@ One issue per task. Nothing here is a claim without the command/measurement that
   FIXED: crown-only generated canopies fitted to the cards (5); (2) kept painted-wall wedges with hard edges next
   to the outer forest (walls 006/012/031); (3) waterfall sheets / pool edges hard-edged (021/034/035/037);
   (4) a floating dark-green rectangle (005). All suites PASS (claude-v233-*).
+- claude-v236: remaining green painted walls (user: "стены зелёные до сих пор есть"): diagnostics (inspector
+  walls.txt "kept-forest-face" + reason) showed most were partitions with level ground on both sides / walls in front
+  of plateaus / partial panels. Now: a panel goes when >= half its faces pass (rest completed with the panel's foot);
+  every other painted-forest face becomes a HEDGE (not drawn; generated trees every 1.7 m on its foot line + CC0
+  shrubs both sides): 39 faces, 31 trees, 76 plants. Remaining in the tour: green triangle fragments at wall 008,
+  dark square at wall 005, fern-rock walls (page 10) still flat. All suites PASS (claude-v236-*).
 - QUEUE (user 2026-10-26, in order): lake covered by the outer world (fix in test: water = level hull);
   {icon 4}/Р1 in texts -> bound keys (done v215); remove on-screen moves panel (done v214); chakram artifact in
   the centre when thrown; Original-mode level background (user: not ported to Unity Original); grass on slopes

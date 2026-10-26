@@ -138,6 +138,8 @@ namespace Xena.Assets
                     }
                     if (k % 4 == 0) yield return null;
                 }
+                lines.Add("completed panel faces " + PrototypeRemasterOuterWorld.CompletedFaces + ", dropped " + (PrototypeRemasterOuterWorld.Walls != null ? PrototypeRemasterOuterWorld.Walls.Count : 0));
+                foreach (var (centre, reason) in PrototypeRemasterOuterWorld.Rejected) lines.Add("kept-forest-face " + centre.ToString("F1") + " " + reason);
                 File.WriteAllText(Path.Combine(output, "walls.txt"), string.Join(Environment.NewLine, lines));
             }
             report.views_.Sort((a, b) => (b.holes - b.originalHoles).CompareTo(a.holes - a.originalHoles));
