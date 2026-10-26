@@ -15,6 +15,7 @@ Shader "Xena/RemasterWater"
         _Detail ("Original texture detail", Range(0, 1)) = 0.55
         _FlowDirection ("Flow direction XZ", Vector) = (0.3, 1, 0, 0)
         _FlowSpeed ("Flow speed", Float) = 0.35
+        _ClipBelow ("Skip faces below this height (drawn by the continuous lake)", Float) = -100000
     }
     SubShader
     {
@@ -34,7 +35,7 @@ Shader "Xena/RemasterWater"
             TEXTURE2D(_MainTex); SAMPLER(sampler_MainTex);
             CBUFFER_START(UnityPerMaterial)
                 float4 _MainTex_ST, _DeepColor, _ShallowColor, _SkyColor, _HorizonColor, _SunDirection, _SunColor, _FlowDirection;
-                float _Opacity, _Detail, _FlowSpeed;
+                float _Opacity, _Detail, _FlowSpeed, _ClipBelow;
             CBUFFER_END
             struct Attributes { float4 positionOS : POSITION; float2 uv : TEXCOORD0; };
             struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; float3 positionWS : TEXCOORD1; float fog : TEXCOORD2; };
@@ -78,6 +79,7 @@ Shader "Xena/RemasterWater"
             }
             half4 Frag(Varyings input) : SV_Target
             {
+                clip(input.positionWS.y - _ClipBelow);
                 float2 grad = WaveGradient(input.positionWS.xz, _Time.y);
                 float3 n = normalize(float3(-grad.x, 1, -grad.y));
                 float3 v = normalize(_WorldSpaceCameraPos - input.positionWS);

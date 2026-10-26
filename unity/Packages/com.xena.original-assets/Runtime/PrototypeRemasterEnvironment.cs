@@ -86,6 +86,25 @@ namespace Xena.Assets
         {
             var lake = targets.Find(t => t.renderer != null && streamFilter != null && t.renderer.gameObject == streamFilter.gameObject);
             if (lake == null) return;
+            // Footprint of the original @_stream mesh: river faces under it would draw a second layer.
+            var lakeTris = new List<Vector2[]>(); var sv = streamFilter.sharedMesh.vertices; var st = streamFilter.sharedMesh.triangles;
+            for (int i = 0; i < st.Length; i += 3)
+            {
+                Vector3 a = streamFilter.transform.TransformPoint(sv[st[i]]), b = streamFilter.transform.TransformPoint(sv[st[i + 1]]), d = streamFilter.transform.TransformPoint(sv[st[i + 2]]);
+                lakeTris.Add(new[] { new Vector2(a.x, a.z), new Vector2(b.x, b.z), new Vector2(d.x, d.z) });
+            }
+            bool InsideLake(float px, float pz)
+            {
+                var p = new Vector2(px, pz);
+                foreach (var t in lakeTris)
+                {
+                    float d1 = Cross(p, t[0], t[1]), d2 = Cross(p, t[1], t[2]), d3 = Cross(p, t[2], t[0]);
+                    bool neg = d1 < 0 || d2 < 0 || d3 < 0, pos = d1 > 0 || d2 > 0 || d3 > 0;
+                    if (!(neg && pos)) return true;
+                }
+                return false;
+            }
+            float Cross(Vector2 p, Vector2 a, Vector2 b) => (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
             var mesh = new Mesh { name = "RemasterRiverSurface", indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
             var v = new List<Vector3>(); var uv = new List<Vector2>(); var tri = new List<int>();
             foreach (var (filter, triangles) in riverFaces)
@@ -95,11 +114,12 @@ namespace Xena.Assets
                 {
                     Vector3 a = filter.transform.TransformPoint(src[triangles[i]]), b = filter.transform.TransformPoint(src[triangles[i + 1]]), c = filter.transform.TransformPoint(src[triangles[i + 2]]);
                     Vector3 n = Vector3.Cross(b - a, c - a).normalized; if (Mathf.Abs(n.y) < 0.75f) continue;
+                    Vector3 mid = (a + b + c) / 3; if (InsideLake(mid.x, mid.z)) continue;
                     foreach (var p in new[] { a, b, c }) { tri.Add(v.Count); v.Add(p + Vector3.up * 0.01f); uv.Add(new Vector2(p.x, p.z) / 8f); }
                 }
             }
             // Extras have no UVs into the stream's texture rect: same water, original detail off.
-            extraMaterial = new Material(lake.material) { name = "RemasterWater (extras)" }; extraMaterial.SetFloat("_Detail", 0);
+            extraMaterial = new Material(lake.material) { name = "RemasterWater (extras)" }; extraMaterial.SetFloat("_Detail", 0); extraMaterial.SetFloat("_ClipBelow", -100000);
             AddWater("RemasterRiverSurface", mesh, v, uv, tri, extraMaterial);
             // Horizon: lake level = lowest @_stream vertex.
             float level = float.MaxValue; Bounds box = streamFilter.GetComponent<MeshRenderer>().bounds;
@@ -113,13 +133,14 @@ namespace Xena.Assets
                 foreach (var p in new[] { new Vector3(x0, y, z0), new Vector3(x0, y, z1), new Vector3(x1, y, z1), new Vector3(x1, y, z0) }) { v.Add(p); uv.Add(new Vector2(p.x, p.z) / 8f); }
                 tri.AddRange(new[] { i, i + 1, i + 2, i, i + 2, i + 3 });
             }
-            const float cell = 2, far = 800;
+            const float cell = 1, far = 800;
             float ax0 = area.min.x, ax1 = area.max.x, az0 = area.min.z, az1 = area.max.z;
             if (motor != null)
                 for (float x = ax0; x < ax1; x += cell) for (float z = az0; z < az1; z += cell)
                 {
-                    Vector3 c = new Vector3(x + cell / 2, level + 30, z + cell / 2);
-                    if (float.IsNegativeInfinity(motor.GroundHeight(c))) Quad(x, z, x + cell, z + cell);
+                    // Water wherever the level has no ground (out of bounds below the lake).
+                    Vector3 c = new Vector3(x + cell / 2, level + 30, z + cell / 2); float g = motor.GroundHeight(c);
+                        if (float.IsNegativeInfinity(g)) Quad(x, z, x + cell, z + cell);
                 }
             Quad(ax0 - far, az0 - far, ax0, az1 + far); Quad(ax1, az0 - far, ax1 + far, az1 + far); Quad(ax0, az0 - far, ax1, az0); Quad(ax0, az1, ax1, az1 + far);
             AddWater("RemasterHorizonWater", new Mesh { name = "RemasterHorizonWater", indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 }, v, uv, tri, extraMaterial);
