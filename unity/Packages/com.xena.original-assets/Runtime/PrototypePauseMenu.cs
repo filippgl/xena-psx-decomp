@@ -29,8 +29,35 @@ namespace Xena.Assets
         public void OpenFromMainMenu() { Standalone = true; Current = Page.Options; Cursor = 0; Opened++; }
         private bool Shown => input != null && (input.Paused || Standalone);
         public static readonly string[] Items = { "Продолжить", "Повтор уровня", "Опции", "Выход" };
-        private static readonly string[] OptionItems = { "Музыка", "Эффекты", "Аудио", "Движения", "Графика", "Чувствительность мыши", "Инверсия камеры", "Управление", "Назад" };
-        private const int OptControls = 7, OptBack = 8;
+        private static readonly string[] OptionItems = { "Музыка", "Эффекты", "Аудио", "Движения", "Графика", "Чувствительность мыши", "Инверсия камеры", "Разрешение", "Экран", "Управление", "Назад" };
+        private const int OptResolution = 7, OptScreen = 8, OptControls = 9, OptBack = 10;
+        // Display options (user 2026-10-26): resolution from the monitor's list, screen mode full screen / borderless
+        // window / window; saved in PlayerPrefs and applied at start (not with --no-settings: tests keep their size).
+        private static readonly FullScreenMode[] Modes = { FullScreenMode.ExclusiveFullScreen, FullScreenMode.FullScreenWindow, FullScreenMode.Windowed };
+        private static readonly string[] ModeNames = { "Полный экран", "Окно без рамки", "В окне" };
+        private static List<Vector2Int> Resolutions()
+        {
+            var list = new List<Vector2Int>();
+            foreach (var r in Screen.resolutions) { var v = new Vector2Int(r.width, r.height); if (!list.Contains(v)) list.Add(v); }
+            if (list.Count == 0) list.Add(new Vector2Int(Screen.width, Screen.height));
+            list.Sort((a, b) => a.x != b.x ? a.x.CompareTo(b.x) : a.y.CompareTo(b.y)); return list;
+        }
+        private static int ModeIndex(FullScreenMode m) { int i = System.Array.IndexOf(Modes, m == FullScreenMode.MaximizedWindow ? FullScreenMode.Windowed : m); return i < 0 ? 2 : i; }
+        public static void ApplyDisplay(int width, int height, FullScreenMode mode)
+        {
+            Screen.SetResolution(width, height, mode);
+            PlayerPrefs.SetInt("xena.resW", width); PlayerPrefs.SetInt("xena.resH", height); PlayerPrefs.SetInt("xena.screenMode", ModeIndex(mode));
+        }
+        private void AdjustResolution(int delta)
+        {
+            var list = Resolutions(); int at = list.FindIndex(v => v.x == Screen.width && v.y == Screen.height); if (at < 0) at = list.Count - 1;
+            var next = list[Mathf.Clamp(at + delta, 0, list.Count - 1)]; ApplyDisplay(next.x, next.y, Screen.fullScreenMode); PrototypeSfx.Play2D(0x39, ui: true);
+        }
+        private void AdjustScreen(int delta)
+        {
+            int at = Mathf.Clamp(ModeIndex(Screen.fullScreenMode) + delta, 0, Modes.Length - 1);
+            ApplyDisplay(Screen.width, Screen.height, Modes[at]); PrototypeSfx.Play2D(0x39, ui: true);
+        }
         private PrototypeInput input; private PrototypeLevelScripts scripts; private bool wasPaused;
         private readonly Dictionary<string, Texture2D> labels = new Dictionary<string, Texture2D>(); private Texture2D shield, sword, scroll, hdShield, hdSword, hdScroll;
         [Serializable] private sealed class Label { public string name; public int[] originOffset; public int extent; }
@@ -52,6 +79,8 @@ namespace Xena.Assets
             var json = Resources.Load<TextAsset>("PauseMenu/pause_menu");
             if (json != null) foreach (var l in JsonUtility.FromJson<LabelFile>(json.text).labels) if (l != null && l.name != null) layout[l.name] = l;
             MusicVolume = PlayerPrefs.GetFloat("xena.music", 1); EffectsVolume = PlayerPrefs.GetFloat("xena.effects", 1);
+            if (System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "--no-settings") < 0 && PlayerPrefs.HasKey("xena.resW"))
+                Screen.SetResolution(PlayerPrefs.GetInt("xena.resW"), PlayerPrefs.GetInt("xena.resH"), Modes[Mathf.Clamp(PlayerPrefs.GetInt("xena.screenMode", 2), 0, Modes.Length - 1)]);
             Stereo = PlayerPrefs.GetInt("xena.stereo", 1) != 0; AlwaysRun = PlayerPrefs.GetInt("xena.alwaysRun", 0) != 0; Active = this;
         }
 
@@ -93,6 +122,8 @@ namespace Xena.Assets
             if (Cursor == 4) ToggleGraphics();
             if (Cursor == 5) input.Preferences.Data.mouseSensitivity = Mathf.Clamp(input.Preferences.Data.mouseSensitivity + delta * 0.01f, 0.03f, 0.3f);
             if (Cursor == 6) input.Preferences.Data.invertY = !input.Preferences.Data.invertY;
+            if (Cursor == OptResolution) AdjustResolution(delta);
+            if (Cursor == OptScreen) AdjustScreen(delta);
         }
         private static void ToggleGraphics() { if (PrototypeGraphics.Active != null) PrototypeGraphics.Active.SetMode(PrototypeGraphics.Active.Mode == XenaVisualMode.Original ? XenaVisualMode.Remaster : XenaVisualMode.Original); }
         public void Select()
@@ -119,6 +150,8 @@ namespace Xena.Assets
                     if (Cursor == 4 || Cursor == 6) Adjust(1);
                     else if (Cursor == 2) Adjust(Stereo ? -1 : 1);
                     else if (Cursor == 3) Adjust(AlwaysRun ? -1 : 1);
+                    else if (Cursor == OptScreen) AdjustScreen(ModeIndex(Screen.fullScreenMode) == Modes.Length - 1 ? -(Modes.Length - 1) : 1);
+                    else if (Cursor == OptResolution) AdjustResolution(1);
                     else if (Cursor == OptControls) { Current = Page.Controls; Cursor = 0; }
                     else if (Cursor == OptBack) { input.SaveSettings(); Back(); }
                     break;
@@ -167,11 +200,11 @@ namespace Xena.Assets
                 Text(R, 160, 40, "ОПЦИИ", null, Color.white, false, scale, pulse);
                 string[] values = { Mathf.RoundToInt(MusicVolume * 100) == 0 ? "Вык" : Mathf.RoundToInt(MusicVolume * 100) + "%", Mathf.RoundToInt(EffectsVolume * 100) == 0 ? "Вык" : Mathf.RoundToInt(EffectsVolume * 100) + "%",
                     Stereo ? "Стерео" : "Моно", AlwaysRun ? "Бег" : "Ходьба",
-                    Remaster ? "Ремастер" : "Оригинал", input.Preferences.Data.mouseSensitivity.ToString("0.00"), input.Preferences.Data.invertY ? "Вкл" : "Вык", "", "" };
+                    Remaster ? "Ремастер" : "Оригинал", input.Preferences.Data.mouseSensitivity.ToString("0.00"), input.Preferences.Data.invertY ? "Вкл" : "Вык", Screen.width + "×" + Screen.height, ModeNames[ModeIndex(Screen.fullScreenMode)], "", "" };
                 for (int i = 0; i < OptionItems.Length; i++)
                 {
-                    Text(R, 160, 62 + 18 * i, OptionItems[i], null, grey, i == Cursor, scale, pulse);
-                    if (values[i] != "") Text(R, 260, 62 + 18 * i, values[i], null, grey, i == Cursor, scale, pulse);
+                    Text(R, 160, 56 + 16 * i, OptionItems[i], null, grey, i == Cursor, scale, pulse);
+                    if (values[i] != "") Text(R, 260, 56 + 16 * i, values[i], null, grey, i == Cursor, scale, pulse);
                 }
                 return;
             }

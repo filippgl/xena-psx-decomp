@@ -171,7 +171,7 @@ namespace Xena.Assets
                 pause.Move(1); pause.Select(); Require(PrototypePauseMenu.AlwaysRun != run, "Движения did not toggle Ходьба/Бег"); pause.Select();
                 Require(PrototypePauseMenu.Stereo == stereo && PrototypePauseMenu.AlwaysRun == run, "Аудио/Движения did not toggle back");
                 report.checks.Add("options: original Аудио Моно/Стерео and Движения Ходьба/Бег toggle");
-                pause.Move(4); pause.Select(); Require(pause.Current == PrototypePauseMenu.Page.Controls, "Controls did not open");
+                pause.Move(6); pause.Select(); Require(pause.Current == PrototypePauseMenu.Page.Controls, "Controls did not open");
                 yield return null; yield return new WaitForEndOfFrame(); Capture("pause-controls.png");
                 pause.Back(); pause.Back(); Require(pause.Current == PrototypePauseMenu.Page.Main, "Back did not return to the main page");
                 pause.Select(); Require(!pauseInput.Paused, "Продолжить did not resume"); yield return null;

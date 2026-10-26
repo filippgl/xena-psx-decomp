@@ -38,6 +38,7 @@ namespace Xena.Assets
         }
         private void Load()
         {
+            EnsureListener();
             var json = Resources.Load<TextAsset>("Sfx/index");
             if (json != null) foreach (var e in JsonUtility.FromJson<Index>(json.text).sounds) entries[e.id] = e;
             for (int i = 0; i < Voices; i++)
@@ -45,6 +46,14 @@ namespace Xena.Assets
                 var s = gameObject.AddComponent<AudioSource>(); s.playOnAwake = false; s.spatialBlend = 0; s.dopplerLevel = 0;
                 voices[i] = new Voice { source = s };
             }
+        }
+        // The prototype scene camera had no AudioListener: nothing was audible (user 2026-10-26). One listener on the
+        // main camera (re-checked each frame, the camera can be rebuilt on a level reload).
+        public static bool EnsureListener()
+        {
+            if (FindObjectsByType<AudioListener>(FindObjectsSortMode.None).Length > 0) return true;
+            var cam = Camera.main; if (cam == null) return false;
+            cam.gameObject.AddComponent<AudioListener>(); return true;
         }
         private AudioClip Clip(string name)
         {
@@ -133,6 +142,7 @@ namespace Xena.Assets
         }
         private void LateUpdate()
         {
+            EnsureListener();
             foreach (var v in voices)
             {
                 if (v.id < 0) continue;

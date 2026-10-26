@@ -183,6 +183,14 @@ One issue per task. Nothing here is a claim without the command/measurement that
   rock_face height scan (triplanar in object space, tile 3.2 m) on top of the fBm relief, same watertight weights
   (0 on walkable faces/edges: ground and collider exact). Inspector tour now adds a grazing view along each wall.
   Frame 2.19 vs 0.89 ms (spawn looking back). PENDING user verdict. All suites PASS (claude-v238-*).
+- claude-v240: REJECTED hedges (user: start rocks became "void", left side "mess of sticks"): the detector took the
+  start's mossy rock slabs (pages 5/6 green) for painted forest; commit 04e4b6d reverted (226ad19), rock slabs back.
+  NO SOUND FIXED: the prototype scene camera had no AudioListener at all -> PrototypeSfx.EnsureListener adds one;
+  bandit smoke requires one listener and a non-silent mixer (peak 0.78). Options: Разрешение (monitor list) and
+  Экран (Полный экран / Окно без рамки / В окне), saved, applied at start (not with --no-settings). Main menu fits
+  the HD picture (21:9 cropped logo and menu) with a dimmed cover copy in the bars. Suites PASS except bandit:
+  FLAKY since the 12-segment relief (v238 passed; v239-v240 failed 3 of 5 runs, three different timing checks:
+  sword input, New game, lark spawn) - suspect heavier startup / frame timing; OPEN, investigate next.
 - QUEUE (user 2026-10-26, in order): lake covered by the outer world (fix in test: water = level hull);
   {icon 4}/Р1 in texts -> bound keys (done v215); remove on-screen moves panel (done v214); chakram artifact in
   the centre when thrown; Original-mode level background (user: not ported to Unity Original); grass on slopes

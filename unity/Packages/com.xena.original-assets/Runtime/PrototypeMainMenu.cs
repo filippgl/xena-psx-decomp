@@ -278,7 +278,11 @@ namespace Xena.Assets
         private void DrawRemaster()
         {
             float bw = hdBackground.width, bh = hdBackground.height;
-            float scale = Mathf.Max(Screen.width / bw, Screen.height / bh);
+            // Fit (not cover): on wide screens (21:9) cover cropped the logo and the menu (user 2026-10-26). The bars
+            // show a dimmed, cover-scaled copy of the same picture; the picture and its labels stay whole.
+            float cover = Mathf.Max(Screen.width / bw, Screen.height / bh), scale = Mathf.Min(Screen.width / bw, Screen.height / bh);
+            var tint = GUI.color; GUI.color = new Color(0.32f, 0.3f, 0.36f, 1);
+            GUI.DrawTexture(new Rect((Screen.width - bw * cover) / 2, (Screen.height - bh * cover) / 2, bw * cover, bh * cover), hdBackground); GUI.color = tint;
             Vector2 origin = new Vector2((Screen.width - bw * scale) / 2, (Screen.height - bh * scale) / 2);
             Rect Hd(float x, float y, float w, float h) => new Rect(origin.x + x * scale, origin.y + y * scale, w * scale, h * scale);
             float k = bh / 240f; Rect Ps(float x, float y, float w, float h) => Hd(85 + x * k, y * k, w * k, h * k);
