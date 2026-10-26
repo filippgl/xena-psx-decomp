@@ -124,10 +124,16 @@ namespace Xena.Assets
                         }
                     if (!found) { lines.Add(k + " no ground in front " + c.ToString("F1")); continue; }
                     lines.Add(k + " wall area " + groups[k].area.ToString("F0") + " centre " + c.ToString("F1") + " eye " + eye.ToString("F1"));
-                    foreach (var (tag, turn) in new[] { ("front", 0f), ("left", -35f), ("right", 35f) })
+                    foreach (var (tag, turn) in new[] { ("front", 0f), ("left", -35f), ("graze", 999f) })
                     {
                         Vector3 look = Quaternion.Euler(0, turn, 0) * (new Vector3(c.x, eye.y - 0.4f, c.z) - eye);
                         cam.transform.SetPositionAndRotation(eye, Quaternion.LookRotation(look));
+                        if (turn == 999f)
+                        {
+                            // Grazing view: 1.6 m from the wall, looking along it (relief and depth show here).
+                            Vector3 along = Vector3.Cross(Vector3.up, h); Vector3 g0 = c + h * 1.6f - along * 3; float gy = motor.GroundHeight(new Vector3(g0.x, c.y + 3, g0.z));
+                            cam.transform.SetPositionAndRotation(new Vector3(g0.x, (float.IsNegativeInfinity(gy) ? eye.y - 1.7f : gy) + 1.7f, g0.z), Quaternion.LookRotation(along * 3 - h * 1.2f + Vector3.down * 0.2f));
+                        }
                         foreach (var mode in new[] { XenaVisualMode.Original, XenaVisualMode.Remaster })
                         {
                             if (PrototypeGraphics.Active.Mode != mode) { PrototypeGraphics.Active.SetMode(mode); yield return null; yield return null; }

@@ -25,7 +25,35 @@ namespace Xena.Assets
     {
         // Terrain, rock, two pillars, hole fill, bridge and outer jungle net.
         private static readonly string[] Targets = { "level-01-object-1", "level-01-object-65", "level-01-object-66", "level-01-object-67", "level-01-object-68", "level-01-object-39", "level-01-object-73" };
-        public const int Segments = 6;
+        public const int Segments = 12;
+        // Rock-wall relief (user 2026-10-26: "make the wall itself 3D"): on the terrain's non-walkable faces a scanned
+        // CC0 rock height field (Poly Haven rock_face, tools/install_cliff_height.py -> Resources/Remaster/Rocks/
+        // CliffHeight.bytes) is applied triplanar in object space along the smooth normal, +-CliffMeters, tiled every
+        // CliffTileMetres; weighted like the fBm relief (0 on walkable faces and their edges), so the mesh stays
+        // watertight and the ground and the collider stay exact. Segments 12 (was 6) gives ~0.4 m cells on walls.
+        public const float CliffMeters = 0.5f, CliffTileMetres = 3.2f;
+        private static float[] cliff; private static int cliffSize;
+        private static bool LoadCliff()
+        {
+            if (cliff != null) return cliffSize > 0;
+            var asset = Resources.Load<TextAsset>("Remaster/Rocks/CliffHeight"); cliff = new float[0];
+            if (asset == null) return false;
+            var b = asset.bytes; cliffSize = (int)Mathf.Sqrt(b.Length); if (cliffSize * cliffSize != b.Length) { cliffSize = 0; return false; }
+            cliff = new float[b.Length]; for (int i = 0; i < b.Length; i++) cliff[i] = b[i] / 255f - 0.5f;
+            return true;
+        }
+        private static float CliffSample(float u, float v)
+        {
+            float x = (u / CliffTileMetres - Mathf.Floor(u / CliffTileMetres)) * cliffSize, y = (v / CliffTileMetres - Mathf.Floor(v / CliffTileMetres)) * cliffSize;
+            int x0 = (int)x % cliffSize, y0 = (int)y % cliffSize, x1 = (x0 + 1) % cliffSize, y1 = (y0 + 1) % cliffSize; float ax = x - Mathf.Floor(x), ay = y - Mathf.Floor(y);
+            return Mathf.Lerp(Mathf.Lerp(cliff[y0 * cliffSize + x0], cliff[y0 * cliffSize + x1], ax), Mathf.Lerp(cliff[y1 * cliffSize + x0], cliff[y1 * cliffSize + x1], ax), ay) * 2;
+        }
+        private static float Cliff(Vector3 m, Vector3 n)
+        {
+            Vector3 w = new Vector3(Mathf.Pow(Mathf.Abs(n.x), 4), Mathf.Pow(Mathf.Abs(n.y), 4), Mathf.Pow(Mathf.Abs(n.z), 4)); float sum = w.x + w.y + w.z + 1e-6f;
+            return (CliffSample(m.z, m.y) * w.x + CliffSample(m.x, m.z) * w.y + CliffSample(m.x, m.y) * w.z) / sum;
+        }
+        public float MaxCliffMeters { get; private set; }
         // Relief amplitude: terrain cliffs / free-standing rocks and pillars (meshes 65-67, which
         // also round every edge like natural boulders: crease 180).
         public const float TerrainReliefMeters = 0.18f, RockReliefMeters = 0.25f;
@@ -79,7 +107,9 @@ namespace Xena.Assets
                     }
                 }
                 Mesh remaster = Subdivide(source, rounded, pages, terrain ? TerrainBulge : PropBulge, filter.transform.InverseTransformDirection(Vector3.up).normalized, out float offset, out float walkOffset, out int seams, filter.transform.lossyScale.y, out float relief,
-                    terrain ? TerrainReliefMeters : boulder ? RockReliefMeters : 0, boulder ? 180 : terrain ? TerrainCreaseDegrees : CreaseDegrees, terrain ? TerrainMaxBulgeMeters : float.PositiveInfinity);
+                    terrain ? TerrainReliefMeters : boulder ? RockReliefMeters : 0, boulder ? 180 : terrain ? TerrainCreaseDegrees : CreaseDegrees, terrain ? TerrainMaxBulgeMeters : float.PositiveInfinity,
+                    terrain && LoadCliff() ? CliffMeters : 0, out float cliffMax);
+                MaxCliffMeters = Mathf.Max(MaxCliffMeters, cliffMax);
                 MaxReliefMeters = Mathf.Max(MaxReliefMeters, relief);
                 SeamEdges += seams;
                 if (terrain) { MaxTerrainOffset = offset; MaxWalkableOffset = walkOffset; }
@@ -151,8 +181,9 @@ namespace Xena.Assets
         // Metres in, roughly -1..1 out: large forms plus finer cracks.
         private static float Relief(Vector3 m) => 0.62f * Perlin(m * 0.7f) + 0.28f * Perlin(m * 1.9f + new Vector3(17, 3, 9)) + 0.1f * Perlin(m * 4.6f + new Vector3(5, 29, 11));
 
-        private static Mesh Subdivide(Mesh source, HashSet<int> rounded, Texture2D[] pages, float bulge, Vector3 localUp, out float maxOffset, out float walkableOffset, out int seamCount, float worldScaleY, out float maxRelief, float reliefMeters, float creaseDegrees, float maxBulgeMeters)
+        private static Mesh Subdivide(Mesh source, HashSet<int> rounded, Texture2D[] pages, float bulge, Vector3 localUp, out float maxOffset, out float walkableOffset, out int seamCount, float worldScaleY, out float maxRelief, float reliefMeters, float creaseDegrees, float maxBulgeMeters, float cliffMeters, out float maxCliff)
         {
+            maxCliff = 0;
             Vector3[] positions = source.vertices; Vector2[] uvs = source.uv; Color[] colors = source.colors;
             bool hasUv = uvs.Length == positions.Length, hasColor = colors.Length == positions.Length;
             var faces = new List<int>(); var faceSubmesh = new List<int>();
@@ -334,14 +365,17 @@ namespace Xena.Assets
                             if (free20) weight = Mathf.Max(weight, 4 * w * t);
                             weight = Mathf.SmoothStep(0, 1, Mathf.Clamp01(weight));
                             Vector3 dir = (t * m0 + u * m1 + w * m2).normalized, metres = linear * metresPerUnit;
-                            float h = Relief(metres);
-                            point += dir * (h * weight * reliefUnits);
-                            maxRelief = Mathf.Max(maxRelief, Mathf.Abs(h * weight) * reliefMeters);
-                            // Shading: soften hard corners toward the smooth normal, tilt by the relief slope.
+                            // Height in metres: fBm relief + scanned rock (cliffMeters > 0 on the terrain).
+                            float Height(Vector3 mm) => Relief(mm) * reliefMeters + (cliffMeters > 0 ? Cliff(mm, dir) * cliffMeters : 0);
+                            float h = Height(metres);
+                            point += dir * (h * weight / metresPerUnit);
+                            maxRelief = Mathf.Max(maxRelief, Mathf.Abs(Relief(metres) * weight) * reliefMeters);
+                            if (cliffMeters > 0) maxCliff = Mathf.Max(maxCliff, Mathf.Abs(h * weight));
+                            // Shading: soften hard corners toward the smooth normal, tilt by the height slope.
                             const float step = 0.05f;
-                            Vector3 grad = new Vector3(Relief(metres + Vector3.right * step) - h, Relief(metres + Vector3.up * step) - h, Relief(metres + Vector3.forward * step) - h) / step;
+                            Vector3 grad = new Vector3(Height(metres + Vector3.right * step) - h, Height(metres + Vector3.up * step) - h, Height(metres + Vector3.forward * step) - h) / step;
                             Vector3 soft = Vector3.Slerp(shadeNormal, dir, 0.55f);
-                            shadeNormal = (soft - Vector3.ProjectOnPlane(grad, soft) * (reliefMeters * weight)).normalized;
+                            shadeNormal = (soft - Vector3.ProjectOnPlane(grad, soft) * weight).normalized;
                         }
                         float offset = (point - linear).magnitude * worldScaleY; maxOffset = Mathf.Max(maxOffset, offset);
                         if (Walkable(f)) walkableOffset = Mathf.Max(walkableOffset, offset);

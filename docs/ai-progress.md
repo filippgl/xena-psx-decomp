@@ -178,6 +178,11 @@ One issue per task. Nothing here is a claim without the command/measurement that
   every other painted-forest face becomes a HEDGE (not drawn; generated trees every 1.7 m on its foot line + CC0
   shrubs both sides): 39 faces, 31 trees, 76 plants. Remaining in the tour: green triangle fragments at wall 008,
   dark square at wall 005, fern-rock walls (page 10) still flat. All suites PASS (claude-v236-*).
+- claude-v238: ROCK WALLS AS 3D RELIEF (user chose "make the wall itself 3D" over new rock models): Remaster terrain
+  subdivision 6 -> 12 per face; non-walkable faces displaced +-0.5 m along the smooth normal by the CC0 Poly Haven
+  rock_face height scan (triplanar in object space, tile 3.2 m) on top of the fBm relief, same watertight weights
+  (0 on walkable faces/edges: ground and collider exact). Inspector tour now adds a grazing view along each wall.
+  Frame 2.19 vs 0.89 ms (spawn looking back). PENDING user verdict. All suites PASS (claude-v238-*).
 - QUEUE (user 2026-10-26, in order): lake covered by the outer world (fix in test: water = level hull);
   {icon 4}/Р1 in texts -> bound keys (done v215); remove on-screen moves panel (done v214); chakram artifact in
   the centre when thrown; Original-mode level background (user: not ported to Unity Original); grass on slopes
