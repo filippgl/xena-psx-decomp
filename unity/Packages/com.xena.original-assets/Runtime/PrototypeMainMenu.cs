@@ -269,8 +269,9 @@ namespace Xena.Assets
             else { float h = Screen.height, w = h * 4 / 3; GUI.DrawTexture(new Rect((Screen.width - w) / 2, 0, w, h), screen, ScaleMode.StretchToFill); }
             if (Note != null && Time.unscaledTime < noteUntil)
             {
-                var style = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.Max(14, Screen.height / 36) };
-                GUI.Label(new Rect(0, Screen.height * 0.93f, Screen.width, Screen.height * 0.05f), Note, style);
+                // Top of the screen: the bottom line belongs to the "Нажми Enter для выбора" prompt.
+                if (PrototypeMenuText.Available) PrototypeMenuText.Draw(new Rect(0, Screen.height * 0.02f, Screen.width, Screen.height * 0.06f), Note, Mathf.Max(14, Screen.height / 30), new Color(0.95f, 0.9f, 0.8f), TextAnchor.MiddleCenter);
+                else GUI.Label(new Rect(0, Screen.height * 0.02f, Screen.width, Screen.height * 0.05f), Note, new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.Max(14, Screen.height / 36) });
             }
         }
         // HD image: the 4:3 picture spans x 85..1450 of 1536 at full height (1024).

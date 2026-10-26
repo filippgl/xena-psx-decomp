@@ -95,7 +95,8 @@ One issue per task. Nothing here is a claim without the command/measurement that
 - claude-v175: bandit block-test flake addressed: the intake/block checks pause every other bandit (a second
   bandit's side hit mixed into LastIntake / reactions / blood), and the check reads LastBlockedIntake.
   Bandit smoke 3/3 PASS (unblockedDuringBlock 0), all suites PASS (build/unity-import/claude-v175-*.txt).
-  Next: gate Remaster model (show the user), note overlapping the menu prompt.
+- claude-v176: main menu "Пока недоступно" note moved to the top (it overlapped the Enter prompt).
+  Next: gate Remaster model (show the user before it counts as done).
 - CLAUDE 2026-10-25 10:50 build (DLL 10:50:29), all 8 suites + aggregate PASS
   (build/unity-import/claude-v32-*.txt), bandit 6/6 runs 0 stalled.
   GAME OVER (native capture build/gameover, --poke 8700:0x8014E4F2:600:2 = Xena +0x12):
