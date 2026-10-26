@@ -90,7 +90,8 @@ walks to waypoint (-2237,-1424,-4091). Snapshot: #32 remaining 0, one bandit ali
 * Signs (`0x800406C8`): touching sets `+0x10C` (`0x80038F08`); message `p0 + 0x46`; 60-frame
   cooldown, re-armed while Xena is within 400.
 * Message box: `func_800672F8` (only in game state 12), drawn by `func_8006E508` from up to 8 line
-  pointers, dismissed after 15 frames by pad bit 0x800 (Start, INFERRED).
+  pointers, closed by held CROSS (0x800) once the 15-pass delay is over, or by START at any time
+  (VERIFIED, see `docs/xena-message-window.md`; the earlier "Start" reading of 0x800 was wrong).
 * Text is a Russian translation stored with remapped Latin glyphs. A..Z mapping read from the font
   glyphs in VRAM (960,256) of the snapshot; `$ & + # @ 0 3 4 6` = о б л ч з О З Ч Б are INFERRED but
   produce consistent Russian. Level 01: scroll#5 "Быстро следуй к Обалусу… И остерегайся пиратов по
