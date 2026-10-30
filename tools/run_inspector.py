@@ -13,7 +13,7 @@ ap.add_argument('--keep', action='store_true'); a = ap.parse_args()
 out = os.path.abspath(a.out); os.makedirs(out, exist_ok=True)
 for f in glob.glob(os.path.join(out, 'inspect-*.png')) + glob.glob(os.path.join(out, 'inspect.json')): os.remove(f)
 exe = os.path.abspath('build/unity-movement/XenaMovementPrototype.exe')
-code = subprocess.call([exe, '-screen-fullscreen', '0', '-screen-width', '1280', '-screen-height', '720', '-logFile', os.path.join(out, 'inspect.log'), '--no-settings', '--inspect', out], timeout=1800)
+code = subprocess.call([exe, '--mute', '-screen-fullscreen', '0', '-screen-width', '1280', '-screen-height', '720', '-logFile', os.path.join(out, 'inspect.log'), '--no-settings', '--inspect', out], timeout=1800)
 report_path = os.path.join(out, 'inspect.json')
 if code != 0 or not os.path.exists(report_path): sys.exit('inspector failed (exit %s), see %s' % (code, os.path.join(out, 'inspect.log')))
 r = json.load(open(report_path, encoding='utf-8')); views = r['views_']

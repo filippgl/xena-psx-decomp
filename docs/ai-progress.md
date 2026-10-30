@@ -3,6 +3,31 @@
 Read at the start of every session; update after each completed task and before compaction.
 One issue per task. Nothing here is a claim without the command/measurement that produced it.
 
+## Current task - closed Remaster shell, start pocket test (Claude, 2026-10-31, branch claude/work)
+
+- User approved variant A: one closed solid instead of treating walls face by face. Test region only: start pocket, z < -23.
+- Root cause of all earlier wall attempts: terrain `1-terr_1` is ONE single-sided sheet of 2290 faces, nothing behind or below it
+  (1412 of 1429 floor faces have nothing beneath); 48% of wall-wall and 84% of wall-floor edges break atlas UV.
+- Tools: `tools/fetch_remaster_shell_assets.py`, `tools/build_remaster_shell.py` (venv `../_tools/remaster-venv`: numpy, scipy, pillow,
+  scikit-image). Output Resources/Remaster/Shell (not committed), report `build/remaster-shell/report.json`.
+- Method: signed distance of the sheet with pseudo-normal sign, height cap, roofs filled up to their rim, CC0 scans melted in, player
+  capsule carved out, marching cubes at 12.5 cm, walkable vertices snapped to the exact planes, world-space layers
+  (`Shaders/RemasterShell.shader`), vertex colour = blurred original paint x baked light. Plants baked as a list, built at runtime.
+- Original, colliders and the height query are untouched. Presentation smoke has a shell block.
+- Bake measurements (report.json): 1972112 drawn tris, 0 open and 0 non-manifold edges on the drawn mesh, 0 of 53244 capsule samples inside
+  solid, floor error p50 ~0, p99 4.5 cm, max 28 cm; solid behind 90.6% of replaced faces, 98.1% of the arch roof.
+- Camera: only the old collider stops it, so 1971 of 135720 simulated lens positions were inside new rock; Remaster-only pull-in on a baked grid
+  (`LensBlocked`, 1.6 m minimum) leaves 902; those see dark stone (shader Cull Off), not a hole. Inspector eyes are not reachability-checked.
+- Traps found: atlas V must be flipped; the arch is only an underside and side walls, so its mass is ABOVE the sheet (the cap destroyed it);
+  a wrong vertex test in closest-point gave false distances on obtuse faces; hill plants grew on the arch (user saw it; now excluded).
+- The painted trail on the south wall is a real carved trail now; its wall collider stays, so like the painted one it cannot be walked.
+- Test runs are silent now: `--mute` (`PrototypeAudioMute.cs`), passed by every `tools/check_*_player.mjs` and `run_inspector.py`.
+  The bandit mixer test unmutes briefly: it is the one real sound test.
+- Final build claude-shell16: DLL 2026-10-31 00:13:45 MSK, resources 00:24:45; all 8 suites + aggregate PASS (build/unity-import/claude-shell16-*.txt),
+  inspector 136 points / 1088 views, 0 flagged (build/inspect-shell/inspect.json), 600 fps vs 2273 at 1280x720 (build/shell-review/timing.txt). Not on main.
+- Open: visual verdict from the user; visible material step at the neck z = -23 (test boundary); shrub_01/03/04 were fetched but are unused;
+  rock faces at the walkway are near the collider plane; thicket crowns can surround the camera close to a bank; rest of the level still old.
+
 ## Current task — Unity combat and original collision audit (2026-10-24)
 
 - CLAUDE 2026-10-27 02:05 build `claude-v247` (DLL 02:02): the pool seam by the waterfall (Codex handoff,

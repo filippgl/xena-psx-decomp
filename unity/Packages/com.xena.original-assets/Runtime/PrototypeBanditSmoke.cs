@@ -299,8 +299,11 @@ namespace Xena.Assets
                 Require(PrototypeSfx.IsPlaying(0x13, 0x13), "Level 01 water loop 0x13 is not playing");
                 // Audible: one AudioListener and non-silent mixer output (the scene once had no listener at all).
                 Require(FindObjectsByType<AudioListener>(FindObjectsSortMode.None).Length == 1, "No (or several) AudioListener in the scene");
+                // The one real sound test: a muted run unmutes only until the first non-silent mixer block.
+                AudioListener.volume = 1;
                 var outSamples = new float[1024]; float peak = 0;
                 for (int i = 0; i < 20 && peak < 1e-4f; i++) { PrototypeSfx.Play2D(0x39); yield return null; yield return null; AudioListener.GetOutputData(outSamples, 0); foreach (var v in outSamples) peak = Mathf.Max(peak, Mathf.Abs(v)); }
+                if (PrototypeAudioMute.Active) AudioListener.volume = 0;
                 report.audioPeak = peak; Require(peak > 1e-4f, "Mixer output is silent (peak " + peak + ")");
                 var cam = new GameObject("SfxProbe").transform; cam.position = Vector3.zero; cam.rotation = Quaternion.identity;
                 PrototypeSfx.Attenuate(new Vector3(0, 0, 2000 / 400f), cam, out int v0, out int p0);

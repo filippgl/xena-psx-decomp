@@ -47,6 +47,7 @@ namespace Xena.Assets
             combat = GetComponent<PrototypeCombat>(); if (combat == null) combat = gameObject.AddComponent<PrototypeCombat>();
             chakram = GetComponent<PrototypeChakram>(); if (chakram == null) chakram = gameObject.AddComponent<PrototypeChakram>();
             if (GetComponent<PrototypeRemasterEnvironment>() == null) gameObject.AddComponent<PrototypeRemasterEnvironment>();
+            if (GetComponent<PrototypeRemasterShell>() == null) gameObject.AddComponent<PrototypeRemasterShell>();
             if (GetComponent<PrototypeRemasterGeometry>() == null) gameObject.AddComponent<PrototypeRemasterGeometry>();
             if (GetComponent<PrototypeSky>() == null) gameObject.AddComponent<PrototypeSky>();
             if (GetComponent<PrototypeBandits>() == null) gameObject.AddComponent<PrototypeBandits>();

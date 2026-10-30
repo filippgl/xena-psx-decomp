@@ -13,7 +13,7 @@ const report={result:'PASS',checks:[],phases:[],testedBuild};
 for(const phase of ['write','read','malformed']){
   if(phase==='malformed')fs.writeFileSync(settings,'{invalid-json');
   const file=path.join(out,`settings-${phase}-verification.json`);if(fs.existsSync(file))fs.unlinkSync(file);
-  const child=spawn(executable,['-screen-fullscreen','0','-screen-width','1280','-screen-height','720','-logFile',path.join(out,`settings-${phase}-player.log`),'--settings-file',settings,'--settings-smoke',phase,out],{windowsHide:false,stdio:'ignore'});
+  const child=spawn(executable,['--mute','-screen-fullscreen','0','-screen-width','1280','-screen-height','720','-logFile',path.join(out,`settings-${phase}-player.log`),'--settings-file',settings,'--settings-smoke',phase,out],{windowsHide:false,stdio:'ignore'});
   const code=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>{child.kill();reject(Error('Settings phase timed out: '+phase));},30000);child.once('error',error=>{clearTimeout(timer);reject(error);});child.once('exit',value=>{clearTimeout(timer);resolve(value);});});
   const phaseReport=fs.existsSync(file)?JSON.parse(fs.readFileSync(file)):null;
   console.log(JSON.stringify(phaseReport,null,2));assert.equal(code,0,'Settings player failed: '+phase);assert.equal(phaseReport?.result,'PASS');

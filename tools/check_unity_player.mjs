@@ -8,7 +8,7 @@ const output = path.resolve('build/unity-import');
 assert(fs.existsSync(executable), 'Build the standalone preview with run_unity_import.mjs --build first');
 const reportPath = path.join(output, 'player-verification.json');
 if (fs.existsSync(reportPath)) fs.unlinkSync(reportPath);
-const child = spawn(executable, ['-screen-fullscreen', '0', '-screen-width', '960', '-screen-height', '720',
+const child = spawn(executable, ['--mute','-screen-fullscreen', '0', '-screen-width', '960', '-screen-height', '720',
   '-logFile', path.join(output, 'player.log'), '--xena-smoke', output], { windowsHide: false, stdio: 'ignore' });
 const code = await new Promise((resolve, reject) => {
   const timeout = setTimeout(() => { child.kill(); reject(Error('Player verification timed out after 60s; inspect build/unity-import/player.log')); }, 60000);

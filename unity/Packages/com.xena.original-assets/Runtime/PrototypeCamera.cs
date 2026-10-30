@@ -97,7 +97,7 @@ namespace Xena.Assets
             // under the lens and the lens must stay above it, else move closer.
             if (motor != null)
                 // Never pull the lens into Xena for this: 1.6 m minimum.
-                while (radius > 1.6f && OutsideLevel(focus + back * radius)) radius = Mathf.Max(1.6f, radius - 0.1f);
+                while (radius > 1.6f && (OutsideLevel(focus + back * radius) || PrototypeRemasterShell.LensBlocked(focus + back * radius))) radius = Mathf.Max(1.6f, radius - 0.1f);
             transform.position = focus + back * radius; transform.LookAt(focus); DistanceToTarget = radius;
         }
         // Death camera func_80053380 (Xena: zero offset): destination = Xena + (Xena - camera)/100

@@ -212,6 +212,7 @@ namespace Xena.Assets
             foreach (var (w, c, id) in candidates)
             {
                 int r = Find(id);
+                if (PrototypeRemasterShell.Covers((w.a + w.b + w.c) / 3)) continue; // the closed shell owns this region
                 if (forest.Contains(w.submesh) && panelPassed[r] == panelSize[r]) walls.Add(w); else PartialPanels++;
             }
             ForestPages = new List<string>(); foreach (int sub in forest) ForestPages.Add(materials[sub].name);
@@ -265,6 +266,7 @@ namespace Xena.Assets
                 if (d < 8) { float k = 1 / (0.5f + d * d); wsum += k; ysum += k * Walls[i].baseY; }
             }
             if (distance > BandMeters) return false;
+            if (PrototypeRemasterShell.Covers(p)) return false;
             int gx = Mathf.FloorToInt(p.x * 2), gz = Mathf.FloorToInt(p.z * 2); bool inside = false;
             for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) if (covered.Contains(new Vector2Int(gx + dx, gz + dz))) inside = true;
             if (inside && distance > 1.5f) return false;

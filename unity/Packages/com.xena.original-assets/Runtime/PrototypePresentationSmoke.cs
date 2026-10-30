@@ -454,7 +454,7 @@ namespace Xena.Assets
             // continued path stands behind them.
             {
                 var outer = FindFirstObjectByType<PrototypeRemasterOuterWorld>(); var geo = FindFirstObjectByType<PrototypeRemasterGeometry>();
-                Require(outer != null && geo != null && geo.DroppedBackdropTriangles > 0 && outer.BandTriangles > 0 && outer.Trees > 0 && outer.Plants > 0 && outer.Tufts > 0 && outer.PathSegments > 0,
+                Require(outer != null && geo != null && geo.DroppedBackdropTriangles > 0 && outer.BandTriangles > 0 && outer.Trees > 0 && outer.Plants > 0 && outer.Tufts > 0 && (outer.PathSegments > 0 || PrototypeRemasterShell.TrailMeters > 5),
                     "Outer world: dropped " + (geo != null ? geo.DroppedBackdropTriangles : 0) + ", band " + (outer != null ? outer.BandTriangles : 0) + ", trees " + (outer != null ? outer.Trees : 0) + ", path " + (outer != null ? outer.PathSegments : 0));
                 report.checks.Add("Remaster outer world: " + geo.DroppedBackdropTriangles + " painted wall tris hidden; band " + outer.BandTriangles + " tris, " + outer.Trees + " trees, " + outer.Plants + " plants, " + outer.Tufts + " tufts, path " + outer.PathSegments + " segments, " + outer.GroundCrops + " ground crops, " + outer.Blocked + " plants skipped under colliders; forest pages by colour: " + string.Join(" ", PrototypeRemasterOuterWorld.ForestPages) + "; " + PrototypeRemasterOuterWorld.PartialPanels + " faces kept with their panel; paths from " + string.Join(" ", outer.PathStarts.ConvertAll(x => x.ToString("F1"))));
                 // Each continued path: a view from 5 m inside, along the path, both modes.
@@ -547,6 +547,19 @@ namespace Xena.Assets
                 var env = FindFirstObjectByType<PrototypeRemasterEnvironment>();
                 Require(env != null && env.BedTriangles > 0, "Remaster water has no opaque bed");
                 report.checks.Add("Remaster water bed: " + env.BedTriangles + " opaque tris " + PrototypeRemasterEnvironment.BedDepth + " m under every water surface");
+            }
+            // Closed shell of the start pocket: Remaster only, no collider of its own, faces really replaced.
+            if (PrototypeRemasterShell.Available)
+            {
+                var shell = FindFirstObjectByType<PrototypeRemasterShell>(); var shellObject = GameObject.Find("RemasterShell");
+                Require(shell != null && shell.Triangles > 0 && shell.Plants > 0 && shellObject != null && shellObject.GetComponent<Collider>() == null, "Remaster shell missing or collidable");
+                var terrainGeometry = FindFirstObjectByType<PrototypeRemasterGeometry>();
+                Require(terrainGeometry != null && terrainGeometry.DroppedBackdropTriangles > 0, "Shell region faces not dropped from the Remaster terrain");
+                PrototypeGraphics.Active.SetMode(XenaVisualMode.Original); yield return null;
+                Require(GameObject.Find("RemasterShell") == null, "Shell visible in Original");
+                PrototypeGraphics.Active.SetMode(XenaVisualMode.Remaster); yield return null;
+                Require(shellObject.activeInHierarchy, "Shell hidden in Remaster");
+                report.checks.Add("Remaster shell: " + shell.Triangles + " tris, " + shell.Plants + " plants, Original restored, no collider");
             }
             // Remaster gate: both leaves get volume (rounded planks), at most thickness + grain deep per side.
             var gate = FindFirstObjectByType<PrototypeRemasterGate>();
