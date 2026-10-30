@@ -16,6 +16,7 @@ import argparse, collections, json, os, struct, time
 import numpy as np
 from PIL import Image
 from scipy import ndimage
+from scipy.interpolate import griddata
 from scipy.spatial import cKDTree
 from skimage import measure
 
@@ -266,6 +267,24 @@ def main():
     roof_col = ndimage.binary_dilation(col_ny < -.25, iterations=2) & has
     closed = ndimage.grey_closing(np.where(np.isfinite(cols), cols, y0), size=int(9 / c))
     H = np.where(roof_col, np.maximum(H, closed + .3 + hill * 1.2), H); log("roof columns", int(roof_col.sum()), "m2", round(float(roof_col.sum() * c * c)))
+    # The arch massif keeps its original outline: its top is the surface through the rim of its side walls (their open
+    # upper edges), and on it relief only goes inward. Nothing may grow out of this shape.
+    is_massif = np.array([x.split("-")[1] == "1" for x in names]) & (centre[:, 1] > 6.5) & (centre[:, 0] > -18) & (centre[:, 0] < 0) & (centre[:, 2] > -38) & (centre[:, 2] < -22.5)
+    mw = rng.dirichlet((1, 1, 1), 60); mp = np.concatenate([mw @ t for t in tri[is_massif]])
+    mask = np.zeros((len(xs), len(zs)), bool); mi_, mk_ = ((mp[:, 0] - x0) / c).astype(int), ((mp[:, 2] - z0) / c).astype(int); keep_ = (mi_ >= 0) & (mi_ < len(xs)) & (mk_ >= 0) & (mk_ < len(zs)); mask[mi_[keep_], mk_[keep_]] = True
+    mass_col = ndimage.binary_fill_holes(ndimage.binary_closing(mask, iterations=int(1 / c)))
+    edge_count = collections.Counter(); key3 = lambda v: tuple(np.round(v * 256).astype(int))
+    for t in tri:
+        k_ = [key3(v) for v in t]
+        for e_ in range(3): edge_count[tuple(sorted((k_[e_], k_[(e_ + 1) % 3])))] += 1
+    rim_pts = []
+    for t in tri[is_massif]:
+        k_ = [key3(v) for v in t]
+        for e_ in range(3):
+            if edge_count[tuple(sorted((k_[e_], k_[(e_ + 1) % 3])))] == 1: rim_pts += [t[e_], t[(e_ + 1) % 3]]
+    rim_pts = np.unique(np.round(np.array(rim_pts), 3), axis=0); rim_pts = rim_pts[rim_pts[:, 1] > 8]; log("massif faces", int(is_massif.sum()), "rim points", len(rim_pts), "y", rim_pts[:, 1].min().round(1), rim_pts[:, 1].max().round(1), "columns m2", round(float(mass_col.sum() * c * c)))
+    hull = griddata(rim_pts[:, [0, 2]], rim_pts[:, 1], (X2, Z2), method="linear"); near_hull = griddata(rim_pts[:, [0, 2]], rim_pts[:, 1], (X2, Z2), method="nearest"); hull = np.where(np.isnan(hull), near_hull, hull)
+    hull = ndimage.gaussian_filter(hull, .3 / c); H = np.where(mass_col, hull, H); mass_near = ndimage.binary_dilation(mass_col, iterations=int(1.5 / c))
     # Sign outside the sheet's columns: the back of the walls is solid, so the outside is solid under the hill.
     outside = ~has
     Y = ys[None, :, None]; field = np.maximum(field, (Y - H[:, None, :]).astype(np.float32))
@@ -282,6 +301,7 @@ def main():
     dp, _ = kd_player.query(W, workers=-1); dw = kd_water.query(W, workers=-1)[0] if kd_water else np.full(len(W), 99.0)
     free = smoothstep(.45, 1.7, dp) * smoothstep(.5, 1.3, dw) * smoothstep(ZCUT + .5, ZCUT - 2.5, W[:, 2])
     wforest = sheet_forest[sheet.owner[sheet.kd.query(W, workers=-1)[1]]].astype(np.float32)
+    w_mass = mass_near[ids[:, 0], ids[:, 2]] & (W[:, 1] > 5.5); free_all = free.copy(); free = np.where(w_mass, 0, free)
     log("working cells", len(W))
     values = field[working]
     # Scanned rock forms.
@@ -318,12 +338,16 @@ def main():
             k = .22; h = np.clip(.5 + .5 * (values[sel] - rock) / k, 0, 1); values[sel] = values[sel] * (1 - h) + rock * h - k * h * (1 - h)
             if num % 40 == 0: log("rocks", num)
     # Fine fracture noise where the player cannot touch it, then carve the player's volume back out.
+    # @plr_cx1, @plr_cx2 axes (plan position of the pillar objects).
+    d_pillar = np.minimum(np.hypot(W[:, 0] + 15.1, W[:, 2] + 33), np.hypot(W[:, 0] + 8.5, W[:, 2] + 27))
     soft = noise(W * .55 + 41) * .6 + noise(W * 1.3 + 5) * .25
-    values = values - rock_noise(W) * .6 * free * (1 - wforest) + soft * .5 * free * wforest + .12 * free
+    values = values - rock_noise(W) * .6 * free * (1 - wforest) + soft * .5 * free * wforest + .12 * free + (rock_noise(W) * .5 + .5) * .2 * w_mass * free_all * smoothstep(2.2, 3.6, d_pillar)
+    # The roof sits slightly into the separate pillar objects, so no light shows between them.
+    values = values - .16 * (1 - smoothstep(1.8, 3.0, d_pillar)) * (W[:, 1] > 7)
     edge = .27 + .12 * (noise(W * 2.3) * .5 + .5)
     carve = edge - dp; k = .08; h = np.clip(.5 + .5 * (carve - values) / k, 0, 1); values = values * (1 - h) + carve * h + k * h * (1 - h)
     field[working] = values
-    reach_over = int(1.6 / c) * 2 + 1; H2 = ndimage.maximum_filter(H, reach_over) + .5; field = np.maximum(field, (Y - H2[:, None, :]).astype(np.float32))
+    reach_over = int(1.6 / c) * 2 + 1; H2 = np.where(mass_near, H, ndimage.maximum_filter(H, reach_over) + .5); field = np.maximum(field, (Y - H2[:, None, :]).astype(np.float32))
     trail = trail_points(); kd_trail = cKDTree(trail[:, [0, 2]]); dt2, it2 = kd_trail.query(np.c_[X2.ravel(), Z2.ravel()], workers=-1); dt2, it2 = dt2.reshape(X2.shape), it2.reshape(X2.shape)
     bank = trail[it2, 1] + np.clip(dt2 - TRAIL_WIDTH, 0, None) * .85 + np.clip(dt2 - TRAIL_WIDTH, 0, 3) * hill * .5
     field = np.where((dt2 < 7)[:, None, :], np.maximum(field, (Y - bank[:, None, :]).astype(np.float32)), field)
@@ -421,6 +445,12 @@ def main():
     guide = guide * (1 - on_trail[:, None]) + path_colour * on_trail[:, None]
     splat = np.c_[(1 - flat) * (1 - moss), (1 - flat) * moss, flat * (1 - pathy), flat * pathy]
     colour = np.c_[np.round(guide * 255), np.round(np.clip(occ, 0, 1) * 255)].astype(np.uint8); splat8 = np.round(splat * 255).astype(np.uint8)
+    # Oracle: the massif has not grown. Vertices over its columns: distance in front of the original surfaces, height over the hull.
+    # (Inner columns only: on the mask's own edge a vertex can belong to the neighbouring taller wall.)
+    box = ndimage.binary_erosion(mass_col, iterations=3)[np.clip(((V[:, 0] - x0) / c).astype(int), 0, len(xs) - 1), np.clip(((V[:, 2] - z0) / c).astype(int), 0, len(zs) - 1)] & (V[:, 1] > 6.5) & (V[:, 2] < ZCUT)
+    over_hull = V[box, 1] - hull[np.clip(((V[box, 0] - x0) / c).astype(int), 0, len(xs) - 1), np.clip(((V[box, 2] - z0) / c).astype(int), 0, len(zs) - 1)]
+    report_growth = dict(massif_vertices=int(box.sum()), massif_max_over_hull_m=float(over_hull.max())); log("massif oracle: vertices", int(box.sum()), "max over hull m", round(float(over_hull.max()), 3), "p99", round(float(np.percentile(over_hull, 99)), 3))
+    assert over_hull.max() < .3, "the massif grew over its original outline"
     # Mesh checks (on the whole closed mesh, before the unseen outside is cut away).
     edges = np.sort(np.vstack([F[:, [0, 1]], F[:, [1, 2]], F[:, [2, 0]]]), axis=1); _, valence = np.unique(edges, axis=0, return_counts=True)
     open_edges, nonmanifold = int((valence == 1).sum()), int((valence > 2).sum())
@@ -470,7 +500,7 @@ def main():
     log("removed from original tops", int(on_top.sum()), "from roofs over the walkway", int(over_walk.sum()), "from the arch", int(arch.sum()))
     dress = dress[~on_top & ~over_walk & ~arch]
     log("dress", {k: int((dress[:, 0] == k).sum()) for k in (0, 1, 2)})
-    report = dict(**report_lens, solid_behind_replaced_faces=float(solid_behind[applicable].mean()), oracle_thin_faces=int(thin.sum()), oracle_trail_faces=int(cut_by_trail.sum()), plants=len(dress), vertices=len(V), triangles=len(F), open_edges=open_edges, nonmanifold_edges=nonmanifold, rocks_placed=len(placed), capsule_samples=len(spheres), capsule_samples_inside_solid=embedded,
+    report = dict(**report_lens, **report_growth, solid_behind_replaced_faces=float(solid_behind[applicable].mean()), oracle_thin_faces=int(thin.sum()), oracle_trail_faces=int(cut_by_trail.sum()), plants=len(dress), vertices=len(V), triangles=len(F), open_edges=open_edges, nonmanifold_edges=nonmanifold, rocks_placed=len(placed), capsule_samples=len(spheres), capsule_samples_inside_solid=embedded,
                   floor_vertices_checked=int(near_floor.sum()), floor_error_m_p50=float(np.percentile(floor_error, 50)), floor_error_m_p99=float(np.percentile(floor_error, 99)), floor_error_m_max=float(floor_error.max()), faces_replaced=int(drop.sum()), trail_metres=TRAIL_LENGTH, cell=c, zcut=ZCUT,
                   bounds=[[float(V[:, 0].min()), float(V[:, 1].min()), float(V[:, 2].min())], [float(V[:, 0].max()), float(V[:, 1].max()), float(V[:, 2].max())]])
     log(report)

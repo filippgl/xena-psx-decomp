@@ -131,7 +131,7 @@ namespace Xena.Assets
         {
             ("spawn-north", -20, -46, 0, 4, 1.7f), ("spawn-south", -18, -44, 185, 2, 1.7f), ("west-lobe", -27, -33, 275, 3, 1.7f), ("east-lobe", -1, -34, 90, 3, 1.7f),
             ("south-east", -6, -40, 145, 0, 1.7f), ("north-wall", -13, -29, 345, -4, 1.7f), ("neck", -8, -29, 0, 4, 1.7f), ("wall-close", -21, -47.5f, 200, -12, 1.5f),
-            ("chase-south", -14, -41, 170, 14, 3.4f), ("chase-west", -22, -36, 250, 14, 3.4f), ("high-wide", -12, -36, 200, 22, 7f), ("back-of-rim", -10, -49, 330, 8, 8f), ("south-rim-up", -14, -44, 200, -18, 1.6f), ("trail", -21.5f, -45, 170, 2, 1.7f), ("west-wall-near", -33.5f, -31, 280, -8, 1.6f),
+            ("chase-south", -14, -41, 170, 14, 3.4f), ("chase-west", -22, -36, 250, 14, 3.4f), ("high-wide", -12, -36, 200, 22, 7f), ("back-of-rim", -10, -49, 330, 8, 8f), ("arch-sw", -20, -40, 40, -10, 1.7f), ("arch-w", -24, -30, 95, -14, 1.7f), ("arch-e", 0, -29, 265, -14, 1.7f), ("arch-s", -8, -44, 355, -14, 1.7f), ("south-rim-up", -14, -44, 200, -18, 1.6f), ("trail", -21.5f, -45, 170, 2, 1.7f), ("west-wall-near", -33.5f, -31, 280, -8, 1.6f),
         };
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void InitializeReview()

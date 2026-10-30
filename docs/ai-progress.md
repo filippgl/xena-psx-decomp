@@ -14,17 +14,18 @@ One issue per task. Nothing here is a claim without the command/measurement that
   capsule carved out, marching cubes at 12.5 cm, walkable vertices snapped to the exact planes, world-space layers
   (`Shaders/RemasterShell.shader`), vertex colour = blurred original paint x baked light. Plants baked as a list, built at runtime.
 - Original, colliders and the height query are untouched. Presentation smoke has a shell block.
-- Bake measurements (report.json): 1972112 drawn tris, 0 open and 0 non-manifold edges on the drawn mesh, 0 of 53244 capsule samples inside
-  solid, floor error p50 ~0, p99 4.5 cm, max 28 cm; solid behind 90.6% of replaced faces, 98.1% of the arch roof.
-- Camera: only the old collider stops it, so 1971 of 135720 simulated lens positions were inside new rock; Remaster-only pull-in on a baked grid
-  (`LensBlocked`, 1.6 m minimum) leaves 902; those see dark stone (shader Cull Off), not a hole. Inspector eyes are not reachability-checked.
+- Measurements: build/remaster-shell/report.json, 0 open and 0 non-manifold edges on the drawn mesh, 0 of 53244 capsule samples inside solid, floor error p99 4.2 cm, max 28 cm.
+- Camera: only the old collider stops it, so a Remaster-only pull-in on a baked grid (`LensBlocked`, 1.6 m minimum) keeps it out of new rock; what remains sees dark stone (shader Cull Off).
 - Traps found: atlas V must be flipped; the arch is only an underside and side walls, so its mass is ABOVE the sheet (the cap destroyed it);
   a wrong vertex test in closest-point gave false distances on obtuse faces; hill plants grew on the arch (user saw it; now excluded).
 - The painted trail on the south wall is a real carved trail now; its wall collider stays, so like the painted one it cannot be walked.
 - Test runs are silent now: `--mute` (`PrototypeAudioMute.cs`), passed by every `tools/check_*_player.mjs` and `run_inspector.py`.
   The bandit mixer test unmutes briefly: it is the one real sound test.
-- Final build claude-shell16: DLL 2026-10-31 00:13:45 MSK, resources 00:24:45; all 8 suites + aggregate PASS (build/unity-import/claude-shell16-*.txt),
-  inspector 136 points / 1088 views, 0 flagged (build/inspect-shell/inspect.json), 600 fps vs 2273 at 1280x720 (build/shell-review/timing.txt). Not on main.
+- User: growths on the arch massif ("отростки, которых не было"). Fixed: its top is now the surface through the rim of its side walls, relief there
+  goes inward only, no scans; a bake assert fails if it rises over that outline (max 0.275 m at inner columns, p99 1 cm). Rule: prominent original shapes keep their outline.
+- Final build claude-shell19: DLL 2026-10-31 00:48:13 MSK, resources 00:58:28; all 8 suites + aggregate PASS (build/unity-import/claude-shell19-*.txt),
+  inspector 136 points / 1088 views, 0 flagged (build/inspect-shell/inspect.json). 1.95M tris, 1196 plants, about 200 fps at 3440x1440 (timing.txt). Lens inside rock:
+  1129 of 135720 before pull-in, 816 after. Not on main.
 - Open: visual verdict from the user; visible material step at the neck z = -23 (test boundary); shrub_01/03/04 were fetched but are unused;
   rock faces at the walkway are near the collider plane; thicket crowns can surround the camera close to a bank; rest of the level still old.
 
