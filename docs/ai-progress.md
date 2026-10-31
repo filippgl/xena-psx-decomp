@@ -3,6 +3,13 @@
 Read at the start of every session; update after each completed task and before compaction.
 One issue per task. Nothing here is a claim without the command/measurement that produced it.
 
+## Rollback - whole-level shell rejected (Claude, 2026-10-31, branch claude/work)
+
+- User on the whole-level shell (d77ed41): "это отвратительно, откати к предыдущему этапу". Reverted; tree identical to 9b12fc9, the start-pocket shell the user called "выглядит неплохо".
+- Do not reapply d77ed41 without a new request. Its passing oracles did not establish visual quality.
+- Rebaked data matches: 1945844 tris, 1196 plants. Build claude-rollback: DLL 2026-10-31 11:57:06 MSK; all 8 suites + aggregate PASS (build/unity-import/claude-rollback-*.txt),
+  inspector 136 points / 1088 views, 0 flagged (build/inspect-shell). Not on main. What exactly was disgusting about the whole level is not known yet.
+
 ## Current task - closed Remaster shell, start pocket test (Claude, 2026-10-31, branch claude/work)
 
 - User approved variant A: one closed solid instead of treating walls face by face. Test region only: start pocket, z < -23.
