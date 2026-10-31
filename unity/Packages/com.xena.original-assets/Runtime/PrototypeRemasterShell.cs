@@ -7,7 +7,7 @@ using UnityEngine;
 namespace Xena.Assets
 {
     // Remaster presentation only: the closed shell baked by tools/build_remaster_shell.py replaces the terrain's
-    // faces (water faces and cut-out cards stay). Colliders and the original height query stay; Original restores the
+    // faces in its region (start pocket). Colliders and the original height query stay; Original restores the
     // original mesh through PrototypeRemasterGeometry, which drops the replaced faces from its Remaster mesh.
     public sealed class PrototypeRemasterShell : MonoBehaviour, IXenaVisualModeTarget
     {
@@ -17,7 +17,7 @@ namespace Xena.Assets
         {
             if (replaced != null) return;
             replaced = new HashSet<Vector3Int>();
-            var asset = Resources.Load<TextAsset>("Remaster/Shell/level-faces"); if (asset == null) return;
+            var asset = Resources.Load<TextAsset>("Remaster/Shell/pocket-faces"); if (asset == null) return;
             byte[] b = asset.bytes; zCut = BitConverter.ToSingle(b, 0); xMin = BitConverter.ToSingle(b, 4); xMax = BitConverter.ToSingle(b, 8);
             mossTint = new Vector4(BitConverter.ToSingle(b, 12), BitConverter.ToSingle(b, 16), BitConverter.ToSingle(b, 20), BitConverter.ToSingle(b, 24));
             TrailMeters = BitConverter.ToSingle(b, 28);
@@ -39,16 +39,15 @@ namespace Xena.Assets
             if (!ActiveShown) return false;
             if (solid == null)
             {
-                var asset = Resources.Load<TextAsset>("Remaster/Shell/level-solid"); byte[] b = asset != null ? asset.bytes : new byte[0]; solid = b;
+                var asset = Resources.Load<TextAsset>("Remaster/Shell/pocket-solid"); byte[] b = asset != null ? asset.bytes : new byte[0]; solid = b;
                 if (b.Length < 28) return false;
                 solidOrigin = new Vector3(BitConverter.ToSingle(b, 0), BitConverter.ToSingle(b, 4), BitConverter.ToSingle(b, 8)); solidCell = BitConverter.ToSingle(b, 12);
                 sx = BitConverter.ToInt32(b, 16); sy = BitConverter.ToInt32(b, 20); sz = BitConverter.ToInt32(b, 24);
             }
             if (solid.Length < 28) return false;
             Vector3 g = (p - solidOrigin) / solidCell; int i = Mathf.RoundToInt(g.x), j = Mathf.RoundToInt(g.y), k = Mathf.RoundToInt(g.z);
-            return i >= 0 && j >= 0 && k >= 0 && i < sx && j < sy && k < sz && Bit(i + sx * (j + sy * k));
+            return i >= 0 && j >= 0 && k >= 0 && i < sx && j < sy && k < sz && solid[28 + i + sx * (j + sy * k)] != 0;
         }
-        private static bool Bit(int index) => (solid[28 + (index >> 3)] >> (index & 7) & 1) != 0;
         private static bool ActiveShown;
         private GameObject root;
         public int Triangles { get; private set; }
@@ -56,22 +55,16 @@ namespace Xena.Assets
         private void Awake()
         {
             if (!Available) return;
-            var meshes = Resources.LoadAll<Mesh>("Remaster/Shell/level"); var template = Resources.Load<Material>("Remaster/ShellMaterial");
-            if (meshes.Length == 0 || template == null) throw new InvalidOperationException("Remaster shell assets unavailable");
+            var mesh = Resources.Load<Mesh>("Remaster/Shell/pocket"); var template = Resources.Load<Material>("Remaster/ShellMaterial");
+            if (mesh == null || template == null) throw new InvalidOperationException("Remaster shell assets unavailable");
             var material = new Material(template); material.SetVector("_MossTint", mossTint);
             foreach (string layer in new[] { "Rock", "Moss", "Ground", "Path" })
             {
                 material.SetTexture("_" + layer + "Color", Resources.Load<Texture2D>("Remaster/Shell/" + layer + "Color"));
                 material.SetTexture("_" + layer + "Normal", Resources.Load<Texture2D>("Remaster/Shell/" + layer + "Normal"));
             }
-            root = new GameObject("RemasterShell");
-            foreach (var mesh in meshes)
-            {
-                var part = new GameObject(mesh.name); part.transform.SetParent(root.transform, false);
-                part.AddComponent<MeshFilter>().sharedMesh = mesh; part.AddComponent<MeshRenderer>().sharedMaterial = material;
-                Triangles += (int)mesh.GetIndexCount(0) / 3;
-            }
-            root.SetActive(false);
+            root = new GameObject("RemasterShell"); root.AddComponent<MeshFilter>().sharedMesh = mesh; root.AddComponent<MeshRenderer>().sharedMaterial = material;
+            Triangles = (int)mesh.GetIndexCount(0) / 3; root.SetActive(false);
         }
         public void ApplyVisualMode(XenaVisualMode mode) { Shown = ActiveShown = mode == XenaVisualMode.Remaster && root != null; if (root != null) root.SetActive(Shown); if (dress != null) dress.SetActive(Shown); }
 
@@ -82,7 +75,7 @@ namespace Xena.Assets
         {
             if (root == null) yield break;
             yield return null; yield return null; // PrototypeRemasterTrees creates its materials in its Start
-            var asset = Resources.Load<TextAsset>("Remaster/Shell/level-dress"); var trees = GetComponent<PrototypeRemasterTrees>();
+            var asset = Resources.Load<TextAsset>("Remaster/Shell/pocket-dress"); var trees = GetComponent<PrototypeRemasterTrees>();
             if (asset == null || trees == null || trees.Leaves == null) yield break;
             dress = new GameObject("RemasterShellPlants");
             var bark = new Material(trees.Bark) { name = "ShellBark" }; bark.SetColor("_Color", trees.Bark.GetColor("_Color") * 0.75f);
@@ -138,9 +131,7 @@ namespace Xena.Assets
         {
             ("spawn-north", -20, -46, 0, 4, 1.7f), ("spawn-south", -18, -44, 185, 2, 1.7f), ("west-lobe", -27, -33, 275, 3, 1.7f), ("east-lobe", -1, -34, 90, 3, 1.7f),
             ("south-east", -6, -40, 145, 0, 1.7f), ("north-wall", -13, -29, 345, -4, 1.7f), ("neck", -8, -29, 0, 4, 1.7f), ("wall-close", -21, -47.5f, 200, -12, 1.5f),
-            ("chase-south", -14, -41, 170, 14, 3.4f), ("chase-west", -22, -36, 250, 14, 3.4f), ("high-wide", -12, -36, 200, 22, 7f), ("back-of-rim", -10, -49, 330, 8, 8f), ("arch-sw", -20, -40, 40, -10, 1.7f), ("arch-w", -24, -30, 95, -14, 1.7f), ("arch-e", 0, -29, 265, -14, 1.7f), ("arch-s", -8, -44, 355, -14, 1.7f), ("south-rim-up", -14, -44, 200, -18, 1.6f),
-            ("lake-west", 8, -2, 270, -6, 1.7f), ("lake-north", 18, 2, 0, -4, 1.7f), ("lake-east", 25, 0, 90, -4, 1.7f), ("lake-south", 15, 4, 180, -4, 1.7f), ("river-bridge", 3, 28, 180, -2, 1.7f),
-            ("mid-path", -12, 12, 40, 0, 1.7f), ("west-plain", -30, 0, 270, -4, 1.7f), ("north-field", 28, 45, 0, -4, 1.7f), ("north-east", 38, 35, 60, -4, 1.7f), ("pool-falls", -6, 38, 90, -6, 1.7f), ("deck-a", 33, 46, 0, -6, 1.7f), ("deck-b", 28, 52, 90, -4, 1.7f), ("trail", -21.5f, -45, 170, 2, 1.7f), ("west-wall-near", -33.5f, -31, 280, -8, 1.6f),
+            ("chase-south", -14, -41, 170, 14, 3.4f), ("chase-west", -22, -36, 250, 14, 3.4f), ("high-wide", -12, -36, 200, 22, 7f), ("back-of-rim", -10, -49, 330, 8, 8f), ("arch-sw", -20, -40, 40, -10, 1.7f), ("arch-w", -24, -30, 95, -14, 1.7f), ("arch-e", 0, -29, 265, -14, 1.7f), ("arch-s", -8, -44, 355, -14, 1.7f), ("south-rim-up", -14, -44, 200, -18, 1.6f), ("trail", -21.5f, -45, 170, 2, 1.7f), ("west-wall-near", -33.5f, -31, 280, -8, 1.6f),
         };
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void InitializeReview()
