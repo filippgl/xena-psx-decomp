@@ -3,6 +3,11 @@
 Read at the start of every session; update after each completed task and before compaction.
 One issue per task. Nothing here is a claim without the command/measurement that produced it.
 
+## Second rollback of the whole-level shell (Claude, 2026-10-31, branch claude/work)
+
+- User on the second whole-level version (254c1ca): "всё не так, откатывай". Reverted; tree identical to 12c766f: shell in the start zone only, black fins removed. The user has still not said what is wrong with the whole level. Do not reapply without a concrete request.
+- Build claude-rollback2: DLL and data 2026-10-31 14:49 MSK, same data numbers as claude-fins7 (1860430 tris, 1147 plants). Results in build/unity-import/claude-rollback2-*.txt and build/inspect-shell.
+
 ## Fins and lace on the tops of the start zone removed (Claude, 2026-10-31, branch claude/work)
 
 - User's screenshots (2026-10-31 12:46): black torn shapes over the massif and rocks. The previous "page 5" fix only stopped drawing the cards; the bake still treated them as surfaces.
