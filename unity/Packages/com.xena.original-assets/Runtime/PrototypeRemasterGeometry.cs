@@ -76,6 +76,7 @@ namespace Xena.Assets
         public float MaxReliefMeters { get; private set; }
         public int DroppedBackdropTriangles { get; private set; }
         public int SilhouetteCards { get; private set; }
+        public int StrippedCardTriangles { get; private set; }
 
         private void Awake()
         {
@@ -128,7 +129,7 @@ namespace Xena.Assets
                 // The flat PS1 tree-line card has no place in front of the shell's real forest.
                 if (source.name == "level-01-object-73" && PrototypeRemasterShell.Available)
                 {
-                    Mesh kept = Instantiate(source); kept.name = source.name; Vector3[] kv = kept.vertices;
+                    Mesh kept = Instantiate(source); kept.name = source.name; Vector3[] kv = kept.vertices; int before = kept.triangles.Length / 3;
                     for (int s = 0; s < kept.subMeshCount; s++)
                     {
                         int[] all = kept.GetTriangles(s); var keep = new List<int>(all.Length);
@@ -136,7 +137,7 @@ namespace Xena.Assets
                             if (!PrototypeRemasterShell.Covers(filter.transform.TransformPoint((kv[all[i]] + kv[all[i + 1]] + kv[all[i + 2]]) / 3))) { keep.Add(all[i]); keep.Add(all[i + 1]); keep.Add(all[i + 2]); }
                         kept.SetTriangles(keep, s);
                     }
-                    source = kept;
+                    StrippedCardTriangles += before - kept.triangles.Length / 3; source = kept;
                 }
                 Mesh remaster = Subdivide(source, rounded, pages, terrain ? TerrainBulge : PropBulge, filter.transform.InverseTransformDirection(Vector3.up).normalized, out float offset, out float walkOffset, out int seams, filter.transform.lossyScale.y, out float relief,
                     terrain ? TerrainReliefMeters : boulder ? RockReliefMeters : 0, boulder ? 180 : terrain ? TerrainCreaseDegrees : CreaseDegrees, terrain ? TerrainMaxBulgeMeters : float.PositiveInfinity,

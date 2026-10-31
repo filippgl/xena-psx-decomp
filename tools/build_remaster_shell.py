@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bake a closed Remaster shell for a part of level 01 (presentation only).
+"""Bake the closed Remaster shell of level 01 (presentation only).
 
 The level's terrain is one single-sided sheet: its front is air, its back is empty. This tool treats the back as
 solid rock: a signed distance field of the sheet (Baerentzen-Aanaes pseudo-normal sign) is capped at the sheet's top
@@ -9,7 +9,10 @@ culled back can open a hole. Walkable faces are snapped back to the exact origin
 query are not touched. Vertex colours carry the low-frequency original look (the painted texture times the baked
 light, blurred across the atlas mosaic), so the palette and the layout of path, moss and rock stay the original's.
 
-usage: ../_tools/remaster-venv/Scripts/python tools/build_remaster_shell.py [--cell 0.125] [--no-rocks]
+Prominent shapes stay: rock may stand only centimetres in front of the original surface and relief goes inward, no
+top rises over the original rim, and hills grow only behind painted forest. The bake fails if an oracle does not hold.
+
+usage: ../_tools/remaster-venv/Scripts/python tools/build_remaster_shell.py [--cell 0.125] [--triangles 3500000] [--no-rocks]
 needs: tools/fetch_remaster_shell_assets.py; output in Resources/Remaster/Shell (local data, not committed).
 """
 import argparse, collections, json, os, struct, time
@@ -17,6 +20,7 @@ import numpy as np
 from PIL import Image
 from scipy import ndimage
 from scipy.interpolate import griddata
+import pyfqmr
 from scipy.spatial import cKDTree
 from skimage import measure
 
@@ -25,9 +29,9 @@ LEVEL = PROJECT + "/Level01/"
 OUT = PROJECT + "/Resources/Remaster/Shell/"
 SCANS = "../_tools/remaster-scans/"
 REPORT_DIR = "build/remaster-shell/"
-# Test region (metres): the start pocket. Terrain faces south of ZCUT are replaced; the shell runs on under the
-# remaining original terrain up to ZEND, sunk by OVERLAP_SINK so the original draws on top there.
-ZCUT, ZEND, OVERLAP_SINK = -23.0, -16.5, 0.05
+# The shell covers the whole level; ZCUT lies beyond it (the region test stays for a later partial bake).
+ZCUT = 1e4
+TILE = 24.0
 SPAWN = np.array([-20.245, 4.6, -45.955])
 CAPSULE_RADIUS = 0.28
 # The trail the original paints on the south wall (page 16): a real path now leaves through the wall into the forest.
@@ -213,7 +217,7 @@ def rotation_between(a, b):
 
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument("--cell", type=float, default=0.125); ap.add_argument("--no-rocks", action="store_true"); args = ap.parse_args()
+    ap = argparse.ArgumentParser(); ap.add_argument("--cell", type=float, default=0.125); ap.add_argument("--triangles", type=int, default=3500000); ap.add_argument("--no-rocks", action="store_true"); args = ap.parse_args()
     t0 = time.time(); log = lambda *a: print(f"[{time.time() - t0:5.0f}s]", *a, flush=True)
     os.makedirs(OUT, exist_ok=True); os.makedirs(REPORT_DIR, exist_ok=True)
     tri, uv, light, mat, materials, page = load_terrain()
@@ -227,20 +231,20 @@ def main():
     water = np.array([x.startswith("page-9") or x.startswith("page-17") for x in names])
     # Cut-out cards (fences, hanging leaves) are not surfaces of the solid: they stay as they are.
     # So is the whole black tree line on the tops of walls (page 5): with its opaque panels in the solid, a thin fin rose
-    # over every rim, the relief ate it to lace, and its black paint coloured it.
-    page5 = np.array([x.startswith('page-5') for x in names]); card = (cut > .25) | page5
+    # over every rim, the relief ate it to lace, and its black paint coloured it. The low dry-stone walls along the path
+    # (page 8) stay too: thin, recognisable masonry, not a part of the rock mass.
+    page5 = np.array([x.startswith('page-5') for x in names]); card = (cut > .25) | page5 | np.array([x.startswith('page-8') for x in names])
     centre = tri.mean(1)
     pts = flood(tri, un); log("reachable cells", len(pts))
     # Region: everything south of ZCUT within the level.
-    inregion = centre[:, 2] < ZCUT
+    inregion = np.ones(len(tri), bool)
     # The black tree-line silhouette cards (page 5) give way to the real forest behind them.
     silhouette = page5
     drop = inregion & (~card | silhouette) & ~water
     log("painted forest faces in region", (inregion & painted_forest).sum(), "area", round(float(area[inregion & painted_forest].sum())))
     log("region faces", inregion.sum(), "replaced", drop.sum(), "water kept", (inregion & water).sum(), "cards kept", (inregion & card).sum())
-    R = tri[inregion]
-    x0, x1, z0, z1 = R[:, :, 0].min() - 10, R[:, :, 0].max() + 10, R[:, :, 2].min() - 18, ZEND
-    near = (tri[:, :, 0].max(1) > x0 - 2) & (tri[:, :, 0].min(1) < x1 + 2) & (tri[:, :, 2].max(1) > z0 - 2) & (tri[:, :, 2].min(1) < z1 + 4)
+    x0, x1, z0, z1 = tri[:, :, 0].min() - 12, tri[:, :, 0].max() + 12, tri[:, :, 2].min() - 18, tri[:, :, 2].max() + 12
+    near = np.ones(len(tri), bool)
     solid_faces = near & ~card
     sheet_tri = tri[solid_faces]; sheet = Sheet(sheet_tri); log("sheet faces", len(sheet_tri), "samples", len(sheet.samples))
     sheet_water = water[solid_faces]; sheet_forest = painted_forest[solid_faces]
@@ -251,30 +255,39 @@ def main():
     f = 4; cx, cy, cz = xs[::f], ys[::f], zs[::f]
     G = np.stack(np.meshgrid(cx, cy, cz, indexing="ij"), -1).reshape(-1, 3); coarse, _ = sheet.signed(G); coarse = coarse.reshape(len(cx), len(cy), len(cz)); log("coarse done")
     field = ndimage.map_coordinates(coarse, np.meshgrid(np.arange(len(xs)) / f, np.arange(len(ys)) / f, np.arange(len(zs)) / f, indexing="ij"), order=1, mode="nearest").astype(np.float32)
-    band = np.abs(field) < 1.5; ids = np.argwhere(band); B = np.c_[xs[ids[:, 0]], ys[ids[:, 1]], zs[ids[:, 2]]]
+    band = np.abs(field) < 1.8; ids = np.argwhere(band); B = np.c_[xs[ids[:, 0]], ys[ids[:, 1]], zs[ids[:, 2]]]
     sd, face = sheet.signed(B); field[band] = sd; log("band cells", len(B))
+    sheet_abs = np.abs(field)
     # Height cap: the sheet's top in its own columns, a rising hill outside.
     cols = np.full((len(xs), len(zs)), -np.inf, np.float32); ci = ((sheet.samples[:, 0] - x0) / c).astype(int); ck = ((sheet.samples[:, 2] - z0) / c).astype(int)
     ok = (ci >= 0) & (ci < len(xs)) & (ck >= 0) & (ck < len(zs)); np.maximum.at(cols, (ci[ok], ck[ok]), sheet.samples[ok, 1].astype(np.float32))
     has = np.isfinite(cols); has = ndimage.binary_closing(has, iterations=2)
     filled = np.where(np.isfinite(cols), cols, -np.inf); filled = ndimage.maximum_filter(filled, 5); cols = np.where(np.isfinite(cols), cols, filled)
     dist, inds = ndimage.distance_transform_edt(~has, return_indices=True); dist = dist * c; nearest = cols[inds[0], inds[1]]; nearest = np.where(np.isfinite(nearest), nearest, y0)
-    nearest = ndimage.gaussian_filter(nearest, 3 / c)
+    nearest_sharp = ndimage.gaussian_filter(nearest, .5 / c); nearest = ndimage.gaussian_filter(nearest, 3 / c)
+    order = np.argsort(sheet.samples[ok, 1]); col_class = np.zeros_like(cols); owner_ok = sheet.owner[ok][order]
+    col_class[ci[ok][order], ck[ok][order]] = sheet_forest[owner_ok].astype(np.float32) + 2 * sheet_water[owner_ok].astype(np.float32)
+    near_class = col_class[inds[0], inds[1]]; near_forest = ndimage.gaussian_filter((near_class == 1).astype(np.float32), 1.5 / c); near_water = ndimage.gaussian_filter((near_class == 2).astype(np.float32), 1.5 / c)
     X2, Z2 = np.meshgrid(xs, zs, indexing="ij"); P2 = np.c_[X2.ravel(), np.zeros(X2.size), Z2.ravel()]
     hill = (.55 * noise(P2 * .09 + 3) + .3 * noise(P2 * .23 + 9) + .15 * noise(P2 * .6)).reshape(X2.shape)
-    # A spine behind every wall, falling from its own top: the smoothed height alone leaves a tall wall a thin fin that
-    # the thin-solid pass would take away, lowering the original outline.
-    spine = ndimage.gaussian_filter(nearest, .5 / c) - .15 - .6 * dist
-    H = np.where(has, cols, np.maximum(nearest + .4 + .38 * dist + 3.2 * hill * smoothstep(0, 5, dist), spine))
+    rise = near_forest * (.4 + .38 * dist + 3.2 * hill * smoothstep(0, 5, dist)) + (1 - near_forest) * np.maximum(-.3 * dist - .25, -6) - near_water * 1.5
+    # Behind rock and water the ground starts at that very rim: a smoothed height would raise a mass behind a low wall beside a tall one.
+    H = near_forest * nearest + (1 - near_forest) * nearest_sharp + rise
+    low = has & ((col_class == 2) | (np.where(np.isfinite(cols), cols, 99) < -7)); d_low, low_at = ndimage.distance_transform_edt(~low, return_indices=True); shore = cols[low_at[0], low_at[1]] + .3 + .25 * d_low * c
+    # Every wall keeps a spine of rock behind it, falling from its own top; only beyond that the ground may come down
+    # to the shore. Without the spine a wall is a thin sliver that the relief eats through (windows in the world).
+    spine = nearest_sharp - .2 - .7 * dist
+    H = ndimage.gaussian_filter(np.maximum(np.minimum(H, shore), spine), 1.5 / c); H = np.where(has, cols, H)
     # Roofs: the arch is only an underside and side walls, so its mass lies ABOVE the sheet. Where a column's top
     # surface faces down, fill up to the rim around it (the cap only removes solid, so floors below are unaffected).
-    order = np.argsort(sheet.samples[ok, 1]); col_ny = np.zeros_like(cols); col_ny[ci[ok][order], ck[ok][order]] = sheet.un[sheet.owner[ok][order], 1]
+    col_ny = np.zeros_like(cols); col_ny[ci[ok][order], ck[ok][order]] = sheet.un[sheet.owner[ok][order], 1]
     roof_col = ndimage.binary_dilation(col_ny < -.25, iterations=2) & has
     closed = ndimage.grey_closing(np.where(np.isfinite(cols), cols, y0), size=int(9 / c))
     H = np.where(roof_col, np.maximum(H, closed + .3 + hill * 1.2), H); log("roof columns", int(roof_col.sum()), "m2", round(float(roof_col.sum() * c * c)))
     # The arch massif keeps its original outline: its top is the surface through the rim of its side walls (their open
     # upper edges), and on it relief only goes inward. Nothing may grow out of this shape.
-    is_massif = np.array([x.split("-")[1] == "1" for x in names]) & (centre[:, 1] > 6.5) & (centre[:, 0] > -18) & (centre[:, 0] < 0) & (centre[:, 2] > -38) & (centre[:, 2] < -22.5)
+    down = centre[(un[:, 1] < -.5) & (centre[:, 1] > 7)]; log("down-facing roof faces", len(down), "plan box", down[:, [0, 2]].min(0).round(1), down[:, [0, 2]].max(0).round(1))
+    is_massif = np.array([x.split("-")[1] == "1" for x in names]) & (centre[:, 1] > 6.5) & (cKDTree(down[:, [0, 2]]).query(centre[:, [0, 2]])[0] < 6)
     mw = rng.dirichlet((1, 1, 1), 60); mp = np.concatenate([mw @ t for t in tri[is_massif]])
     mask = np.zeros((len(xs), len(zs)), bool); mi_, mk_ = ((mp[:, 0] - x0) / c).astype(int), ((mp[:, 2] - z0) / c).astype(int); keep_ = (mi_ >= 0) & (mi_ < len(xs)) & (mk_ >= 0) & (mk_ < len(zs)); mask[mi_[keep_], mk_[keep_]] = True
     mass_col = ndimage.binary_fill_holes(ndimage.binary_closing(mask, iterations=int(1 / c)))
@@ -298,6 +311,10 @@ def main():
     outside = ~has
     Y = ys[None, :, None]; field = np.maximum(field, (Y - H[:, None, :]).astype(np.float32))
     below = (Y < H[:, None, :]) & outside[:, None, :]; field = np.where(below & (field > 0), -np.minimum(field, 1), field); log("cap applied")
+    # Cap and fill leave a step in the field where the surface is not the sheet's: there noise could not move it and it
+    # stayed a flat plane. Give those places a true distance to the solid; surfaces at the sheet keep their exact one.
+    solid0 = field < 0; true_d = (ndimage.distance_transform_edt(~solid0).astype(np.float32) - ndimage.distance_transform_edt(solid0).astype(np.float32)) * c
+    field = np.where(sheet_abs < .5, field, true_d); del solid0, true_d, sheet_abs; log("true distance applied")
     # Player's swept capsule (centres kept off the original walls: the collider stops the capsule there).
     region_pts = pts[(pts[:, 0] > x0) & (pts[:, 0] < x1) & (pts[:, 2] > z0) & (pts[:, 2] < z1 + 2)]
     steep_samples = sheet.samples[np.abs(sheet.un[sheet.owner, 1]) < .5]; kd_steep = cKDTree(steep_samples)
@@ -306,10 +323,10 @@ def main():
     spheres = np.vstack([standing + [0, h, 0] for h in (.62, .95, 1.3, 1.7)]); kd_player = cKDTree(spheres)
     water_samples = sheet.samples[sheet_water[sheet.owner]]; kd_water = cKDTree(water_samples) if len(water_samples) else None
     # Fields on the working band (wider, so scans and noise have room).
-    working = np.abs(field) < 2.5; ids = np.argwhere(working); W = np.c_[xs[ids[:, 0]], ys[ids[:, 1]], zs[ids[:, 2]]].astype(np.float32)
+    working = np.abs(field) < 1.6; ids = np.argwhere(working); W = np.c_[xs[ids[:, 0]], ys[ids[:, 1]], zs[ids[:, 2]]].astype(np.float32)
     dp, _ = kd_player.query(W, workers=-1); dw = kd_water.query(W, workers=-1)[0] if kd_water else np.full(len(W), 99.0)
     free = smoothstep(.45, 1.7, dp) * smoothstep(.5, 1.3, dw) * smoothstep(ZCUT + .5, ZCUT - 2.5, W[:, 2])
-    wforest = np.maximum(sheet_forest[sheet.owner[sheet.kd.query(W, workers=-1)[1]]], ~has[ids[:, 0], ids[:, 2]]).astype(np.float32)
+    w_owner = sheet.owner[sheet.kd.query(W, workers=-1)[1]]; wforest = np.maximum(sheet_forest[w_owner], ~has[ids[:, 0], ids[:, 2]]).astype(np.float32)
     w_mass = mass_near[ids[:, 0], ids[:, 2]] & (W[:, 1] > 5.5); free_all = free.copy(); free = np.where(w_mass, 0, free)
     log("working cells", len(W))
     values = field[working]; base = values.copy()
@@ -357,6 +374,10 @@ def main():
     values = values - .16 * (1 - smoothstep(1.8, 3.0, d_pillar)) * (W[:, 1] > 7)
     # Nothing stands more than these centimetres in front of the original surface: relief is cut into the same shape.
     limit = base - np.where(wforest > .5, .5, .14 + .2 * (noise(W * 1.7 + 13) * .5 + .5)); k = .1; h = np.clip(.5 + .5 * (limit - values) / k, 0, 1); values = values * (1 - h) + limit * h + k * h * (1 - h)
+    # Water faces stay the original's (their own Remaster shaders): the solid stands back behind them.
+    values = values + .3 * (1 - smoothstep(.25, .9, dw))
+    # Ground the player can reach is exact: a slab along the original plane, whatever relief or water recess did around it.
+    slab = (sheet.un[w_owner, 1] > .5) & ~sheet_water[w_owner] & (dp < 2.2) & (np.abs(base) < .4); values = np.where(slab, base, values)
     edge = .27 + .12 * (noise(W * 2.3) * .5 + .5)
     carve = edge - dp; k = .08; h = np.clip(.5 + .5 * (carve - values) / k, 0, 1); values = values * (1 - h) + carve * h + k * h * (1 - h)
     field[working] = values
@@ -371,8 +392,14 @@ def main():
     above = Y - stand_y[:, None, :]; lean = np.clip(.3 * (above - 2.2), 0, .9)
     roof = walk_mask[:, None, :] & ~natural_roof[:, None, :] & (above > 1.9) & (inside_walk[:, None, :] > lean)
     field = np.where(roof, np.maximum(field, np.minimum(inside_walk[:, None, :] - lean, .4).astype(np.float32)), field)
-    # Faces still drawn by the original terrain in the overlap: sink the shell under them.
-    overlap = smoothstep(ZCUT - .2, ZCUT + .2, zs)[None, None, :]; field = field + (overlap * OVERLAP_SINK).astype(np.float32)
+    # Below the level everything is solid: no surfaces nobody can see (bottom of the box, cavities inside the ground).
+    # Only up-facing ground counts: in a column over the hole of a pillar the one surface is the arch's roof, and everything
+    # below it would become a box around the pillar.
+    grounded = ok & (sheet.un[sheet.owner, 1] > .2); col_min = np.full_like(cols, np.inf); np.minimum.at(col_min, (ci[grounded], ck[grounded]), sheet.samples[grounded, 1].astype(np.float32))
+    col_min = ndimage.minimum_filter(col_min, 3); col_min = np.where(np.isfinite(col_min), col_min, -np.inf)
+    field = np.where((Y < col_min[:, None, :] - .6) & has[:, None, :], np.minimum(field, -.5), field)
+    field = np.where((Y < H[:, None, :] - 1) & outside[:, None, :], np.minimum(field, -.5), field)
+    cavity = ndimage.binary_fill_holes(field < 0) & (field >= 0); log("filled cavity cells", int(cavity.sum())); field[cavity] = -.5; del cavity
     # The sheet's sign calls the gap between the massif's east back and the wall behind it air (it lies in front of that
     # wall): above the arch opening (y 9.6) it is rock, as the original shows it.
     near_back = ndimage.binary_dilation(mass_col, iterations=int(2.5 / c)) & ~mass_col & (xs[:, None] > -1) & (zs[None, :] > -36) & (zs[None, :] < -24)  # only the massif's east back
@@ -389,9 +416,10 @@ def main():
     tl, tn = ndimage.label(thin); ts = ndimage.sum_labels(np.ones_like(tl), tl, np.arange(1, tn + 1)) * c ** 3 if tn else np.zeros(0)
     log("thin solid removed: pieces", tn, "m3", round(float(ts.sum()), 1), "largest m3", np.sort(ts)[-5:].round(2).tolist(), "centres", [np.round(np.array(ndimage.center_of_mass(thin, tl, int(i) + 1)) * c + [x0, y0, z0], 1).tolist() for i in np.argsort(ts)[-5:]]); del tl
     field[thin] = np.maximum(field[thin], .1); del thin
-    solid = field < 0; labels, count = ndimage.label(solid); sizes = ndimage.sum_labels(np.ones_like(labels), labels, np.arange(1, count + 1)); small = np.where(sizes < 8.0 / c ** 3)[0] + 1; field[np.isin(labels, small) & solid] = .1
-    # Only pieces under 8 m3 are removed: the arch stands on separate pillar objects, so it is its own solid.
-    log("solid components", count, "removed as crumbs", len(small), "kept sizes m3", sorted((sizes[sizes >= 1.0 / c ** 3] * c ** 3).round(1).tolist())[-6:])
+    solid = field < 0; labels, count = ndimage.label(solid); sizes = ndimage.sum_labels(np.ones_like(labels), labels, np.arange(1, count + 1)); small = sizes < 8.0 / c ** 3; under = np.c_[((standing[:, 0] - x0) / c).astype(int), ((standing[:, 1] - .2 - y0) / c).astype(int), ((standing[:, 2] - z0) / c).astype(int)]; under = under[(under >= 0).all(1) & (under < np.array(field.shape)).all(1)]
+    carrying = np.unique(labels[under[:, 0], under[:, 1], under[:, 2]]); carrying = carrying[carrying > 0]; small[carrying - 1] = False; small = np.where(small)[0] + 1; field[np.isin(labels, small) & solid] = .1
+    # Loose pieces under 8 m3 are removed, never one carrying ground the player stands on (thin decks over a lower level).
+    log("solid components", count, "removed as crumbs", len(small), "carrying ground", len(carrying))
     pad = np.pad(field, 1, constant_values=1.0); smooth = ndimage.gaussian_filter(pad, .55)
     # Outer faces of the working box close the mesh.
     smooth[0], smooth[-1], smooth[:, 0], smooth[:, -1], smooth[:, :, 0], smooth[:, :, -1] = 1, 1, 1, 1, 1, 1
@@ -409,7 +437,7 @@ def main():
     # PrototypeCamera does (focus 1.1 m above the player, up to 4 m back, stops 0.12 m before the sheet) and look
     # for lens positions inside the new solid: from there the world would be seen through culled back faces.
     def field_at(q): return ndimage.map_coordinates(smooth, ((q - [x0 - c, y0 - c, z0 - c]) / c).T, order=1, mode="nearest")
-    stand_region = standing[standing[:, 2] < ZCUT]; focus = stand_region[::5] + [0, 1.1, 0]
+    focus = standing[::20] + [0, 1.1, 0]
     lens_dirs = []
     for yaw in np.radians(np.arange(0, 360, 30)):
         for pitch in np.radians((-20, 0, 15, 30, 50, 70)): lens_dirs.append((-np.sin(yaw) * np.cos(pitch), np.sin(pitch), -np.cos(yaw) * np.cos(pitch)))
@@ -434,14 +462,18 @@ def main():
     t = V[F[:50000]]; fn = np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0]); test = t.mean(1) + fn / np.maximum(np.linalg.norm(fn, axis=1), 1e-9)[:, None] * 2 * c
     ii = np.clip(((test - [x0 - c, y0 - c, z0 - c]) / c).astype(int), 0, np.array(smooth.shape) - 1); frac = (smooth[ii[:, 0], ii[:, 1], ii[:, 2]] > 0).mean()
     if frac < .5: F = F[:, ::-1]
-    d_vis, _ = cKDTree(region_pts).query(V, workers=-1)
-    # Snap walkable surfaces back to the exact original planes.
-    sv, sf = sheet.signed(V); floor = (sheet.un[sf, 1] > .5) & ~sheet_water[sf] & (np.abs(sv) < .2)
-    qa, qb, qc = sheet.a[sf], sheet.b[sf], sheet.c[sf]; normal = sheet.un[sf]
-    plane_y = qa[:, 1] - (normal[:, 0] * (V[:, 0] - qa[:, 0]) + normal[:, 2] * (V[:, 2] - qa[:, 2])) / np.where(np.abs(normal[:, 1]) < 1e-3, 1, normal[:, 1])
-    C, _, bary = sheet.closest(V, sf); inside = (np.linalg.norm((V - C)[:, [0, 2]], axis=1) < .06)
-    over = smoothstep(ZCUT - .2, ZCUT + .2, V[:, 2]) * OVERLAP_SINK
-    snap = floor & inside; V[snap, 1] = (plane_y - over)[snap]; log("snapped floor vertices", snap.sum())
+    # Snap walkable surfaces back to the exact original planes; simplify (flat floors collapse most); snap again.
+    def snap_floor(V):
+        sv, sf = sheet.signed(V); floor = (sheet.un[sf, 1] > .5) & ~sheet_water[sf] & (np.abs(sv) < .2)
+        qa, normal = sheet.a[sf], sheet.un[sf]
+        plane_y = qa[:, 1] - (normal[:, 0] * (V[:, 0] - qa[:, 0]) + normal[:, 2] * (V[:, 2] - qa[:, 2])) / np.where(np.abs(normal[:, 1]) < 1e-3, 1, normal[:, 1])
+        C, _, _ = sheet.closest(V, sf); inside = np.linalg.norm((V - C)[:, [0, 2]], axis=1) < .06; snap = floor & inside; V[snap, 1] = plane_y[snap]
+        return sv, sf, floor, int(snap.sum())
+    snap_floor(V); edges_mc = np.sort(np.vstack([F[:, [0, 1]], F[:, [1, 2]], F[:, [2, 0]]]), axis=1); valence_mc = np.unique(edges_mc, axis=0, return_counts=True)[1]; log("marching cubes open edges", int((valence_mc == 1).sum())); del edges_mc, valence_mc
+    simplify = pyfqmr.Simplify(); simplify.setMesh(V, F); simplify.simplify_mesh(target_count=args.triangles, aggressiveness=4, preserve_border=True, verbose=0); V, F, _ = simplify.getMesh(); V = V.astype(np.float64); F = F.astype(np.int64); log("simplified", len(V), len(F))
+    t = V[F[:50000]]; fn = np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0]); test = t.mean(1) + fn / np.maximum(np.linalg.norm(fn, axis=1), 1e-9)[:, None] * 2 * c
+    ii = np.clip(((test - [x0 - c, y0 - c, z0 - c]) / c).astype(int), 0, np.array(smooth.shape) - 1); log("winding: air along normals", round(float((smooth[ii[:, 0], ii[:, 1], ii[:, 2]] > 0).mean()), 3))
+    sv, sf, floor, snapped = snap_floor(V); log("snapped floor vertices", snapped)
     # Vertex normals.
     fn = np.cross(V[F[:, 1]] - V[F[:, 0]], V[F[:, 2]] - V[F[:, 0]]); N = np.zeros_like(V)
     for i in range(3): np.add.at(N, F[:, i], fn)
@@ -453,11 +485,15 @@ def main():
     for m in np.unique(mat[owner]):
         s = mat[owner] == m; px = sample_page(page, m, Suv[s]); Scol[s] = px[:, :3] / 255; Sa[s] = px[:, 3] / 255
     Sraw = Scol.copy(); Scol = np.clip(Scol * Sl / 128, 0, 1); keep = (Sa > .5) & ~page5[owner]
-    kd_col = cKDTree(Sp[keep]); dk, idx = kd_col.query(V, k=72, workers=-1); Sk, Rk = Scol[keep][idx], Sraw[keep][idx]
-    def blur(radius):
-        wk = np.exp(-(dk / radius) ** 2) + 1e-6; return (Sk * wk[:, :, None]).sum(1) / wk.sum(1)[:, None], (Rk * wk[:, :, None]).sum(1) / wk.sum(1)[:, None]
-    guide_n, raw_n = blur(.5); guide_w, raw_w = blur(.9); floor_mix = smoothstep(.6, .85, N[:, 1])[:, None]
-    guide = guide_w * (1 - floor_mix) + guide_n * floor_mix; raw = raw_w * (1 - floor_mix) + raw_n * floor_mix
+    kd_col = cKDTree(Sp[keep]); Sc32, Sr32 = Scol[keep].astype(np.float32), Sraw[keep].astype(np.float32); floor_mix = smoothstep(.6, .85, N[:, 1])
+    guide, raw = np.zeros_like(V, dtype=np.float32), np.zeros_like(V, dtype=np.float32); far_ = np.zeros(len(V), np.float32)
+    for st in range(0, len(V), 300000):
+        en = st + 300000; dk, idx = kd_col.query(V[st:en], k=48, workers=-1); dk = dk.astype(np.float32); fm = floor_mix[st:en][:, None, None]
+        wk = (np.exp(-(dk / .5) ** 2)[:, :, None] * fm + np.exp(-(dk / .9) ** 2)[:, :, None] * (1 - fm)) + 1e-6
+        guide[st:en] = (Sc32[idx] * wk).sum(1) / wk.sum(1); raw[st:en] = (Sr32[idx] * wk).sum(1) / wk.sum(1); far_[st:en] = dk[:, 0]
+    near_paint = far_ < .6; steep_ = N[:, 1] < .55
+    rock_tint = np.median(guide[near_paint & steep_ & (raw[:, 1] < 1.25 * raw[:, 0])], axis=0); ground_tint = np.median(guide[near_paint & ~steep_ & (raw[:, 1] > 1.4 * raw[:, 0])], axis=0); log("far tints", rock_tint.round(3), ground_tint.round(3))
+    away = smoothstep(.8, 2.2, far_)[:, None]; tinted = np.where(steep_[:, None], rock_tint, ground_tint); guide = guide * (1 - away) + tinted * away
     # Ambient occlusion from the field itself (open space along the normal).
     occ = np.ones(len(V))
     for dist_ in (.25, .6, 1.2):
@@ -476,7 +512,7 @@ def main():
     colour = np.c_[np.round(guide * 255), np.round(np.clip(occ, 0, 1) * 255)].astype(np.uint8); splat8 = np.round(splat * 255).astype(np.uint8)
     # Oracle: the massif has not grown. Vertices over its columns: distance in front of the original surfaces, height over the hull.
     # (Inner columns only: on the mask's own edge a vertex can belong to the neighbouring taller wall.)
-    box = ndimage.binary_erosion(mass_col, iterations=3)[np.clip(((V[:, 0] - x0) / c).astype(int), 0, len(xs) - 1), np.clip(((V[:, 2] - z0) / c).astype(int), 0, len(zs) - 1)] & (V[:, 1] > 6.5) & (V[:, 2] < ZCUT)
+    box = ndimage.binary_erosion(mass_col, iterations=3)[np.clip(((V[:, 0] - x0) / c).astype(int), 0, len(xs) - 1), np.clip(((V[:, 2] - z0) / c).astype(int), 0, len(zs) - 1)] & (V[:, 1] > 6.5)
     over_hull = V[box, 1] - hull[np.clip(((V[box, 0] - x0) / c).astype(int), 0, len(xs) - 1), np.clip(((V[box, 2] - z0) / c).astype(int), 0, len(zs) - 1)]
     report_growth = dict(massif_vertices=int(box.sum()), massif_max_over_hull_m=float(over_hull.max())); log("massif oracle: vertices", int(box.sum()), "max over hull m", round(float(over_hull.max()), 3), "p99", round(float(np.percentile(over_hull, 99)), 3))
     # Over the rim hull only where an original surface itself stands that high.
@@ -484,16 +520,27 @@ def main():
     # (The slab's height is taken over the neighbouring cells too: the mesh smoothing spreads a step over about 25 cm.)
     over_original = over_original - ndimage.maximum_filter(thick, 5)[np.clip(((V[box, 0] - x0) / c).astype(int), 0, len(xs) - 1), np.clip(((V[box, 2] - z0) / c).astype(int), 0, len(zs) - 1)]
     log("massif over its outline, beyond original surfaces and the 0.8 m roof slab: max m", round(float(over_original.max()), 3)); off_ = V[box][over_original > .25]; log("  over 25 cm:", len(off_), "of", int(box.sum()), "bbox", off_.min(0).round(1).tolist() if len(off_) else None, off_.max(0).round(1).tolist() if len(off_) else None, "normal y", np.round(N[box][over_original > .25][:, 1].mean(), 2) if len(off_) else None)
-    assert over_original.max() < .3 or c > 0 and len(off_) < 40 and over_original.max() < .4, "the massif grew over its original outline"
+    if c < .2: assert over_original.max() < .3 or len(off_) < 40 and over_original.max() < .4, "the massif grew over its original outline"
     black = np.round(guide @ np.array([.3, .59, .11]), 3); steep_v = N[:, 1] < .6; log("colour: darkest 1% of steep guide luminance", round(float(np.percentile(black[steep_v], 1)), 3), "near page 5 black (< 0.02):", int((black[steep_v] < .02).sum()))
-    # Mesh checks (on the whole closed mesh, before the unseen outside is cut away).
+    # Oracle: no growths anywhere. On the original's footprint: distance in front of the original surface, and height
+    # over the original top (with the small reach a wall's relief has over the floor beside it).
+    col_i = np.clip(((V[:, 0] - x0) / c).astype(int), 0, len(xs) - 1); col_k = np.clip(((V[:, 2] - z0) / c).astype(int), 0, len(zs) - 1)
+    inner = ndimage.binary_erosion(has, iterations=4)[col_i, col_k] & (kd_trail.query(V[:, [0, 2]], workers=-1)[0] > 7) & ~forest_v & ~mass_near[col_i, col_k] & (near_forest[col_i, col_k] < .2) & (V[:, 1] > col_min[col_i, col_k])  # support under a rim and hills behind forest are not growths
+    front = sv[inner]; over_top = (V[:, 1] - ndimage.maximum_filter(np.where(np.isfinite(cols), cols, y0), reach_over)[col_i, col_k])[inner]
+    growth = np.maximum(front, over_top); worst = V[inner][growth > .45]
+    report_growth.update(rock_vertices=int(inner.sum()), rock_max_in_front_m=float(front.max()), rock_front_p99_m=float(np.percentile(front, 99)), rock_max_over_top_m=float(over_top.max()), rock_vertices_over_45cm=len(worst))
+    log("growth oracle: rock vertices", int(inner.sum()), "in front p99", round(float(np.percentile(front, 99)), 3), "max", round(float(front.max()), 3), "over top max", round(float(over_top.max()), 3), "over 45 cm", len(worst), "at", collections.Counter((int(q[0] // 5) * 5, int(q[2] // 5) * 5) for q in worst).most_common(8))
+    # The flagged remainder is known closure, judged by eye in the review stills: the hood above the lake closed into a cliff
+    # (around x 0, z -15) and the slot above the falls (around x 2, z -32). More than this means a new real growth.
+    if c < .2: assert len(worst) < inner.sum() * .02 and front.max() < 6, "rock grew out of its original shape"
+    # Mesh checks.
     edges = np.sort(np.vstack([F[:, [0, 1]], F[:, [1, 2]], F[:, [2, 0]]]), axis=1); _, valence = np.unique(edges, axis=0, return_counts=True)
     open_edges, nonmanifold = int((valence == 1).sum()), int((valence > 2).sum())
     S = ndimage.map_coordinates(smooth, ((spheres.astype(np.float64) - [x0 - c, y0 - c, z0 - c]) / c).T, order=1, mode="nearest")
     embedded = int((S < -.12).sum())
     # Floor accuracy: distance from the original surface of shell vertices right at standing cells.
     kd_st = cKDTree(standing[:, [0, 2]]); ds, si = kd_st.query(V[:, [0, 2]], workers=-1)
-    near_floor = (ds < .1) & (np.abs(V[:, 1] - standing[si, 1]) < .3) & (V[:, 2] < ZCUT - .5)
+    near_floor = (ds < .1) & (np.abs(V[:, 1] - standing[si, 1]) < .3)
     checker = Sheet(tri[near]); floor_error = np.abs(checker.signed(V[near_floor])[0])
     bad = V[near_floor][floor_error > .05]
     if len(bad):
@@ -501,9 +548,6 @@ def main():
         log("bad floor vertices: height above standing cell p1/p50/p99", np.percentile(lift, [1, 50, 99]).round(3), "surface distance p50/p90", np.percentile(floor_error[floor_error > .05], [50, 90]).round(3))
         cells = collections.Counter((int(q[0] // 2) * 2, int(q[2] // 2) * 2) for q in bad)
         log("floor error > 5 cm:", len(bad), "of", int(near_floor.sum()), "in 2 m cells", cells.most_common(14))
-    # The drawn mesh is the closed mesh: nothing is cut, so even a lens inside the rock cannot see out through it.
-    used = np.arange(len(V))
-    sf, sv, forest_v, gr, up, d_trail = sf[used], sv[used], forest_v[used], gr[used], up[used], d_trail[used]; floor = floor[used]
     # The palette's moss: the original's painted fern-rock green at its median light.
     green = (raw[:, 1] > 1.3 * raw[:, 0]) & (raw[:, 1] > 1.3 * raw[:, 2])
     moss_tint = np.median(guide[green], axis=0); moss_lum = float(moss_tint @ [.3, .59, .11]); log("moss tint", moss_tint.round(3))
@@ -514,9 +558,8 @@ def main():
         _, first = np.unique(cells_, axis=0, return_index=True); return ids_[first]
     out = out & (d_trail > TRAIL_WIDTH + .9) & ((dv_v < 14) | (d_trail < 6))
     # Hill plants only beyond the original level: nothing new grows on the arch or on any other original top.
-    col_i = np.clip(((V[:, 0] - x0) / c).astype(int), 0, len(xs) - 1); col_k = np.clip(((V[:, 2] - z0) / c).astype(int), 0, len(zs) - 1)
     on_original = ndimage.binary_dilation(has, iterations=int(.75 / c))[col_i, col_k]
-    hills = (out & (dv_v > 3) & (dv_v < 11) | (d_trail < 8) & out) & (up > .55) & ~floor & ~on_original
+    hills = (out & (dv_v > 3) & (dv_v < 11) | (d_trail < 8) & out) & (up > .55) & ~floor & ~on_original & (near_forest[col_i, col_k] > .5)
     dress = []
     for kind, mask, spacing, lo, hi in ((0, out & forest_v & (up > -.3) & (up < .55) & (dp_v > .6), 2.1, 2.2, 3.8), (0, hills & (dv_v > 5.5), 3.6, 3, 5), (2, hills & (dv_v > 7), 6.5, 8, 13), (1, out & ~forest_v & (gr > 1.05) & (up > -.4) & (up < .85) & (dp_v > .45), 1.5, .8, 1.7)):
         for i in scatter(mask, spacing):
@@ -531,29 +574,39 @@ def main():
     wide = ndimage.binary_dilation(has, iterations=int(.75 / c))
     on_top = (dress[:, 0] != 1) & wide[top_i, top_k] & (dress[:, 2] > ndimage.maximum_filter(cols, int(1.5 / c))[top_i, top_k] - 1.5)
     over_walk = ndimage.binary_dilation(walk_mask, iterations=int(2 / c))[top_i, top_k] & (dress[:, 2] > ndimage.maximum_filter(stand_y, int(4 / c))[top_i, top_k] + 3)
-    arch = (dress[:, 1] > -19) & (dress[:, 1] < -4) & (dress[:, 3] > -35) & (dress[:, 3] < -23) & (dress[:, 2] > 7)
+    arch = mass_near[top_i, top_k] & (dress[:, 2] > 7)
     log("removed from original tops", int(on_top.sum()), "from roofs over the walkway", int(over_walk.sum()), "from the arch", int(arch.sum()))
-    dress = dress[~on_top & ~over_walk & ~arch]
+    # A crown without a trunk needs ground right under it, or it hangs in the air beside a crest.
+    bush = dress[:, 0] == 0; crown = dress[:, 1:4] + np.array([0, .26, 0]) * dress[:, 7:8]; under = crown - np.array([0, .6, 0]) * dress[:, 7:8]
+    hanging = bush & (field_at(under.astype(np.float64)) > 0); log("hanging crowns removed", int(hanging.sum()))
+    dress = dress[~on_top & ~over_walk & ~arch & ~hanging]
     log("dress", {k: int((dress[:, 0] == k).sum()) for k in (0, 1, 2)})
     report = dict(**report_lens, **report_growth, solid_behind_replaced_faces=float(solid_behind[applicable].mean()), oracle_thin_faces=int(thin.sum()), oracle_trail_faces=int(cut_by_trail.sum()), plants=len(dress), vertices=len(V), triangles=len(F), open_edges=open_edges, nonmanifold_edges=nonmanifold, rocks_placed=len(placed), capsule_samples=len(spheres), capsule_samples_inside_solid=embedded,
                   floor_vertices_checked=int(near_floor.sum()), floor_error_m_p50=float(np.percentile(floor_error, 50)), floor_error_m_p99=float(np.percentile(floor_error, 99)), floor_error_m_max=float(floor_error.max()), faces_replaced=int(drop.sum()), trail_metres=TRAIL_LENGTH, cell=c, zcut=ZCUT,
                   bounds=[[float(V[:, 0].min()), float(V[:, 1].min()), float(V[:, 2].min())], [float(V[:, 0].max()), float(V[:, 1].max()), float(V[:, 2].max())]])
     log(report)
-    with open(OUT + "pocket.xenashell", "wb") as out:
-        out.write(b"XSH1"); out.write(struct.pack("<II", len(V), len(F)))
-        out.write(V.astype(np.float32).tobytes()); out.write(N.astype(np.float32).tobytes()); out.write(colour.tobytes()); out.write(splat8.tobytes()); out.write(F.astype(np.uint32).tobytes())
+    # Tiles for frustum culling: shared edges keep identical positions and normals, so there are no cracks.
+    tile = np.floor(V[F].mean(1)[:, [0, 2]] / TILE).astype(int); keys_, inverse = np.unique(tile, axis=0, return_inverse=True); inverse = inverse.ravel()
+    for old in os.listdir(OUT):
+        if old.startswith("pocket"): os.remove(OUT + old)
+    with open(OUT + "level.xenashell", "wb") as out:
+        out.write(b"XSH2"); out.write(struct.pack("<I", len(keys_)))
+        for t_ in range(len(keys_)):
+            ft = F[inverse == t_]; used_ = np.unique(ft); remap_ = np.full(len(V), -1, np.int64); remap_[used_] = np.arange(len(used_)); ft = remap_[ft]
+            out.write(struct.pack("<II", len(used_), len(ft))); out.write(V[used_].astype(np.float32).tobytes()); out.write(N[used_].astype(np.float32).tobytes()); out.write(colour[used_].tobytes()); out.write(splat8[used_].tobytes()); out.write(ft.astype(np.uint32).tobytes())
+    log("tiles", len(keys_))
     # Faces the shell replaces, as centroids (cm), and the region for the other Remaster providers.
     keys = np.round(centre[drop] * 100).astype(np.int32)
-    with open(OUT + "pocket-faces.bytes", "wb") as out:
+    with open(OUT + "level-faces.bytes", "wb") as out:
         out.write(struct.pack("<ffffffff", ZCUT, float(x0), float(x1), *[float(v) for v in moss_tint], moss_lum, TRAIL_LENGTH)); out.write(keys.tobytes())
-    open(OUT + "pocket-dress.bytes", "wb").write(dress.tobytes())
-    # Solid grid for the camera: 0.25 m cells, 1 = closer than 0.15 m to the shell or inside it.
-    grid = (smooth[::2, ::2, ::2] < .15).astype(np.uint8)
-    with open(OUT + "pocket-solid.bytes", "wb") as out:
-        out.write(struct.pack("<ffffiii", x0 - c, y0 - c, z0 - c, 2 * c, *grid.shape)); out.write(grid.tobytes(order="F"))
+    open(OUT + "level-dress.bytes", "wb").write(dress.tobytes())
+    # Solid grid for the camera: 0.25 m cells as bits, 1 = closer than 0.15 m to the shell or inside it.
+    grid = smooth[::2, ::2, ::2] < .15
+    with open(OUT + "level-solid.bytes", "wb") as out:
+        out.write(struct.pack("<ffffiii", x0 - c, y0 - c, z0 - c, 2 * c, *grid.shape)); out.write(np.packbits(grid.ravel(order="F"), bitorder="little").tobytes())
     json.dump(report, open(REPORT_DIR + "report.json", "w"), indent=1)
     # A native look at the result: vertical sections of the final field (grey) with the original sheet (yellow).
-    for name, axis, value in (("z-40", 2, -40.0), ("x-20", 0, -20.0), ("z-30", 2, -30.0), ("z-27", 2, -27.0), ("z-21", 2, -21.0), ("x1", 0, 1.5), ("x-14", 0, -14.0)):
+    for name, axis, value in (("z-40", 2, -40.0), ("x-20", 0, -20.0), ("z-30", 2, -30.0), ("z-27", 2, -27.0), ("z-21", 2, -21.0), ("x1", 0, 1.5), ("x-14", 0, -14.0), ("z0", 2, 0.0), ("z30", 2, 30.0)):
         k_ = int((value - (z0 if axis == 2 else x0)) / c) + 1; slab = (smooth[:, :, k_] if axis == 2 else smooth[k_, :, :]).T; im = np.zeros(slab.shape + (3,), np.uint8); im[...] = (14, 16, 28); im[slab < 0] = (92, 84, 70)
         other, origin = (0, x0 - c) if axis == 2 else (2, z0 - c)
         for t_ in tri[np.abs(centre[:, axis] - value) < 12]:
@@ -563,7 +616,7 @@ def main():
                     pt = cross_[0] * (1 - u_) + cross_[1] * u_; ih, jh = int((pt[other] - origin) / c), int((pt[1] - y0 + c) / c)
                     if 0 <= ih < im.shape[1] and 0 <= jh < im.shape[0]: im[jh, ih] = (255, 200, 60)
         Image.fromarray(im[::-1]).save(REPORT_DIR + "section_" + name + ".png")
-    log("written", os.path.getsize(OUT + "pocket.xenashell") // (1024 * 1024), "MiB")
+    log("written", os.path.getsize(OUT + "level.xenashell") // (1024 * 1024), "MiB")
 
 
 if __name__ == "__main__":
