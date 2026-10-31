@@ -3,6 +3,13 @@
 Read at the start of every session; update after each completed task and before compaction.
 One issue per task. Nothing here is a claim without the command/measurement that produced it.
 
+## Flat black silhouette pieces removed from Remaster (Claude, 2026-10-31, branch claude/work)
+
+- User: flat polygons with holes on the tops of models. Identified from the level data, the user's image did not arrive: terrain page 5 (black tree line, 67 faces, 38 with cut-outs). All dropped from the Remaster mesh, Original and colliders keep them.
+- Build claude-cards2: DLL 2026-10-31 12:24:26 MSK, SHA256 608e682da7ddf96b...; all 8 suites + aggregate PASS (build/unity-import/claude-cards2-*.txt), inspector 139 points / 1112 views, 0 flagged.
+- Tag `remaster-start-zone-ok` marks c4d3691, before this change. `Play-Unity-Prototype.cmd` (outside Git) now runs decomp-claude's player, with decomp as fallback.
+- Open: flat dark painted forest walls outside the pocket still stand, e.g. the view from (-26, 5) to the west.
+
 ## Rollback - whole-level shell rejected (Claude, 2026-10-31, branch claude/work)
 
 - User on the whole-level shell (d77ed41): "это отвратительно, откати к предыдущему этапу". Reverted; tree identical to 9b12fc9, the start-pocket shell the user called "выглядит неплохо".

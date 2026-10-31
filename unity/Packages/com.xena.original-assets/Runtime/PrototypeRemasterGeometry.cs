@@ -75,6 +75,7 @@ namespace Xena.Assets
         public int SeamEdges { get; private set; }
         public float MaxReliefMeters { get; private set; }
         public int DroppedBackdropTriangles { get; private set; }
+        public int SilhouetteCards { get; private set; }
 
         private void Awake()
         {
@@ -93,6 +94,14 @@ namespace Xena.Assets
                 if (terrain)
                 {
                     var drop = new HashSet<(int, int)>(); foreach (var w in PrototypeRemasterOuterWorld.Detect(source, bound, filter.transform)) drop.Add((w.submesh, w.triangle));
+                    // Flat black tree-line pieces on the tops of walls (page 5, with cut-out holes or without): a PS1
+                    // silhouette against the backdrop, in Remaster just stray flat polygons.
+                    for (int s = 0; s < source.subMeshCount && s < bound.Length; s++)
+                    {
+                        if (bound[s] == null || !bound[s].name.StartsWith("page-5")) continue;
+                        int count = source.GetTriangles(s).Length / 3;
+                        for (int i = 0; i < count; i++) if (drop.Add((s, i))) SilhouetteCards++;
+                    }
                     // Faces of the closed shell's region (PrototypeRemasterShell).
                     if (PrototypeRemasterShell.Available)
                     {

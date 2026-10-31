@@ -559,6 +559,7 @@ namespace Xena.Assets
                 Require(GameObject.Find("RemasterShell") == null, "Shell visible in Original");
                 PrototypeGraphics.Active.SetMode(XenaVisualMode.Remaster); yield return null;
                 Require(shellObject.activeInHierarchy, "Shell hidden in Remaster");
+                Require(terrainGeometry.SilhouetteCards > 0, "Flat silhouette cards with holes still drawn in Remaster");
                 report.checks.Add("Remaster shell: " + shell.Triangles + " tris, " + shell.Plants + " plants, Original restored, no collider");
             }
             // Remaster gate: both leaves get volume (rounded planks), at most thickness + grain deep per side.
