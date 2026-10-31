@@ -260,7 +260,7 @@ namespace Xena.Assets
             int perFace = PrototypeRemasterGeometry.Segments * PrototypeRemasterGeometry.Segments;
             // Painted boundary walls (PrototypeRemasterOuterWorld) are left out of the drawn terrain only.
             int dropped = geometry.DroppedBackdropTriangles;
-            Require(geometry.RemasterActive && geometry.RemasterTriangles == (geometry.OriginalTriangles - dropped - geometry.StrippedCardTriangles) * perFace && terrain.sharedMesh.triangles.Length / 3 == (2290 - dropped) * perFace
+            Require(geometry.RemasterActive && geometry.RemasterTriangles == (geometry.OriginalTriangles - dropped) * perFace && terrain.sharedMesh.triangles.Length / 3 == (2290 - dropped) * perFace
                 && terrain.GetComponent<MeshCollider>().sharedMesh.triangles.Length / 3 == 2290 && geometry.MaxWalkableOffset < 0.001f && geometry.LitSlots > 10 && terrain.GetComponent<MeshRenderer>().sharedMaterials[0].shader.name == "Xena/RemasterLit", "Remaster did not subdivide terrain while keeping the original collider");
             report.checks.Add("Remaster draws 9x curved terrain/prop triangles; walkable surfaces and colliders keep original geometry");
             yield return View(camera, rock.bounds, new Vector3(-0.6f, 0.25f, -1), 1.3f, "presentation-geometry-remaster.png");
@@ -454,7 +454,7 @@ namespace Xena.Assets
             // continued path stands behind them.
             {
                 var outer = FindFirstObjectByType<PrototypeRemasterOuterWorld>(); var geo = FindFirstObjectByType<PrototypeRemasterGeometry>();
-                Require(outer != null && geo != null && geo.DroppedBackdropTriangles > 0 && (PrototypeRemasterShell.Available ? PrototypeRemasterShell.TrailMeters > 5 : outer.BandTriangles > 0 && outer.Trees > 0 && outer.Plants > 0 && outer.Tufts > 0 && outer.PathSegments > 0),
+                Require(outer != null && geo != null && geo.DroppedBackdropTriangles > 0 && outer.BandTriangles > 0 && outer.Trees > 0 && outer.Plants > 0 && outer.Tufts > 0 && (outer.PathSegments > 0 || PrototypeRemasterShell.TrailMeters > 5),
                     "Outer world: dropped " + (geo != null ? geo.DroppedBackdropTriangles : 0) + ", band " + (outer != null ? outer.BandTriangles : 0) + ", trees " + (outer != null ? outer.Trees : 0) + ", path " + (outer != null ? outer.PathSegments : 0));
                 report.checks.Add("Remaster outer world: " + geo.DroppedBackdropTriangles + " painted wall tris hidden; band " + outer.BandTriangles + " tris, " + outer.Trees + " trees, " + outer.Plants + " plants, " + outer.Tufts + " tufts, path " + outer.PathSegments + " segments, " + outer.GroundCrops + " ground crops, " + outer.Blocked + " plants skipped under colliders; forest pages by colour: " + string.Join(" ", PrototypeRemasterOuterWorld.ForestPages) + "; " + PrototypeRemasterOuterWorld.PartialPanels + " faces kept with their panel; paths from " + string.Join(" ", outer.PathStarts.ConvertAll(x => x.ToString("F1"))));
                 // Each continued path: a view from 5 m inside, along the path, both modes.

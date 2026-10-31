@@ -3,14 +3,6 @@
 Read at the start of every session; update after each completed task and before compaction.
 One issue per task. Nothing here is a claim without the command/measurement that produced it.
 
-## Whole-level shell, second version (Claude, 2026-10-31, branch claude/work)
-
-- User after the start-zone cleanup: "ладно, делай так на весь уровень, а потом посмотрим". Whole-level commit reapplied and merged by hand with the fin fixes (page 5 out, thin solid, rim fade, spine, roof slab, shores, ground slabs, water recess).
-- Build claude-level2: DLL and data 2026-10-31 14:28 MSK; 8 suites + aggregate PASS (build/unity-import/claude-level2-*.txt); floor check PASS (4473 points, p99 2.3 mm, 0.49% over 10 cm, max 3.5 m).
-- Report: 3500000 tris, 0 open and 2 non-manifold edges after simplification, 4629 plants, 4 of 248240 capsule samples in solid, lens in rock 1051 of 223416, growth oracle 3498 of 268593 vertices over 45 cm (threshold 2%).
-- Inspector 139 points / 1112 views, 4 flagged at 2 points, (0.2,-36.4) and (-35.8,-30.4), not viewed. About 330 fps vs 2100 at 3440x1440.
-- Open: verdict; tiny sky specks above the arch's east opening (top-4); lake-south bank flat brown with a pale misty end; north wall's top line is rounder than the original and carries plants; not walked in play; not on main.
-
 ## Fins and lace on the tops of the start zone removed (Claude, 2026-10-31, branch claude/work)
 
 - User's screenshots (2026-10-31 12:46): black torn shapes over the massif and rocks. The previous "page 5" fix only stopped drawing the cards; the bake still treated them as surfaces.
@@ -36,23 +28,29 @@ One issue per task. Nothing here is a claim without the command/measurement that
 
 ## Current task - closed Remaster shell, start pocket test (Claude, 2026-10-31, branch claude/work)
 
-- User approved the closed solid approach, then asked for the whole level with no growths ("отростки"). Original, colliders and height query are untouched.
-- Root cause of all earlier wall attempts: terrain `1-terr_1` is ONE single-sided sheet of 2290 faces with nothing behind or below it.
-- Tools (venv `../_tools/remaster-venv`: numpy, scipy, pillow, scikit-image, pyfqmr): `tools/fetch_remaster_shell_assets.py`, `tools/build_remaster_shell.py` (about 17 min,
-  `--cell .25 --triangles 800000` for a 3 min look; oracles assert only at full resolution), `tools/check_remaster_shell_floor.py`. Output Resources/Remaster/Shell (not committed).
-- Method: signed distance with pseudo-normal sign, capped at the sheet's top; roofs filled to their rim; a spine of rock behind every wall; hills only behind painted forest and down to
-  the water as a shore; true distance away from the sheet; CC0 scans melted in; player capsule carved; ground slabs exact; marching cubes 12.5 cm, simplified, 36 tiles.
-- Silhouette rule: rock stands at most 14-34 cm in front of the original surface, relief goes inward; no plants on original tops. Kept as original faces: water, cards, dry-stone walls (page 8).
-- Measurements: 3500000 tris, 0 open and 1 non-manifold edges after simplification, 4881 plants; floor check 4473 flat points, p99 0.3 cm, 0.54% over 10 cm, 0 feet hidden;
-  massif max 0.11 m over its rim hull; solid behind 94.1% of replaced faces; lens inside rock 460 before, 1010 after pull-in of 223488 (dark stone, not a hole).
-- Growth oracle is coarse: 3184 of 245044 rock vertices over 45 cm, threshold 2%, mostly the closure around (0,-15), the slot over the falls (2,-32), (30,50). Judged by stills, not proven clean.
-- Traps: atlas V flipped; closest-point vertex test; arch is underside plus walls, its mass is ABOVE the sheet; hole columns under the roof made a box round the pillar; a Voronoi border of hill heights made a flat wall in the lake;
-  shore cap removed the backing of walls (windows); thin decks removed as crumbs.
-- Final build claude-shell25: DLL 2026-10-31 10:09:53 MSK, SHA256 08cabbe4cf8af87c..., all 8 suites + aggregate PASS (build/unity-import/claude-shell25-*.txt). 646-712 fps vs 2233-2364 at 1280x720 (build/shell-review/timing.txt).
-  Inspector 139 points / 1112 views, 10 flagged at 5 points (build/inspect-shell): they look over a crest at open sky; no flagged view through the ground, but the inspector cannot prove that for the real camera.
-- Silent tests: `--mute` (`PrototypeAudioMute.cs`) in every runner; the bandit mixer test unmutes briefly.
-- Open: user verdict on the level; ground up to 4 m low on a small patch around (31-35, 50-53), not located in stills; grey flat areas beside the falls at wall groups 035/037, not compared with the old build;
-  long brown bank on lake-south; shrub_01/03/04 unused; 3.5M tris not profiled on low-end hardware; not on main.
+- User approved variant A: one closed solid instead of treating walls face by face. Test region only: start pocket, z < -23.
+- Root cause of all earlier wall attempts: terrain `1-terr_1` is ONE single-sided sheet of 2290 faces, nothing behind or below it
+  (1412 of 1429 floor faces have nothing beneath); 48% of wall-wall and 84% of wall-floor edges break atlas UV.
+- Tools: `tools/fetch_remaster_shell_assets.py`, `tools/build_remaster_shell.py` (venv `../_tools/remaster-venv`: numpy, scipy, pillow,
+  scikit-image). Output Resources/Remaster/Shell (not committed), report `build/remaster-shell/report.json`.
+- Method: signed distance of the sheet with pseudo-normal sign, height cap, roofs filled up to their rim, CC0 scans melted in, player
+  capsule carved out, marching cubes at 12.5 cm, walkable vertices snapped to the exact planes, world-space layers
+  (`Shaders/RemasterShell.shader`), vertex colour = blurred original paint x baked light. Plants baked as a list, built at runtime.
+- Original, colliders and the height query are untouched. Presentation smoke has a shell block.
+- Measurements: build/remaster-shell/report.json, 0 open and 0 non-manifold edges on the drawn mesh, 0 of 53244 capsule samples inside solid, floor error p99 4.2 cm, max 28 cm.
+- Camera: only the old collider stops it, so a Remaster-only pull-in on a baked grid (`LensBlocked`, 1.6 m minimum) keeps it out of new rock; what remains sees dark stone (shader Cull Off).
+- Traps found: atlas V must be flipped; the arch is only an underside and side walls, so its mass is ABOVE the sheet (the cap destroyed it);
+  a wrong vertex test in closest-point gave false distances on obtuse faces; hill plants grew on the arch (user saw it; now excluded).
+- The painted trail on the south wall is a real carved trail now; its wall collider stays, so like the painted one it cannot be walked.
+- Test runs are silent now: `--mute` (`PrototypeAudioMute.cs`), passed by every `tools/check_*_player.mjs` and `run_inspector.py`.
+  The bandit mixer test unmutes briefly: it is the one real sound test.
+- User: growths on the arch massif ("отростки, которых не было"). Fixed: its top is now the surface through the rim of its side walls, relief there
+  goes inward only, no scans; a bake assert fails if it rises over that outline (max 0.275 m at inner columns, p99 1 cm). Rule: prominent original shapes keep their outline.
+- Final build claude-shell19: DLL 2026-10-31 00:48:13 MSK, resources 00:58:28; all 8 suites + aggregate PASS (build/unity-import/claude-shell19-*.txt),
+  inspector 136 points / 1088 views, 0 flagged (build/inspect-shell/inspect.json). 1.95M tris, 1196 plants, about 200 fps at 3440x1440 (timing.txt). Lens inside rock:
+  1129 of 135720 before pull-in, 816 after. Not on main.
+- Open: visual verdict from the user; visible material step at the neck z = -23 (test boundary); shrub_01/03/04 were fetched but are unused;
+  rock faces at the walkway are near the collider plane; thicket crowns can surround the camera close to a bank; rest of the level still old.
 
 ## Current task — Unity combat and original collision audit (2026-10-24)
 
